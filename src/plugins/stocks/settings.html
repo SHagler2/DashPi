@@ -1,0 +1,395 @@
+<div class="form-group">
+    <div class="form-group">
+        <label for="title" class="form-label">Title:</label>
+        <input type="text" id="title" name="title" placeholder="Stock Prices" class="form-input">
+    </div>
+
+    <!-- Saved Tickers Section -->
+    <div class="form-group">
+        <label class="form-label">Saved Tickers:</label>
+        <p class="form-help-text">Drag to reorder. Maximum 6 tickers.</p>
+        <div id="savedTickersList" class="ticker-list"></div>
+        <div class="ticker-add-row">
+            <input type="text" id="newTickerInput" placeholder="Enter ticker (e.g., AAPL)" class="form-input ticker-input">
+            <button type="button" onclick="addTicker()" class="action-button ticker-add-btn">+ Add</button>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="tickers" class="form-label">Override Tickers (optional):</label>
+        <input type="text" id="tickers" name="tickers" placeholder="Leave empty to use saved tickers" class="form-input">
+        <small class="form-help-text">Enter comma-separated symbols to temporarily override saved tickers</small>
+    </div>
+
+    <div class="form-group nowrap">
+        <label for="fontSize" class="form-label">Font Size:</label>
+        <select id="fontSize" name="fontSize" class="form-input">
+            <option value="x-small">Extra Small</option>
+            <option value="small">Small</option>
+            <option value="normal">Normal</option>
+            <option value="large">Large</option>
+            <option value="x-large">Extra Large</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="autoRefresh" class="form-label">Auto-Refresh Prices:</label>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="number" id="autoRefresh" name="autoRefresh" min="0" max="1440" value="0" class="form-input" style="width: 80px;">
+            <span style="color: var(--text-secondary, #888);">minutes (0 = disabled)</span>
+        </div>
+        <small class="form-help-text">While stocks is displayed, refresh prices at this interval. Works in loop or standalone.</small>
+    </div>
+</div>
+
+<style>
+    .form-help-text {
+        font-size: 13px;
+        color: var(--text-secondary, #888);
+        margin: 4px 0 10px 0;
+    }
+    .ticker-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+    }
+    .ticker-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        padding: 12px 14px;
+        background: var(--input-bg, #3a3a3a);
+        border: 1px solid var(--border-color, #555);
+        border-radius: 8px;
+        gap: 12px;
+        cursor: move;
+        box-sizing: border-box;
+    }
+    .ticker-item:hover {
+        border-color: var(--accent-primary, #5cb85c);
+    }
+    .ticker-item.dragging {
+        opacity: 0.5;
+    }
+    .drag-handle {
+        font-size: 16px;
+        color: var(--text-secondary, #888);
+        cursor: grab;
+    }
+    .ticker-position {
+        font-size: 14px;
+        color: var(--text-secondary, #888);
+        min-width: 20px;
+    }
+    .ticker-symbol {
+        font-weight: 600;
+        font-size: 16px;
+        color: var(--text-primary, #fff);
+        min-width: 60px;
+    }
+    .ticker-name {
+        flex: 1;
+        font-size: 13px;
+        color: var(--text-secondary, #aaa);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .remove-ticker-btn {
+        background: #dc3545 !important;
+        color: white !important;
+        border: none;
+        padding: 6px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .remove-ticker-btn:hover {
+        background: #c82333 !important;
+    }
+    .ticker-add-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 12px;
+        width: 100%;
+    }
+    .ticker-input {
+        flex: 1;
+        text-transform: uppercase;
+    }
+    .ticker-add-btn {
+        background: #28a745 !important;
+        color: white !important;
+        padding: 10px 20px;
+        white-space: nowrap;
+    }
+    .ticker-add-btn:hover {
+        background: #218838 !important;
+    }
+    .no-tickers {
+        color: var(--text-secondary, #888);
+        font-style: italic;
+        text-align: center;
+        padding: 20px;
+        background: var(--input-bg, #3a3a3a);
+        border: 1px dashed var(--border-color, #555);
+        border-radius: 8px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+</style>
+
+<script>
+    let savedTickers = [];
+    let draggedItem = null;
+
+    function getTickerSymbol(ticker) {
+        return typeof ticker === 'object' ? ticker.symbol : ticker;
+    }
+
+    function getTickerName(ticker) {
+        return typeof ticker === 'object' ? ticker.name : '';
+    }
+
+    function renderSavedTickers() {
+        const container = document.getElementById('savedTickersList');
+        if (savedTickers.length === 0) {
+            container.innerHTML = '<div class="no-tickers">No tickers saved yet. Add some below!</div>';
+            return;
+        }
+        container.innerHTML = savedTickers.map((ticker, index) => {
+            const symbol = getTickerSymbol(ticker);
+            const name = getTickerName(ticker);
+            return `
+            <div class="ticker-item" data-ticker="${symbol}" draggable="true">
+                <span class="drag-handle">⋮⋮</span>
+                <span class="ticker-position">${index + 1}</span>
+                <span class="ticker-symbol">${symbol}</span>
+                <span class="ticker-name">${name}</span>
+                <button type="button" class="remove-ticker-btn" onclick="removeTicker('${symbol}')">Remove</button>
+            </div>
+        `}).join('');
+
+        setupTickerDragAndDrop();
+    }
+
+    function setupTickerDragAndDrop() {
+        document.querySelectorAll('.ticker-item').forEach(item => {
+            item.addEventListener('dragstart', function(e) {
+                draggedItem = this;
+                this.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            item.addEventListener('dragend', function() {
+                this.classList.remove('dragging');
+                document.querySelectorAll('.ticker-item').forEach(el => {
+                    el.style.borderTop = '';
+                });
+            });
+
+            item.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (this !== draggedItem) {
+                    this.style.borderTop = '2px solid #5cb85c';
+                }
+            });
+
+            item.addEventListener('dragleave', function() {
+                this.style.borderTop = '';
+            });
+
+            item.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.style.borderTop = '';
+
+                if (this !== draggedItem && draggedItem) {
+                    const container = this.parentElement;
+                    const allItems = Array.from(container.querySelectorAll('.ticker-item'));
+                    const draggedIndex = allItems.indexOf(draggedItem);
+                    const targetIndex = allItems.indexOf(this);
+
+                    if (draggedIndex < targetIndex) {
+                        this.parentNode.insertBefore(draggedItem, this.nextSibling);
+                    } else {
+                        this.parentNode.insertBefore(draggedItem, this);
+                    }
+
+                    const newOrder = Array.from(container.querySelectorAll('.ticker-item')).map(item => item.dataset.ticker);
+                    savedTickers = newOrder;
+                    saveTickerOrder();
+                }
+            });
+        });
+    }
+
+    function loadSavedTickers() {
+        fetch('/plugin/stocks/tickers')
+            .then(response => response.json())
+            .then(data => {
+                savedTickers = data.tickers || [];
+                renderSavedTickers();
+            })
+            .catch(error => {
+                console.error('Error loading tickers:', error);
+                document.getElementById('savedTickersList').innerHTML = '<div class="no-tickers" style="color: #dc3545;">Error loading tickers</div>';
+            });
+    }
+
+    function addTicker() {
+        const input = document.getElementById('newTickerInput');
+        const ticker = input.value.trim().toUpperCase();
+
+        if (!ticker) {
+            alert('Please enter a ticker symbol');
+            return;
+        }
+
+        if (savedTickers.includes(ticker)) {
+            alert('Ticker already in list');
+            return;
+        }
+
+        if (savedTickers.length >= 6) {
+            alert('Maximum 6 tickers allowed');
+            return;
+        }
+
+        // Show loading state
+        const addBtn = document.querySelector('.ticker-add-btn');
+        const originalText = addBtn.textContent;
+        addBtn.textContent = 'Validating...';
+        addBtn.disabled = true;
+
+        fetch('/plugin/stocks/tickers/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticker: ticker })
+        })
+        .then(response => response.json())
+        .then(data => {
+            addBtn.textContent = originalText;
+            addBtn.disabled = false;
+            if (data.success) {
+                savedTickers = data.tickers;
+                renderSavedTickers();
+                input.value = '';
+            } else {
+                alert(data.error || 'Failed to add ticker');
+            }
+        })
+        .catch(error => {
+            addBtn.textContent = originalText;
+            addBtn.disabled = false;
+            console.error('Error adding ticker:', error);
+            alert('Error adding ticker');
+        });
+    }
+
+    function removeTicker(ticker) {
+        fetch(`/plugin/stocks/tickers/${ticker}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                savedTickers = data.tickers;
+                renderSavedTickers();
+            } else {
+                alert(data.error || 'Failed to remove ticker');
+            }
+        })
+        .catch(error => {
+            console.error('Error removing ticker:', error);
+            alert('Error removing ticker');
+        });
+    }
+
+    function saveTickerOrder() {
+        fetch('/plugin/stocks/tickers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tickers: savedTickers })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderSavedTickers();
+            } else {
+                alert(data.error || 'Failed to save order');
+                loadSavedTickers();
+            }
+        })
+        .catch(error => {
+            console.error('Error saving ticker order:', error);
+            loadSavedTickers();
+        });
+    }
+
+    document.getElementById('newTickerInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addTicker();
+        }
+    });
+
+    async function loadStocksSettings() {
+        try {
+            const response = await fetch('/plugin/stocks/settings');
+            const data = await response.json();
+            return data.settings || {};
+        } catch (error) {
+            console.error('Error loading stocks settings:', error);
+            return {};
+        }
+    }
+
+    async function saveStocksSettings() {
+        const settings = {
+            autoRefresh: document.getElementById('autoRefresh').value || '0',
+            fontSize: document.getElementById('fontSize').value || 'normal',
+            title: document.getElementById('title').value || ''
+        };
+        try {
+            await fetch('/plugin/stocks/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settings })
+            });
+        } catch (error) {
+            console.error('Error saving stocks settings:', error);
+        }
+    }
+
+    // Auto-save settings when changed
+    document.getElementById('autoRefresh')?.addEventListener('change', saveStocksSettings);
+    document.getElementById('fontSize')?.addEventListener('change', saveStocksSettings);
+    document.getElementById('title')?.addEventListener('blur', saveStocksSettings);
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        loadSavedTickers();
+
+        // Load saved stocks settings first
+        const savedSettings = await loadStocksSettings();
+
+        let fontSize = savedSettings.fontSize || "normal";
+        let autoRefresh = savedSettings.autoRefresh || "0";
+        let title = savedSettings.title || "";
+
+        // Override with loop plugin settings if editing from loop
+        if (typeof loadPluginSettings !== 'undefined' && loadPluginSettings) {
+            title = pluginSettings.title || title;
+            document.getElementById('tickers').value = pluginSettings.tickers || '';
+            fontSize = pluginSettings.fontSize || fontSize;
+            autoRefresh = pluginSettings.autoRefresh || autoRefresh;
+        }
+
+        document.getElementById('title').value = title;
+        document.getElementById('fontSize').value = fontSize;
+        document.getElementById('autoRefresh').value = autoRefresh;
+    });
+</script>

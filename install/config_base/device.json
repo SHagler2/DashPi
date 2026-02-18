@@ -1,0 +1,8 @@
+{
+    "name": "DashPi",
+    "orientation": "horizontal",
+    "inverted_image": false,
+    "scheduler_sleep_time": 60,
+    "startup": true,
+    "display_type": "lcd"
+}

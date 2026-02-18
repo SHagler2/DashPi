@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loops - DashPi</title>
+    <script>
+        (function() {
+            const theme = localStorage.getItem('dashpi-theme') ||
+                         (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            if (theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/main.css') }}">
+    <script src="{{ url_for('static', filename='scripts/loops_manager.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='scripts/response_modal.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='scripts/dark_mode.js') }}"></script>
+</head>
+<body>
+    <div class="frame">
+        <header class="header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button onclick="window.location.href='{{ url_for('main.main_page') }}'" class="back-button">← Back</button>
+                <h1>Loops</h1>
+            </div>
+            <div class="header-actions">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--text-secondary); white-space: nowrap;">
+                    <input type="checkbox" id="showLoopsStatus" style="width: 16px; height: 16px; cursor: pointer;" />
+                    Live Status
+                </label>
+                <button class="settings-button dark-mode-toggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode"></button>
+                <button class="header-button" onclick="openCreateLoopModal()">+ New Loop</button>
+            </div>
+        </header>
+
+        <!-- Live Refresh Status -->
+        <div id="loopsStatus" class="live-status-card">
+            <span id="loopsStatusIcon" class="live-status-icon">&#9881;</span>
+            <span id="loopsStatusText" class="live-status-text">Ready</span>
+        </div>
+
+        <!-- Global Rotation Interval Setting -->
+        <div class="status-dashboard-card">
+            <h3 class="countdown-label" style="font-size: 14px; text-transform: none; margin-bottom: 8px;">Display Rotation</h3>
+            <p class="plugin-info-label" style="text-transform: none; margin-bottom: 12px;">How often the display switches to the next plugin</p>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="number" id="rotation-interval" value="{{ (loop_config.rotation_interval_seconds / 60) | int }}"
+                       min="1" class="form-input" style="width: 80px;">
+                <select id="rotation-unit" class="form-input">
+                    <option value="minute">Minutes</option>
+                    <option value="hour">Hours</option>
+                </select>
+                <button onclick="saveRotationInterval()" class="action-button">Save</button>
+            </div>
+        </div>
+
+        <!-- Loops List -->
+        <div class="loop-list">
+            {% for loop_item in loop_config.loops %}
+            <div class="featured-image-card loop-item">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div>
+                        <h2 style="margin: 0; font-size: 18px; font-weight: 600; color: var(--text-primary);">{{ loop_item.name }}</h2>
+                        {% if loop_item.name == loop_config.active_loop %}
+                        <span style="display: inline-block; margin-left: 10px; padding: 4px 10px; background: var(--success-color); color: white; border-radius: 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.5px;">ACTIVE</span>
+                        {% endif %}
+                        <div style="margin-top: 6px; font-size: 13px; color: var(--text-secondary); font-weight: 400;">{{ loop_item.start_time }} - {{ loop_item.end_time }}</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button onclick="toggleRandomize('{{ loop_item.name }}')"
+                                id="randomize-{{ loop_item.name }}"
+                                class="action-button"
+                                style="padding: 8px 14px; font-size: 14px; font-weight: 500; background: {{ 'var(--success-color)' if loop_item.randomize else 'var(--button-bg)' }}; color: {{ 'white' if loop_item.randomize else 'var(--text-primary)' }};"
+                                title="Toggle random plugin order">
+                            {{ 'Random' if loop_item.randomize else 'Sequential' }}
+                        </button>
+                        <button onclick="openEditLoopModal('{{ loop_item.name }}', '{{ loop_item.start_time }}', '{{ loop_item.end_time }}')"
+                                class="action-button" style="background: var(--button-bg); padding: 8px 14px; font-size: 14px; font-weight: 500; color: var(--text-primary);">
+                            Edit
+                        </button>
+                        <button onclick="deleteLoop('{{ loop_item.name }}')"
+                                class="action-button" style="background: #dc3545 !important; padding: 8px 14px; font-size: 14px; font-weight: 500; color: white !important;">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Plugin Order -->
+                <div class="plugin-order" style="margin-top: 16px;">
+                    <h4 style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 12px 0;">
+                        Plugins ({{ loop_item.plugin_order|length }})
+                        <span style="font-weight: 400; color: var(--text-secondary); margin-left: 8px; font-size: 13px;">(Drag to reorder)</span>
+                    </h4>
+                    {% if loop_item.plugin_order %}
+                    <div class="plugin-list" data-loop-name="{{ loop_item.name }}" style="display: flex; flex-direction: column; gap: 8px;">
+                        {% for plugin_ref in loop_item.plugin_order %}
+                        <div class="plugin-ref-item"
+                             data-plugin-id="{{ plugin_ref.plugin_id }}"
+                             draggable="true"
+                             style="display: flex; align-items: center; padding: 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; gap: 12px; cursor: move; transition: all 0.2s ease;">
+                            <span style="font-size: 18px; color: var(--text-secondary);">⋮⋮</span>
+                            <div style="width: 40px; height: 40px; border-radius: 8px; overflow: hidden; border: 2px solid var(--border-color); background: white;">
+                                <img src="{{ url_for('plugin.image', plugin_id=plugin_ref.plugin_id, filename='icon.png') }}"
+                                     alt="icon" style="width: 100%; height: 100%; object-fit: cover; padding: 4px;">
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; font-size: 15px; color: var(--text-primary); margin-bottom: 4px;">{{ plugins.get(plugin_ref.plugin_id, {}).get('display_name', plugin_ref.plugin_id) }}</div>
+                                <div style="font-size: 13px; color: var(--text-secondary); font-weight: 400;">Refreshes every {% if plugin_ref.refresh_interval_seconds < 60 %}{{ plugin_ref.refresh_interval_seconds | int }}s{% else %}{{ (plugin_ref.refresh_interval_seconds / 60) | int }} min{% endif %}</div>
+                            </div>
+                            <button type="button"
+                                    onclick="refreshPluginNow('{{ loop_item.name }}', '{{ plugin_ref.plugin_id }}')"
+                                    class="action-button"
+                                    style="padding: 6px 12px; font-size: 13px; background: var(--accent-primary) !important; font-weight: 500; color: white !important;"
+                                    title="Refresh and display this screen now">
+                                ⟳ Now
+                            </button>
+                            <button type="button"
+                                    data-loop-name="{{ loop_item.name }}"
+                                    data-plugin-id="{{ plugin_ref.plugin_id }}"
+                                    data-refresh-interval="{{ plugin_ref.refresh_interval_seconds }}"
+                                    data-plugin-settings="{{ plugin_ref.plugin_settings | tojson | forceescape }}"
+                                    class="edit-plugin-btn action-button"
+                                    style="padding: 6px 12px; font-size: 13px; background: var(--button-bg) !important; font-weight: 500; color: var(--text-primary) !important;">
+                                Edit
+                            </button>
+                            <button onclick="removePluginFromLoop('{{ loop_item.name }}', '{{ plugin_ref.plugin_id }}')"
+                                    class="action-button"
+                                    style="padding: 6px 12px; font-size: 13px; background: #dc3545 !important; font-weight: 500; color: white !important;"
+                                    title="Remove this plugin from the loop">
+                                Remove
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="plugin-info-label" style="text-transform: none; font-style: italic; text-align: center; padding: 20px 0;">No plugins in this loop yet</p>
+                    {% endif %}
+
+                    <!-- Add Plugin Button -->
+                    <button onclick="openAddPluginModal('{{ loop_item.name }}')"
+                            class="action-button"
+                            style="margin-top: 12px; width: 100%; background: var(--success-color); padding: 10px; font-size: 14px; font-weight: 500;">
+                        + Add Plugin
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Create/Edit Loop Modal -->
+    <div id="loopModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
+        <div class="modal-content" style="background: white; margin: 10% auto; padding: 20px; width: 400px; border-radius: 8px;">
+            <h2 id="modalTitle">Create Loop</h2>
+            <form id="loopForm">
+                <input type="hidden" id="oldLoopName">
+                <div style="margin: 15px 0;">
+                    <label>Name:</label>
+                    <input type="text" id="loopName" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="margin: 15px 0;">
+                    <label>Start Time:</label>
+                    <input type="time" id="startTime" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="margin: 15px 0;">
+                    <label>End Time:</label>
+                    <input type="time" id="endTime" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" style="flex: 1; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save</button>
+                    <button type="button" onclick="closeLoopModal()" style="flex: 1; padding: 10px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Plugin Modal -->
+    <div id="pluginModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
+        <div class="modal-content" style="background: white; margin: 10% auto; padding: 20px; width: 400px; border-radius: 8px;">
+            <h2>Add Plugin to Loop</h2>
+            <form id="pluginForm">
+                <input type="hidden" id="targetLoopName">
+                <div style="margin: 15px 0;">
+                    <label>Plugin:</label>
+                    <select id="pluginSelect" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        <option value="">Select a plugin...</option>
+                        {% for plugin in all_plugins|sort(attribute='display_name') %}
+                        <option value="{{ plugin.id }}">{{ plugin.display_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="margin: 15px 0;">
+                    <label>Refresh Interval:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="refreshInterval" value="30" min="1" required style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        <select id="refreshUnit" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="1">Seconds</option>
+                            <option value="60" selected>Minutes</option>
+                            <option value="3600">Hours</option>
+                            <option value="86400">Days</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" style="flex: 1; padding: 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Add</button>
+                    <button type="button" onclick="closePluginModal()" style="flex: 1; padding: 10px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Plugin Modal -->
+    <div id="editPluginModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5);">
+        <div class="modal-content" style="background: white; margin: 10% auto; padding: 20px; width: 400px; border-radius: 8px;">
+            <h2>Edit Plugin Settings</h2>
+            <form id="editPluginForm">
+                <input type="hidden" id="editLoopName">
+                <input type="hidden" id="editPluginId">
+                <div style="margin: 15px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label>Plugin: <span id="editPluginName" style="font-weight: bold;"></span></label>
+                    </div>
+                    <a id="fullSettingsLink" href="#" target="_blank"
+                       style="display: inline-block; margin-top: 10px; padding: 8px 16px; background: #17a2b8; color: white; border-radius: 4px; text-decoration: none; font-size: 14px;">
+                        ⚙️ Open Full Plugin Settings
+                    </a>
+                    <div id="noInlineSettingsMsg" style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 13px; display: none;">
+                        Use the button above to configure all options for this plugin.
+                    </div>
+                </div>
+                <div style="margin: 15px 0;">
+                    <label>Refresh Interval:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="editRefreshInterval" min="1" required style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        <select id="editRefreshUnit" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="1">Seconds</option>
+                            <option value="60">Minutes</option>
+                            <option value="3600">Hours</option>
+                            <option value="86400">Days</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="clockFaceSettings" style="margin: 15px 0; display: none;">
+                    <label>Clock Face:</label>
+                    <select id="clockFace" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px;">
+                        <option value="Gradient Clock">Gradient Clock</option>
+                        <option value="Digital Clock">Digital Clock</option>
+                        <option value="Divided Clock">Divided Clock</option>
+                        <option value="Word Clock">Word Clock</option>
+                    </select>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 12px;">Primary Color:</label>
+                            <input type="color" id="primaryColor" style="width: 100%; height: 40px;" value="#ffffff">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 12px;">Secondary Color:</label>
+                            <input type="color" id="secondaryColor" style="width: 100%; height: 40px;" value="#000000">
+                        </div>
+                    </div>
+                </div>
+                <div id="weatherSettings" style="margin: 15px 0; display: none;">
+                    <label>Location:</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="text" id="citySearch" placeholder="Enter city name (e.g., Dallas, TX)" style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        <button type="button" onclick="searchCity()" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Search</button>
+                    </div>
+                    <div id="cityResults" style="margin-bottom: 10px;"></div>
+                    <input type="hidden" id="weatherLat">
+                    <input type="hidden" id="weatherLon">
+                    <div style="margin: 10px 0;">
+                        <label>Units:</label>
+                        <select id="weatherUnits" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="imperial">Imperial (°F, mph)</option>
+                            <option value="metric">Metric (°C, km/h)</option>
+                        </select>
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label>Data Source:</label>
+                        <select id="weatherSource" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="open_meteo">Open-Meteo (Free)</option>
+                            <option value="openweathermap">OpenWeatherMap (API Key Required)</option>
+                        </select>
+                    </div>
+
+                    <div style="margin: 15px 0; padding-top: 10px; border-top: 1px solid #dee2e6;">
+                        <label style="font-weight: bold; margin-bottom: 10px; display: block;">Display Options:</label>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="displayRefreshTime" style="width: 18px; height: 18px;">
+                                <span style="font-size: 13px;">Show refresh time</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="displayMetrics" style="width: 18px; height: 18px;">
+                                <span style="font-size: 13px;">Show metrics</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="displayGraph" style="width: 18px; height: 18px;">
+                                <span style="font-size: 13px;">Show graph</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="displayRain" style="width: 18px; height: 18px;">
+                                <span style="font-size: 13px;">Show rain amount</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="moonPhase" style="width: 18px; height: 18px;">
+                                <span style="font-size: 13px;">Show moon phase</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="displayForecast" style="width: 18px; height: 18px;">
+                                <span style="font-size: 13px;">Show forecast</span>
+                            </label>
+                        </div>
+
+                        <div style="margin: 10px 0;">
+                            <label style="font-size: 13px;">Forecast Days:</label>
+                            <select id="forecastDays" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                                <option value="3">3 days</option>
+                                <option value="5">5 days</option>
+                                <option value="7">7 days</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="apodSettings" style="margin: 15px 0; display: none;">
+                    <div style="margin: 10px 0;">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="randomizeApod" style="width: 20px; height: 20px;">
+                            <span>Randomize date</span>
+                        </label>
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label>Custom Date (optional):</label>
+                        <input type="date" id="customDateApod" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label>Display Mode:</label>
+                        <select id="fitModeApod" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="fit">Fit (Letterbox - Full image visible)</option>
+                            <option value="fill">Fill (Crop - No black bars)</option>
+                        </select>
+                        <small style="display: block; margin-top: 5px; color: #666;">
+                            Fit: Shows entire image with black bars if needed<br>
+                            Fill: Crops edges to fill screen completely
+                        </small>
+                    </div>
+                </div>
+
+                <div id="wikipediaSettings" style="margin: 15px 0; display: none;">
+                    <div style="margin: 10px 0;">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="randomizeWpotd" style="width: 20px; height: 20px;">
+                            <span>Randomize date</span>
+                        </label>
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label>Custom Date (optional):</label>
+                        <input type="date" id="customDate" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="shrinkToFitWpotd" style="width: 20px; height: 20px;" checked>
+                            <span>Shrink image to fit display</span>
+                        </label>
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label>Display Mode:</label>
+                        <select id="fitModeWpotd" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="fit">Fit (Letterbox - Full image visible)</option>
+                            <option value="fill">Fill (Crop - No black bars)</option>
+                        </select>
+                        <small style="display: block; margin-top: 5px; color: #666;">
+                            Fit: Shows entire image with black bars if needed<br>
+                            Fill: Crops edges to fill screen completely
+                        </small>
+                    </div>
+                </div>
+
+                <div id="aiImageSettings" style="margin: 15px 0; display: none;">
+                    <div style="margin: 10px 0;">
+                        <label>AI Provider:</label>
+                        <select id="aiImageProvider" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="gemini">Google Gemini (Imagen)</option>
+                            <option value="openai">OpenAI (DALL-E)</option>
+                        </select>
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label>Text Prompt:</label>
+                        <input type="text" id="aiImagePrompt" placeholder="Describe the image to generate..." style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="aiImageRandomize" style="width: 20px; height: 20px;">
+                            <span>Randomize/enhance prompt</span>
+                        </label>
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="aiImageShowTitle" style="width: 20px; height: 20px;" checked>
+                            <span>Show prompt as title overlay</span>
+                        </label>
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label>Display Mode:</label>
+                        <select id="aiImageFitMode" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="fit">Fit (Letterbox)</option>
+                            <option value="fill">Fill (Crop)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="aiTextSettings" style="margin: 15px 0; display: none;">
+                    <div style="margin: 10px 0;">
+                        <label>AI Provider:</label>
+                        <select id="aiTextProvider" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="gemini">Google Gemini</option>
+                            <option value="openai">OpenAI</option>
+                        </select>
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label>Text Prompt:</label>
+                        <input type="text" id="aiTextPrompt" placeholder="e.g., Tell me a joke, Quote of the day..." style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <label>Title (optional):</label>
+                        <input type="text" id="aiTextTitle" placeholder="Leave blank to auto-generate from prompt" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    </div>
+                </div>
+
+                <div id="stocksSettings" style="margin: 15px 0; display: none;">
+                    <div style="margin: 10px 0;">
+                        <label>Auto-Refresh Prices:</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="number" id="stocksAutoRefresh" min="0" max="1440" value="0" style="width: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <span style="color: #666;">minutes (0 = disabled)</span>
+                        </div>
+                        <small style="display: block; margin-top: 5px; color: #666;">
+                            While stocks is displayed, refresh prices at this interval.
+                        </small>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" style="flex: 1; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save</button>
+                    <button type="button" onclick="closeEditPluginModal()" style="flex: 1; padding: 10px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Response Modal (reuse from existing) -->
+    {% include 'response_modal.html' %}
+
+    <!-- Global Refresh Status Polling -->
+    <script>
+    // Exposed as window.loopsStatus so refreshPluginNow can interact with it
+    window.loopsStatus = (function() {
+        const STORAGE_KEY = 'dashpi-show-loops-status';
+        const toggle = document.getElementById('showLoopsStatus');
+        const bar = document.getElementById('loopsStatus');
+        const icon = document.getElementById('loopsStatusIcon');
+        const text = document.getElementById('loopsStatusText');
+
+        let hideTimeout = null;
+        let refreshInProgress = false;
+        let refreshStartTimestamp = 0;
+        let pollTimer = null;
+
+        // Restore toggle state from localStorage
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            toggle.checked = saved === 'true';
+        } catch (e) { toggle.checked = false; }
+
+        toggle.addEventListener('change', function() {
+            try { localStorage.setItem(STORAGE_KEY, toggle.checked); } catch (e) {}
+            if (toggle.checked) { startPolling(); }
+            else { stopPolling(); hideBar(); }
+        });
+
+        function showBar() {
+            bar.style.display = 'flex';
+        }
+
+        function hideBar() {
+            bar.style.display = 'none';
+        }
+
+        function setBarStyle(stage) {
+            bar.classList.remove('status-success', 'status-error', 'status-active');
+            if (stage === 'displayed' || stage === 'rendering') {
+                bar.classList.add('status-success');
+            } else if (stage === 'error' || stage === 'unidentified') {
+                bar.classList.add('status-error');
+            } else {
+                bar.classList.add('status-active');
+            }
+        }
+
+        const stageIcons = {
+            refreshing:  '&#9881;',    generating:  '&#9881;',
+            processing:  '&#9881;',    displaying:  '&#128228;',
+            displayed:   '&#9989;',    idle:        '&#128164;',
+            error:       '&#9888;',    starting:    '&#9881;',
+            recording:   '&#127908;',  detecting:   '&#129504;',
+            detected:    '&#127925;',  identifying: '&#128269;',
+            rendering:   '&#127912;',  unidentified:'&#10067;',
+        };
+
+        const activeStages = new Set([
+            'refreshing', 'generating', 'processing', 'displaying',
+            'starting', 'recording', 'detecting', 'detected', 'identifying', 'rendering'
+        ]);
+        const terminalStages = new Set(['displayed', 'idle', 'error', 'unidentified']);
+
+        function updateBar(stageIcon, message, stage) {
+            icon.innerHTML = stageIcon;
+            text.textContent = message || stage;
+            setBarStyle(stage);
+        }
+
+        async function pollStatus() {
+            try {
+                const r = await fetch('/static/images/plugins/refresh_status.json?t=' + Date.now());
+                if (!r.ok) return;
+                const data = await r.json();
+                if (!data || typeof data.stage !== 'string') return;
+
+                const isActive = activeStages.has(data.stage);
+                const isTerminal = terminalStages.has(data.stage);
+
+                if (isActive) {
+                    // Track the start of a new refresh cycle
+                    if (!refreshInProgress) {
+                        refreshInProgress = true;
+                        refreshStartTimestamp = data.timestamp;
+                    }
+                    if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
+
+                    // Try plugin-specific status.json for granular stages (only if plugin has one)
+                    if (data.plugin_id && data.has_plugin_status) {
+                        try {
+                            const pr = await fetch('/images/' + encodeURIComponent(data.plugin_id) + '/status.json?t=' + Date.now());
+                            if (pr.ok) {
+                                const ps = await pr.json();
+                                if (ps && typeof ps.timestamp === 'number' && ps.timestamp >= refreshStartTimestamp - 2) {
+                                    updateBar(stageIcons[ps.stage] || stageIcons.generating, ps.detail, ps.stage);
+                                    showBar();
+                                    return;
+                                }
+                            }
+                        } catch (e) {}
+                    }
+
+                    updateBar(stageIcons[data.stage] || stageIcons.generating, data.detail, data.stage);
+                    showBar();
+                    return;
+                }
+
+                // Refresh just completed — show result then auto-hide
+                if (refreshInProgress && isTerminal) {
+                    refreshInProgress = false;
+                    updateBar(stageIcons[data.stage] || stageIcons.idle, data.detail, data.stage);
+                    showBar();
+                    if (hideTimeout) clearTimeout(hideTimeout);
+                    hideTimeout = setTimeout(hideBar, 4000);
+                }
+            } catch (e) {}
+        }
+
+        function startPolling() {
+            if (pollTimer) return;
+            pollTimer = setInterval(pollStatus, 800);
+        }
+
+        function stopPolling() {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        }
+
+        // Start polling if toggle is already on
+        if (toggle.checked) startPolling();
+
+        // Public API for refreshPluginNow to call
+        return {
+            showImmediate: function(pluginId) {
+                refreshInProgress = true;
+                refreshStartTimestamp = Date.now() / 1000;
+                updateBar(stageIcons.refreshing, 'Updating ' + pluginId + '...', 'refreshing');
+                showBar();
+                // Temporarily start polling even if toggle is off
+                startPolling();
+            },
+            hideOnError: function() {
+                refreshInProgress = false;
+                hideBar();
+                if (!toggle.checked) stopPolling();
+            }
+        };
+    })();
+    </script>
+</body>
+</html>

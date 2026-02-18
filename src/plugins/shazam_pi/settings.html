@@ -1,0 +1,346 @@
+<!-- ShazamPi Live Status - only visible during updates when enabled -->
+<div id="shazamStatus" class="live-status-card">
+    <span id="statusIcon" class="live-status-icon">&#9835;</span>
+    <span id="statusText" class="live-status-text">Ready</span>
+</div>
+
+<div class="form-group">
+    <label for="autoRefresh" class="form-label">Auto-Listen Interval</label>
+    <select id="autoRefresh" name="autoRefresh" class="form-input">
+        <option value="">Off - Manual only</option>
+        <option value="0.083">~5 second pause</option>
+        <option value="0.166">~10 second pause</option>
+        <option value="0.5">~30 second pause</option>
+        <option value="1">Every 1 minute</option>
+        <option value="2">Every 2 minutes</option>
+        <option value="3">Every 3 minutes</option>
+        <option value="5">Every 5 minutes</option>
+        <option value="10">Every 10 minutes</option>
+    </select>
+    <small style="display: block; margin-top: 5px; color: #666;">
+        How often to automatically listen for music. Click "Update Now" once to start, then it repeats at this interval.
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="recordingDuration" class="form-label">Recording Duration (seconds)</label>
+    <input type="number" id="recordingDuration" name="recordingDuration" class="form-input"
+           min="5" max="30" step="1" />
+    <small style="display: block; margin-top: 5px; color: #666;">
+        How long to listen for music each cycle (5-30 seconds)
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="musicConfidence" class="form-label">Music Detection Confidence</label>
+    <input type="number" id="musicConfidence" name="musicConfidence" class="form-input"
+           min="0.1" max="0.9" step="0.05" />
+    <small style="display: block; margin-top: 5px; color: #666;">
+        YAMNet confidence threshold (lower = more sensitive, default 0.15)
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="fitMode" class="form-label">Display Mode</label>
+    <select id="fitMode" name="fitMode" class="form-input">
+        <option value="fit">Fit (Letterbox - Full image visible)</option>
+        <option value="fill">Fill (Crop - No black bars)</option>
+    </select>
+    <small style="display: block; margin-top: 5px; color: #666;">
+        Fit: Shows entire album art with black bars if needed<br>
+        Fill: Crops edges to fill screen completely
+    </small>
+</div>
+
+<div class="form-group">
+    <label class="form-label" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+        <input type="checkbox" id="pixelated" name="pixelated" style="width: 18px; height: 18px; cursor: pointer;" />
+        Pixelated Mode (Tuneshine-style)
+    </label>
+    <small style="display: block; margin-top: 5px; color: #666;">
+        Downscales album art to a chunky pixel grid for a retro LED display look
+    </small>
+</div>
+
+<div class="form-group" id="pixelSizeGroup" style="display: none;">
+    <label for="pixelSize" class="form-label">Pixel Grid Size</label>
+    <select id="pixelSize" name="pixelSize" class="form-input">
+        <option value="32">32x32 (Extra chunky)</option>
+        <option value="48">48x48</option>
+        <option value="64">64x64 (Tuneshine-style)</option>
+        <option value="80">80x80</option>
+        <option value="96">96x96 (Fine)</option>
+    </select>
+    <small style="display: block; margin-top: 5px; color: #666;">
+        Lower values = bigger pixels, more retro look
+    </small>
+</div>
+
+<div class="form-group" id="pixelStyleGroup" style="display: none;">
+    <label for="pixelStyle" class="form-label">Pixel Shape</label>
+    <select id="pixelStyle" name="pixelStyle" class="form-input">
+        <option value="round">Round LEDs (Tuneshine-style)</option>
+        <option value="square">Square blocks</option>
+    </select>
+    <small style="display: block; margin-top: 5px; color: #666;">
+        Round draws individual dots with gaps, like a real LED panel
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="weatherApiKey" class="form-label">OpenWeatherMap API Key (optional)</label>
+    <input type="text" id="weatherApiKey" name="weatherApiKey" class="form-input"
+           placeholder="Auto-detected from Weather plugin if blank" />
+    <small style="display: block; margin-top: 5px; color: #666;">
+        Leave blank to use the Weather plugin's API key and location
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="geoCoordinates" class="form-label">Geo Coordinates (lat, lon)</label>
+    <input type="text" id="geoCoordinates" name="geoCoordinates" class="form-input"
+           placeholder="Auto-detected from Weather plugin if blank" />
+</div>
+
+<div class="form-group">
+    <label for="units" class="form-label">Temperature Units</label>
+    <select id="units" name="units" class="form-input">
+        <option value="imperial">Imperial (&deg;F)</option>
+        <option value="metric">Metric (&deg;C)</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label class="form-label" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+        <input type="checkbox" id="showStatus" name="showStatus" style="width: 18px; height: 18px; cursor: pointer;" />
+        Show Live Status During Updates
+    </label>
+    <small style="display: block; margin-top: 5px; color: #666;">
+        Show a status bar at the top of the page with real-time progress when updating
+    </small>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const $autoRefresh = document.getElementById('autoRefresh');
+        const $recordingDuration = document.getElementById('recordingDuration');
+        const $musicConfidence = document.getElementById('musicConfidence');
+        const $fitMode = document.getElementById('fitMode');
+        const $pixelated = document.getElementById('pixelated');
+        const $pixelSize = document.getElementById('pixelSize');
+        const $pixelSizeGroup = document.getElementById('pixelSizeGroup');
+        const $pixelStyle = document.getElementById('pixelStyle');
+        const $pixelStyleGroup = document.getElementById('pixelStyleGroup');
+        const $weatherApiKey = document.getElementById('weatherApiKey');
+        const $geoCoordinates = document.getElementById('geoCoordinates');
+        const $units = document.getElementById('units');
+        const $showStatus = document.getElementById('showStatus');
+
+        function togglePixelSizeVisibility() {
+            const show = $pixelated.checked ? 'block' : 'none';
+            $pixelSizeGroup.style.display = show;
+            $pixelStyleGroup.style.display = show;
+        }
+        $pixelated.addEventListener('change', togglePixelSizeVisibility);
+
+        if (loadPluginSettings) {
+            $autoRefresh.value = pluginSettings.autoRefresh || '';
+            $recordingDuration.value = pluginSettings.recordingDuration || 8;
+            $musicConfidence.value = pluginSettings.musicConfidence || 0.15;
+            $fitMode.value = pluginSettings.fitMode || 'fit';
+            $pixelated.checked = pluginSettings.pixelated === 'on' || pluginSettings.pixelated === true;
+            $pixelSize.value = pluginSettings.pixelSize || '64';
+            $pixelStyle.value = pluginSettings.pixelStyle || 'round';
+            $weatherApiKey.value = pluginSettings.weatherApiKey || '';
+            $geoCoordinates.value = pluginSettings.geoCoordinates || '';
+            $units.value = pluginSettings.units || 'imperial';
+            $showStatus.checked = pluginSettings.showStatus === 'on' || pluginSettings.showStatus === true;
+        } else {
+            $autoRefresh.value = '1';
+            $recordingDuration.value = 8;
+            $musicConfidence.value = 0.15;
+            $fitMode.value = 'fit';
+            $pixelated.checked = false;
+            $pixelSize.value = '64';
+            $pixelStyle.value = 'round';
+            $weatherApiKey.value = '';
+            $geoCoordinates.value = '';
+            $units.value = 'imperial';
+            $showStatus.checked = true;
+        }
+        togglePixelSizeVisibility();
+
+        // Status polling
+        const stageLabels = {
+            starting:     ['&#9881;',  'Initializing...'],
+            recording:    ['&#127908;', ''],  // detail has the message
+            detecting:    ['&#129504;', ''],
+            detected:     ['&#127925;', ''],
+            identifying:  ['&#128269;', ''],
+            rendering:    ['&#127912;', ''],
+            unidentified: ['&#10067;',  ''],
+            idle:         ['&#128164;', ''],
+        };
+
+        let updateInProgress = false;
+        let lastStatusTimestamp = 0;
+        let updateStartedAt = 0;  // JS timestamp when Update was clicked
+
+        function showStatusBar() {
+            if (!document.getElementById('showStatus').checked) return;
+            const bar = document.getElementById('shazamStatus');
+            bar.style.display = 'flex';
+        }
+
+        function hideStatusBar() {
+            const bar = document.getElementById('shazamStatus');
+            bar.style.display = 'none';
+        }
+
+        function setBarStyle(stage) {
+            const bar = document.getElementById('shazamStatus');
+            bar.classList.remove('status-success', 'status-error', 'status-active');
+            if (stage === 'rendering') {
+                bar.classList.add('status-success');
+            } else if (stage === 'unidentified' || stage === 'idle') {
+                bar.classList.add('status-error');
+            } else {
+                bar.classList.add('status-active');
+            }
+        }
+
+        function updateStatusBar(data) {
+            const info = stageLabels[data.stage] || ['&#9835;', data.stage];
+            document.getElementById('statusIcon').innerHTML = info[0];
+            document.getElementById('statusText').textContent = data.detail || info[1];
+            setBarStyle(data.stage);
+        }
+
+        function pollStatus() {
+            if (!updateInProgress) return;  // Only poll during active updates
+
+            fetch('/images/shazam_pi/status.json?t=' + Date.now())
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (!data || !updateInProgress) return;
+
+                    // Ignore stale status from a previous run
+                    // (status.json timestamp is seconds, updateStartedAt is ms)
+                    if (data.timestamp * 1000 < updateStartedAt) return;
+
+                    updateStatusBar(data);
+
+                    // Detect completion
+                    if (data.timestamp !== lastStatusTimestamp) {
+                        lastStatusTimestamp = data.timestamp;
+                        const terminal = ['rendering', 'unidentified', 'idle'];
+                        if (terminal.includes(data.stage)) {
+                            updateInProgress = false;
+                            document.getElementById('loadingIndicator').style.display = 'none';
+                            // Build a descriptive message based on the final stage
+                            let msg = data.detail || 'Sending to display...';
+                            if (data.stage === 'rendering') {
+                                msg = (data.detail || 'Song found') + ' — display updating shortly';
+                            } else if (data.stage === 'idle') {
+                                msg = 'No music detected';
+                            } else if (data.stage === 'unidentified') {
+                                msg = data.detail || 'Music heard but could not identify';
+                            }
+                            // Brief delay so user sees final status, then hide bar and show modal
+                            setTimeout(() => {
+                                hideStatusBar();
+                                showResponseModal('success', msg);
+                            }, 1500);
+                        }
+                    }
+                })
+                .catch(() => {
+                    if (updateInProgress) {
+                        document.getElementById('statusText').textContent = 'Processing...';
+                    }
+                });
+        }
+
+        // Poll every 500ms (only active during updates)
+        setInterval(pollStatus, 500);
+
+        // Override handleAction for non-blocking "Update Now" while preserving loop actions
+        const _originalHandleAction = window.handleAction;
+        window.handleAction = async function(action) {
+            // Let the framework handle add_to_loop
+            if (action === 'add_to_loop') {
+                return _originalHandleAction(action);
+            }
+
+            // Handle save_to_loop directly (more reliable than delegation)
+            if (action === 'save_to_loop') {
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                loadingIndicator.style.display = 'block';
+
+                const form = document.getElementById('settingsForm');
+                const formData = new FormData(form);
+                const settings = {};
+                formData.forEach((value, key) => {
+                    if (key !== 'plugin_id') {
+                        settings[key] = value;
+                    }
+                });
+
+                try {
+                    const response = await fetch('/update_plugin_settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            loop_name: loopName,
+                            plugin_id: formData.get('plugin_id'),
+                            plugin_settings: settings
+                        })
+                    });
+                    const result = await response.json();
+                    if (response.ok) {
+                        showResponseModal('success', 'Settings saved to loop "' + loopName + '"');
+                    } else {
+                        showResponseModal('failure', result.error || 'Error saving settings');
+                    }
+                } catch (error) {
+                    console.error('Error saving to loop:', error);
+                    showResponseModal('failure', 'An error occurred while saving settings.');
+                } finally {
+                    loadingIndicator.style.display = 'none';
+                }
+                return;
+            }
+
+            // "Update Now" - non-blocking approach
+            const form = document.getElementById('settingsForm');
+            const formData = new FormData(form);
+            const loadingIndicator = document.getElementById('loadingIndicator');
+
+            loadingIndicator.style.display = 'block';
+            updateInProgress = true;
+            lastStatusTimestamp = 0;
+            updateStartedAt = Date.now();
+            showStatusBar();
+            updateStatusBar({ stage: 'starting', detail: 'Starting update...' });
+
+            // Fire async update - returns immediately, track via status polling
+            fetch('/update_now_async', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(result => {
+                    if (!result.success) {
+                        updateInProgress = false;
+                        loadingIndicator.style.display = 'none';
+                        hideStatusBar();
+                        showResponseModal('failure', result.error || 'Update failed');
+                    }
+                    // Success means queued - polling will detect completion
+                })
+                .catch(err => {
+                    updateInProgress = false;
+                    loadingIndicator.style.display = 'none';
+                    hideStatusBar();
+                    showResponseModal('failure', 'Connection error');
+                });
+        };
+    });
+</script>

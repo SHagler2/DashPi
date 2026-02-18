@@ -1,0 +1,233 @@
+<!-- Provider Selection -->
+<div class="form-group">
+    <label for="provider" class="form-label">AI Provider:</label>
+    <select id="provider" name="provider" class="form-input" onchange="toggleProviderOptions()">
+        <option value="gemini">Google Gemini (Imagen)</option>
+        <option value="openai">OpenAI (DALL-E)</option>
+    </select>
+</div>
+
+<!-- Prompt Source Selection -->
+<div class="form-group">
+    <label for="promptSource" class="form-label">Prompt Source:</label>
+    <select id="promptSource" name="promptSource" class="form-input" onchange="togglePromptSource()">
+        <option value="manual">Manual</option>
+        <option value="news">News Headlines</option>
+    </select>
+</div>
+
+<!-- Manual Prompt Options -->
+<div id="manualPromptOptions">
+    <div class="form-group">
+        <label for="textPrompt" class="form-label">Text Prompt:</label>
+        <input type="text" id="textPrompt" name="textPrompt" placeholder="Type something..." class="form-input">
+    </div>
+
+    <div class="form-group">
+        <label for="randomizePrompt" class="form-label">Randomize Text Prompt:</label>
+        <div class="toggle-container">
+            <input type="checkbox" id="randomizePrompt" name="randomizePrompt" class="toggle-checkbox" value="false" onclick="this.value=this.checked ? 'true' : 'false';">
+            <label for="randomizePrompt" class="toggle-label"></label>
+        </div>
+    </div>
+</div>
+
+<!-- News Headlines Options -->
+<div id="newsOptions" style="display: none;">
+    <div class="form-group">
+        <label class="form-label">News Feeds:</label>
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em;">
+                <input type="checkbox" class="news-feed-checkbox" value="bbc"> BBC World News
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em;">
+                <input type="checkbox" class="news-feed-checkbox" value="reuters"> Reuters Top News
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em;">
+                <input type="checkbox" class="news-feed-checkbox" value="ap"> AP Top News
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em;">
+                <input type="checkbox" class="news-feed-checkbox" value="npr"> NPR News
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em;">
+                <input type="checkbox" class="news-feed-checkbox" value="nyt"> NY Times Headlines
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em;">
+                <input type="checkbox" class="news-feed-checkbox" value="tech"> Ars Technica
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em;">
+                <input type="checkbox" class="news-feed-checkbox" value="verge"> The Verge
+            </label>
+        </div>
+        <input type="hidden" id="newsFeeds" name="newsFeeds" value="">
+    </div>
+
+    <div class="form-group">
+        <label for="customFeedUrl" class="form-label">Custom RSS Feed URL:</label>
+        <input type="text" id="customFeedUrl" name="customFeedUrl" placeholder="https://example.com/rss.xml" class="form-input">
+    </div>
+</div>
+
+<!-- OpenAI Options -->
+<div id="openaiOptions" class="form-group dropdown-container">
+    <!-- Image Model Dropdown -->
+    <div class="form-group">
+        <label for="imageModel" class="form-label">Image Model:</label>
+        <select id="imageModel" name="imageModel" class="form-input" onchange="toggleQualityDropdown()">
+            <option value="dall-e-2">DALL-E 2</option>
+            <option value="dall-e-3" selected>DALL-E 3</option>
+            <option value="gpt-image-1">GPT Image 1</option>
+        </select>
+    </div>
+
+    <!-- Quality Dropdown -->
+    <div class="form-group">
+        <label for="quality" class="form-label">Quality:</label>
+        <select id="quality" name="quality" class="form-input">
+        </select>
+    </div>
+</div>
+
+<!-- Gemini Options -->
+<div id="geminiOptions" class="form-group dropdown-container" style="display: none;">
+    <div class="form-group">
+        <label for="geminiImageModel" class="form-label">Image Model:</label>
+        <select id="geminiImageModel" name="geminiImageModel" class="form-input">
+            <option value="imagen-4.0-generate-001" selected>Imagen 4</option>
+            <option value="imagen-4.0-fast-generate-001">Imagen 4 Fast</option>
+            <option value="imagen-4.0-ultra-generate-001">Imagen 4 Ultra</option>
+        </select>
+    </div>
+</div>
+
+<div class="form-group">
+    <label for="showTitle" class="form-label">Show Prompt Title:</label>
+    <div class="toggle-container">
+        <input type="checkbox" id="showTitle" name="showTitle" class="toggle-checkbox" value="true" checked onclick="this.value=this.checked ? 'true' : 'false';">
+        <label for="showTitle" class="toggle-label"></label>
+    </div>
+</div>
+
+<div class="form-group">
+    <label for="fitMode" class="form-label">Fit Mode:</label>
+    <select id="fitMode" name="fitMode" class="form-input">
+        <option value="fit" selected>Fit (Letterbox)</option>
+        <option value="fill">Fill (Crop)</option>
+    </select>
+</div>
+
+
+<script>
+    function toggleProviderOptions() {
+        const provider = document.getElementById("provider").value;
+        const openaiOptions = document.getElementById("openaiOptions");
+        const geminiOptions = document.getElementById("geminiOptions");
+
+        if (provider === "gemini") {
+            openaiOptions.style.display = "none";
+            geminiOptions.style.display = "flex";
+        } else {
+            openaiOptions.style.display = "flex";
+            geminiOptions.style.display = "none";
+        }
+    }
+
+    function togglePromptSource() {
+        const source = document.getElementById("promptSource").value;
+        const manualOptions = document.getElementById("manualPromptOptions");
+        const newsOptions = document.getElementById("newsOptions");
+
+        if (source === "news") {
+            manualOptions.style.display = "none";
+            newsOptions.style.display = "block";
+        } else {
+            manualOptions.style.display = "block";
+            newsOptions.style.display = "none";
+        }
+    }
+
+    function updateNewsFeedsValue() {
+        const checkboxes = document.querySelectorAll('.news-feed-checkbox');
+        const selected = [];
+        checkboxes.forEach(cb => {
+            if (cb.checked) selected.push(cb.value);
+        });
+        document.getElementById('newsFeeds').value = selected.join(',');
+    }
+
+    // Attach change listeners to news feed checkboxes
+    document.querySelectorAll('.news-feed-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateNewsFeedsValue);
+    });
+
+    function toggleQualityDropdown(quality = "") {
+        const imageModelDropdown = document.getElementById("imageModel");
+        const qualityDropdown = document.getElementById("quality");
+        const selectedModel = imageModelDropdown.value;
+
+        // Clear out old options
+        qualityDropdown.innerHTML = "";
+
+        if (selectedModel === "dall-e-3") {
+            qualityDropdown.add(new Option("HD", "hd"));
+            qualityDropdown.add(new Option("Standard", "standard"));
+        }
+        else if (selectedModel === "dall-e-2") {
+            qualityDropdown.add(new Option("Standard", "standard"));
+        }
+        else if (selectedModel === "gpt-image-1") {
+            qualityDropdown.add(new Option("High", "high"));
+            qualityDropdown.add(new Option("Medium", "medium"));
+            qualityDropdown.add(new Option("Low", "low"));
+        }
+
+        if (quality != "") {
+            qualityDropdown.value = quality;
+        }
+    }
+
+    // populate form values from plugin settings
+    document.addEventListener('DOMContentLoaded', () => {
+        // defaults
+        var provider = 'gemini';
+        var imageModel = 'dall-e-3';
+        var quality = 'standard';
+        var geminiImageModel = 'imagen-4.0-generate-001';
+        var showTitle = true;
+        var fitMode = 'fit';
+        var promptSource = 'manual';
+
+        if (loadPluginSettings) {
+            document.getElementById('textPrompt').value = pluginSettings.textPrompt || '';
+            document.getElementById('randomizePrompt').checked = pluginSettings.randomizePrompt === 'true';
+
+            provider = pluginSettings.provider || 'gemini';
+            imageModel = pluginSettings.imageModel || 'dall-e-3';
+            quality = pluginSettings.quality || 'standard';
+            geminiImageModel = pluginSettings.geminiImageModel || 'imagen-4.0-generate-001';
+            showTitle = pluginSettings.showTitle !== 'false';
+            fitMode = pluginSettings.fitMode || 'fit';
+            promptSource = pluginSettings.promptSource || 'manual';
+
+            // Restore news feed selections
+            var savedFeeds = (pluginSettings.newsFeeds || '').split(',');
+            document.querySelectorAll('.news-feed-checkbox').forEach(cb => {
+                cb.checked = savedFeeds.includes(cb.value);
+            });
+            updateNewsFeedsValue();
+
+            document.getElementById('customFeedUrl').value = pluginSettings.customFeedUrl || '';
+        }
+
+        document.getElementById('provider').value = provider;
+        document.getElementById('promptSource').value = promptSource;
+        document.getElementById('imageModel').value = imageModel;
+        document.getElementById('geminiImageModel').value = geminiImageModel;
+        document.getElementById('showTitle').checked = showTitle;
+        document.getElementById('showTitle').value = showTitle ? 'true' : 'false';
+        document.getElementById('fitMode').value = fitMode;
+        toggleProviderOptions();
+        togglePromptSource();
+        toggleQualityDropdown(quality);
+    });
+</script>

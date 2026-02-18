@@ -1,0 +1,77 @@
+<div class="form-group">
+    <label for="museum" class="form-label">Museum Source:</label>
+    <select id="museum" name="museum" class="form-input">
+        <option value="both" selected>Both (Random)</option>
+        <option value="met">Metropolitan Museum of Art</option>
+        <option value="chicago">Art Institute of Chicago</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label class="form-label">Art Types:</label>
+    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+        <input type="hidden" name="artPaintings" value="false">
+        <input type="checkbox" id="artPaintings" name="artPaintings" value="true" checked
+               style="width: 18px; height: 18px; cursor: pointer;">
+        Paintings
+    </label>
+    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+        <input type="hidden" name="artPhotos" value="false">
+        <input type="checkbox" id="artPhotos" name="artPhotos" value="true" checked
+               style="width: 18px; height: 18px; cursor: pointer;">
+        Photographs
+    </label>
+    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+        <input type="hidden" name="artOthers" value="false">
+        <input type="checkbox" id="artOthers" name="artOthers" value="true" checked
+               style="width: 18px; height: 18px; cursor: pointer;">
+        Others (Prints, Sculptures, etc.)
+    </label>
+    <small style="display: block; margin-top: 4px; color: #666;">
+        Uncheck to exclude types. If all unchecked, all types are shown.
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="fitMode" class="form-label">Display Mode:</label>
+    <select id="fitMode" name="fitMode" class="form-input">
+        <option value="fit" selected>Fit (Letterbox)</option>
+        <option value="fill">Fill (Crop)</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label for="showTitle" class="form-label">Show Artwork Info:</label>
+    <div class="toggle-container">
+        <input type="hidden" name="showTitle" value="false">
+        <input type="checkbox" id="showTitle" name="showTitle" class="toggle-checkbox" value="true" checked>
+        <label for="showTitle" class="toggle-label"></label>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        var museum = 'both';
+        var fitMode = 'fit';
+        var showTitle = true;
+        var artPaintings = true;
+        var artPhotos = true;
+        var artOthers = true;
+
+        if (loadPluginSettings) {
+            museum = pluginSettings.museum || 'both';
+            fitMode = pluginSettings.fitMode || 'fit';
+            showTitle = pluginSettings.showTitle !== 'false';
+            artPaintings = pluginSettings.artPaintings !== 'false';
+            artPhotos = pluginSettings.artPhotos !== 'false';
+            artOthers = pluginSettings.artOthers !== 'false';
+        }
+
+        document.getElementById('museum').value = museum;
+        document.getElementById('fitMode').value = fitMode;
+        document.getElementById('showTitle').checked = showTitle;
+        document.getElementById('artPaintings').checked = artPaintings;
+        document.getElementById('artPhotos').checked = artPhotos;
+        document.getElementById('artOthers').checked = artOthers;
+    });
+</script>

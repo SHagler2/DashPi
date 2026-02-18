@@ -1,0 +1,202 @@
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<!-- Location Search -->
+<div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+    <label class="form-label" style="margin: 0; white-space: nowrap;">Observer Location:</label>
+    <input type="text" id="citySearch" placeholder="Enter city name (e.g., Dallas, TX)" style="flex: 1; min-width: 200px;" class="form-input" />
+    <button type="button" id="searchCityBtn" class="action-button compact">Search</button>
+</div>
+<div id="cityResults" style="margin-bottom: 10px;"></div>
+
+<!-- Coordinates and Map Button -->
+<div class="form-group" style="display: flex; align-items: center; gap: 15px; margin-bottom: 5px;">
+    <span>Latitude:</span>
+    <input readonly type="text" id="latitude" name="latitude" class="form-input" style="width: 100px;" />
+    <span>Longitude:</span>
+    <input readonly type="text" id="longitude" name="longitude" class="form-input" style="width: 100px;" />
+    <button type="button" id="openMap" class="action-button compact">Select on Map</button>
+</div>
+<div id="locationSource" style="font-size: 12px; color: #888; margin-bottom: 15px;"></div>
+
+<!-- Settings -->
+<div class="form-group">
+    <label for="units" class="form-label">Units:</label>
+    <select id="units" name="units" class="form-input">
+        <option value="metric">Metric (km, km/h)</option>
+        <option value="imperial">Imperial (mi, mph)</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label for="autoRefresh" class="form-label">Auto Refresh:</label>
+    <select id="autoRefresh" name="autoRefresh" class="form-input">
+        <option value="1">Every 1 minute</option>
+        <option value="2">Every 2 minutes</option>
+        <option value="5">Every 5 minutes</option>
+        <option value="10">Every 10 minutes</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label for="prepassTrigger" class="form-label">Pre-pass Trigger:</label>
+    <select id="prepassTrigger" name="prepassTrigger" class="form-input">
+        <option value="10">10 minutes before</option>
+        <option value="15">15 minutes before</option>
+        <option value="20">20 minutes before</option>
+        <option value="30">30 minutes before</option>
+    </select>
+</div>
+
+<div id="mapModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button" onclick="closeModal('mapModal')">×</span>
+        <h2 id="modalTitle">Select Observer Location</h2>
+        <div class="separator"></div>
+        <div id="map" style="width: 100%; height: 200px; margin: 10px 0px;"></div>
+        <button id="closeMap" class="action-button">Save</button>
+    </div>
+</div>
+
+<script>
+    async function searchCity() {
+        const cityName = document.getElementById('citySearch').value.trim();
+        const resultsDiv = document.getElementById('cityResults');
+
+        if (!cityName) {
+            resultsDiv.innerHTML = '<div style="color: #dc3545; font-size: 14px;">Please enter a city name</div>';
+            return;
+        }
+
+        resultsDiv.innerHTML = '<div style="font-size: 14px; color: #666;">Searching...</div>';
+
+        try {
+            const response = await fetch('/search_city', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ city_name: cityName })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.cities) {
+                let html = '<div style="font-size: 14px; margin-bottom: 8px; font-weight: bold;">Select a location:</div>';
+                result.cities.forEach(city => {
+                    html += `
+                        <button type="button"
+                                onclick="selectCity(${city.latitude}, ${city.longitude}, '${city.display.replace(/'/g, "\\'")}')"
+                                style="display: block; width: 100%; padding: 10px; margin-bottom: 8px; background: #f8f9fa; border: 1px solid #ccc; border-radius: 4px; text-align: left; cursor: pointer; font-size: 14px;">
+                            <strong>${city.display}</strong> (${city.country})
+                        </button>
+                    `;
+                });
+                resultsDiv.innerHTML = html;
+            } else {
+                resultsDiv.innerHTML = `<div style="color: #dc3545; font-size: 14px;">${result.error || 'No cities found'}</div>`;
+            }
+        } catch (error) {
+            resultsDiv.innerHTML = '<div style="color: #dc3545; font-size: 14px;">Error searching for city</div>';
+        }
+    }
+
+    function selectCity(lat, lon, displayName) {
+        document.getElementById('latitude').value = lat;
+        document.getElementById('longitude').value = lon;
+        document.getElementById('locationSource').innerHTML =
+            '<span style="color: #155724;">Custom location set</span>';
+        document.getElementById('cityResults').innerHTML =
+            `<div style="padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; font-size: 14px; color: #155724;">
+                Selected: ${displayName}<br>
+                <span style="font-size: 12px;">Lat: ${lat}, Lon: ${lon}</span>
+            </div>`;
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        const $latitude = document.querySelector('#latitude');
+        const $longitude = document.querySelector('#longitude');
+        const $openMap = document.querySelector('#openMap');
+        const $closeMap = document.querySelector('#closeMap');
+        const $locationSource = document.querySelector('#locationSource');
+
+        document.getElementById('searchCityBtn').addEventListener('click', searchCity);
+
+        document.getElementById('citySearch').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchCity();
+            }
+        });
+
+        // Load saved settings or defaults
+        let hasCustomLocation = false;
+
+        if (loadPluginSettings) {
+            document.getElementById('latitude').value = pluginSettings.latitude || '';
+            document.getElementById('longitude').value = pluginSettings.longitude || '';
+            document.getElementById('units').value = pluginSettings.units || 'metric';
+            document.getElementById('autoRefresh').value = pluginSettings.autoRefresh || '5';
+            document.getElementById('prepassTrigger').value = pluginSettings.prepassTrigger || '20';
+            hasCustomLocation = !!(pluginSettings.latitude && pluginSettings.longitude);
+        } else {
+            document.getElementById('latitude').value = "";
+            document.getElementById('longitude').value = "";
+            document.getElementById('units').value = "metric";
+            document.getElementById('autoRefresh').value = "5";
+            document.getElementById('prepassTrigger').value = "20";
+        }
+
+        // Fetch weather plugin location as fallback/default display
+        try {
+            const resp = await fetch('/api/weather_location');
+            const data = await resp.json();
+            if (data.latitude && data.longitude) {
+                if (!hasCustomLocation) {
+                    // Show weather location as the effective default
+                    $latitude.value = data.latitude;
+                    $longitude.value = data.longitude;
+                    $locationSource.innerHTML = 'Using Weather plugin location. Search above to override.';
+                } else {
+                    $locationSource.innerHTML = 'Custom location set. Clear to use Weather plugin default.';
+                }
+            } else {
+                if (!hasCustomLocation) {
+                    $locationSource.innerHTML = 'No location set. Search for a city or set one in the Weather plugin.';
+                }
+            }
+        } catch (e) {
+            if (!hasCustomLocation) {
+                $locationSource.innerHTML = 'No location set. Search for a city above.';
+            }
+        }
+
+        let latitude = +$latitude.value;
+        let longitude = +$longitude.value;
+        let zoom = latitude && longitude ? 4.5 : 2.5;
+
+        let map, marker;
+
+        $openMap.addEventListener('click', () => {
+            openModal('mapModal');
+            setTimeout(() => {
+                if (!map) {
+                    map = L.map('map').setView([latitude, longitude], zoom);
+                    L.tileLayer(OSM_TILE_URL).addTo(map);
+                    marker = L.marker([latitude, longitude], { draggable: true }).addTo(map);
+
+                    map.on('click', event => {
+                        marker.setLatLng(event.latlng);
+                    });
+                }
+            }, 100);
+        });
+
+        $closeMap.addEventListener('click', () => {
+            const position = marker.getLatLng().wrap();
+            $latitude.value = position.lat;
+            $longitude.value = position.lng;
+            $locationSource.innerHTML = '<span style="color: #155724;">Custom location set</span>';
+            closeModal('mapModal');
+        });
+    });
+</script>

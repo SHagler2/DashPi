@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>DashPi Display</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+        }
+        .display-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .display-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        /* Optional: show timestamp on hover */
+        .timestamp {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: monospace;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        body:hover .timestamp {
+            opacity: 1;
+        }
+    </style>
+    <script>
+        let lastModified = null;
+        const refreshIntervalMs = 3000;
+
+        async function refreshImage() {
+            const img = document.getElementById('displayImage');
+            if (!img) return;
+
+            try {
+                const headers = {};
+                if (lastModified) {
+                    headers['If-Modified-Since'] = lastModified;
+                }
+
+                const response = await fetch('/api/current_image', { headers });
+
+                if (response.status === 304) {
+                    return; // No change
+                }
+
+                if (!response.ok) {
+                    console.error('Failed to fetch image:', response.status);
+                    return;
+                }
+
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+
+                img.src = objectUrl;
+                lastModified = response.headers.get('Last-Modified');
+
+                // Update timestamp
+                const ts = document.getElementById('timestamp');
+                if (ts) {
+                    ts.textContent = new Date().toLocaleTimeString();
+                }
+            } catch (error) {
+                console.error('Error refreshing image:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshImage();
+            setInterval(refreshImage, refreshIntervalMs);
+        });
+    </script>
+</head>
+<body>
+    <div class="display-container">
+        <img id="displayImage" src="{{ url_for('static', filename='images/current_image.png') }}" alt="Current Display">
+    </div>
+    <div class="timestamp" id="timestamp"></div>
+</body>
+</html>

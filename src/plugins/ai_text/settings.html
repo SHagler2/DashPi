@@ -1,0 +1,84 @@
+<div class="form-group">
+    <div class="form-group nowrap">
+        <label for="title" class="form-label">Title:</label>
+        <input type="text" id="title" name="title" placeholder="Type something..." required class="form-input">
+    </div>
+
+    <!-- Provider Selection -->
+    <div class="form-group nowrap">
+        <label for="provider" class="form-label">AI Provider:</label>
+        <select id="provider" name="provider" class="form-input" onchange="toggleProviderOptions()">
+            <option value="gemini">Google Gemini</option>
+            <option value="openai">OpenAI (GPT)</option>
+        </select>
+    </div>
+
+    <!-- OpenAI Text Model Dropdown -->
+    <div id="openaiOptions" class="form-group nowrap">
+        <label for="textModel" class="form-label">Text Model:</label>
+        <select id="textModel" name="textModel" class="form-input">
+            <option value="gpt-4o-mini">GPT-4o mini</option>
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="gpt-4.1">GPT-4.1</option>
+            <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+            <option value="gpt-4.1-nano">GPT-4.1 nano</option>
+            <option value="gpt-5">GPT-5</option>
+            <option value="gpt-5-mini">GPT-5 mini</option>
+            <option value="gpt-5-nano">GPT-5 nano</option>
+        </select>
+    </div>
+
+    <!-- Gemini Text Model Dropdown -->
+    <div id="geminiOptions" class="form-group nowrap" style="display: none;">
+        <label for="geminiTextModel" class="form-label">Text Model:</label>
+        <select id="geminiTextModel" name="geminiTextModel" class="form-input">
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+            <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
+            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+        </select>
+    </div>
+</div>
+
+<div class="form-group">
+    <label for="textPrompt" class="form-label">Text Prompt:</label>
+    <input type="text" id="textPrompt" name="textPrompt" placeholder="Type something..." required class="form-input">
+</div>
+
+<script>
+    function toggleProviderOptions() {
+        const provider = document.getElementById("provider").value;
+        const openaiOptions = document.getElementById("openaiOptions");
+        const geminiOptions = document.getElementById("geminiOptions");
+
+        if (provider === "gemini") {
+            openaiOptions.style.display = "none";
+            geminiOptions.style.display = "flex";
+        } else {
+            openaiOptions.style.display = "flex";
+            geminiOptions.style.display = "none";
+        }
+    }
+
+    // populate form values from plugin settings
+    document.addEventListener('DOMContentLoaded', () => {
+        // defaults
+        var provider = 'gemini';
+        var textModel = 'gpt-4o-mini';
+        var geminiTextModel = 'gemini-2.0-flash';
+
+        if (loadPluginSettings) {
+            // Populate text inputs
+            document.getElementById('title').value = pluginSettings.title || '';
+            document.getElementById('textPrompt').value = pluginSettings.textPrompt || '';
+
+            provider = pluginSettings.provider || 'openai';
+            textModel = pluginSettings.textModel || 'gpt-4o-mini';
+            geminiTextModel = pluginSettings.geminiTextModel || 'gemini-1.5-flash';
+        }
+
+        document.getElementById('provider').value = provider;
+        document.getElementById('textModel').value = textModel;
+        document.getElementById('geminiTextModel').value = geminiTextModel;
+        toggleProviderOptions();
+    });
+</script>

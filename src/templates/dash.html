@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{{ config.name }}</title>
+
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DashPi">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='styles/main.css') }}">
+
+    <!-- Mobile-responsive status dashboard -->
+    <style>
+        .status-row {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        .status-left {
+            width: 65%;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 0;
+            flex-shrink: 0;
+        }
+        .status-right {
+            width: 35%;
+            position: relative;
+            display: flex;
+            flex-direction: row;
+            align-items: baseline;
+            padding-left: 16px;
+            padding-right: 40px;
+            flex-shrink: 0;
+        }
+        .status-item {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            min-width: 0;
+        }
+        .status-item.flex-1 {
+            flex: 1;
+        }
+        .status-item.no-shrink {
+            flex-shrink: 0;
+            gap: 10px;
+        }
+        .status-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .status-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Mobile responsive - stack on small screens */
+        @media (max-width: 768px) {
+            .status-row {
+                flex-wrap: wrap !important;
+                gap: 12px !important;
+            }
+            .status-left {
+                width: 100% !important;
+                flex-wrap: wrap !important;
+                gap: 10px !important;
+            }
+            .status-right {
+                width: 100% !important;
+                padding-left: 0 !important;
+                padding-right: 50px !important;
+                justify-content: flex-start !important;
+                flex-direction: row !important;
+                border-left: none !important;
+            }
+            .status-item {
+                gap: 6px !important;
+            }
+            .status-item.flex-1 {
+                flex: 0 1 auto !important;
+                max-width: 45% !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .status-left {
+                gap: 8px !important;
+            }
+            .status-item.no-shrink {
+                width: 100% !important;
+            }
+            .status-item.flex-1 {
+                max-width: 48% !important;
+            }
+            .status-label {
+                font-size: 10px !important;
+            }
+            .status-value {
+                font-size: 12px !important;
+            }
+        }
+
+        /* Responsive header */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 8px !important;
+            }
+            .header h1 {
+                font-size: 1.5rem !important;
+            }
+            .header-actions {
+                width: 100% !important;
+                justify-content: flex-start !important;
+            }
+        }
+    </style>
+    <script>
+        (function() {
+            const theme = localStorage.getItem('dashpi-theme') || 
+                         (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            if (theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+        let lastModified = null;
+        const refreshIntervalMs = 3 * 1000;
+
+        async function refreshImage() {
+            const img = document.querySelector('.image-container img');
+            if (!img) return;
+
+            try {
+                const headers = {};
+                if (lastModified) {
+                    headers['If-Modified-Since'] = lastModified;
+                }
+
+                const response = await fetch('{{ url_for("main.get_current_image") }}', { headers });
+                
+                if (response.status === 304) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    console.error('Failed to fetch image:', response.status);
+                    return;
+                }
+
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+
+                img.src = objectUrl;
+                lastModified = response.headers.get('Last-Modified');
+
+                // New image detected - refresh status bar immediately
+                updateCountdown();
+            } catch (error) {
+                console.error('Error refreshing image:', error);
+            }
+        }
+
+        // Countdown timer
+        let countdownSeconds = -1; // -1 means not yet loaded
+        let loopEnabled = true;
+
+        async function updateCountdown() {
+            try {
+                const response = await fetch('/api/next_change_time');
+                const data = await response.json();
+                if (data.success) {
+                    countdownSeconds = data.remaining_seconds;
+                    loopEnabled = data.loop_enabled !== false;
+
+                    // Update plugin names
+                    const currentPluginEl = document.getElementById('currentPlugin');
+                    const nextPluginEl = document.getElementById('nextPlugin');
+                    const countdownLabelEl = document.querySelector('.countdown-display .countdown-label');
+
+                    if (currentPluginEl && data.current_plugin) {
+                        currentPluginEl.textContent = data.current_plugin;
+                    }
+                    if (nextPluginEl) {
+                        nextPluginEl.textContent = loopEnabled ? (data.next_plugin || '...') : '-';
+                    }
+                    if (countdownLabelEl) {
+                        countdownLabelEl.textContent = loopEnabled ? 'Changes in' : 'Status';
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching countdown:', error);
+                countdownSeconds = 0;
+            }
+        }
+
+        function displayCountdown() {
+            const countdownEl = document.getElementById('countdown');
+            if (!countdownEl) return;
+
+            if (!loopEnabled) {
+                countdownEl.textContent = 'Paused';
+                return;
+            }
+
+            if (countdownSeconds === -1) {
+                countdownEl.textContent = 'Loading...';
+                return;
+            }
+
+            if (countdownSeconds <= 0) {
+                countdownEl.textContent = 'Changing...';
+                updateCountdown(); // Fetch new time
+                return;
+            }
+
+            const minutes = Math.floor(countdownSeconds / 60);
+            const seconds = countdownSeconds % 60;
+            countdownEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            countdownSeconds = Math.max(0, countdownSeconds - 1);
+        }
+
+        function updateLoopToggleStyle() {
+            const loopToggle = document.getElementById('loopToggle');
+            if (!loopToggle) return;
+            const enabled = loopToggle.dataset.enabled === 'true';
+            if (enabled) {
+                loopToggle.style.background = '#28a745';
+                loopToggle.style.color = 'white';
+            } else {
+                loopToggle.style.background = '#dc3545';
+                loopToggle.style.color = 'white';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshImage();
+            setInterval(refreshImage, refreshIntervalMs);
+
+            // Start countdown
+            updateCountdown(); // Initial fetch
+            setInterval(displayCountdown, 1000); // Update display every second
+            setInterval(updateCountdown, 30000); // Refresh from server every 30 seconds
+
+            // Initialize loop toggle button style
+            updateLoopToggleStyle();
+
+            // Register service worker for PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then(reg => console.log('Service Worker registered'))
+                    .catch(err => console.log('Service Worker registration failed:', err));
+            }
+        });
+
+        async function toggleLoop() {
+            const loopToggle = document.getElementById('loopToggle');
+            const loopToggleLabel = document.getElementById('loopToggleLabel');
+            const currentlyEnabled = loopToggle.dataset.enabled === 'true';
+            const newEnabled = !currentlyEnabled;
+
+            try {
+                const response = await fetch('/toggle_loop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: newEnabled })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    loopToggle.dataset.enabled = newEnabled;
+                    loopToggleLabel.textContent = newEnabled ? 'Enabled' : 'Disabled';
+                    loopEnabled = newEnabled;
+                    updateLoopToggleStyle();
+                    displayCountdown();
+                    updateCountdown();
+                } else {
+                    alert('Error: ' + (result.error || 'Failed to toggle loop'));
+                }
+            } catch (error) {
+                alert('Error toggling loop: ' + error.message);
+            }
+        }
+
+        async function skipToNext() {
+            const skipButton = document.getElementById('skipButton');
+            const countdownEl = document.getElementById('countdown');
+            skipButton.disabled = true;
+            skipButton.textContent = '...';
+            countdownEl.textContent = 'Skipping...';
+
+            try {
+                const response = await fetch('/api/skip_to_next', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    // Poll for update - refresh takes a few seconds
+                    let attempts = 0;
+                    const pollForUpdate = async () => {
+                        attempts++;
+                        await updateCountdown();
+                        // Keep polling until current plugin changes or max attempts
+                        if (attempts < 15) {
+                            setTimeout(pollForUpdate, 2000);
+                        } else {
+                            skipButton.disabled = false;
+                            skipButton.textContent = '▶';
+                        }
+                    };
+                    // Start polling after short delay
+                    setTimeout(pollForUpdate, 1000);
+                } else {
+                    alert('Error: ' + (result.error || 'Failed to skip'));
+                    skipButton.disabled = false;
+                    skipButton.textContent = '▶';
+                }
+            } catch (error) {
+                alert('Error skipping: ' + error.message);
+                skipButton.disabled = false;
+                skipButton.textContent = '▶';
+            }
+        }
+    </script>
+    <script src="{{ url_for('static', filename='scripts/image_modal.js') }}"></script>
+</head>
+<body>
+    <script src="{{ url_for('static', filename='scripts/dark_mode.js') }}"></script>
+    <!-- Main container -->
+    <div class="frame">
+        <!-- Header -->
+        <header class="header">
+            <h1>DashPi v{{ version }}</h1>
+
+            <div class="header-actions">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--text-secondary); white-space: nowrap;">
+                    <input type="checkbox" id="showMainStatus" style="width: 16px; height: 16px; cursor: pointer;" />
+                    Live Status
+                </label>
+                <a href="{{ url_for('main.display_page') }}" class="settings-button" title="Fullscreen Display" target="_blank">
+                    <span style="font-size: 20px;">🖼️</span>
+                </a>
+                <button class="settings-button dark-mode-toggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode"></button>
+                <a href="{{ url_for('apikeys.apikeys_page') }}" class="settings-button" title="API Keys">
+                    <span style="font-size: 20px;">🔑</span>
+                </a>
+                <a href="{{ url_for('loops.loops_page') }}" class="settings-button" title="Loops">
+                    <span style="font-size: 24px;">🔁</span>
+                </a>
+                <a href="{{ url_for('settings.settings_page') }}" class="settings-button">
+                    <img src="{{ url_for('static', filename='icons/settings.png') }}" title="Settings" alt="settings icon" class="icon-image">
+                </a>
+            </div>
+        </header>
+
+        <!-- Live Refresh Status -->
+        <div id="mainStatus" class="live-status-card">
+            <span id="mainStatusIcon" class="live-status-icon">&#9881;</span>
+            <span id="mainStatusText" class="live-status-text">Ready</span>
+        </div>
+
+        <!-- Status Dashboard Card -->
+        <div class="status-dashboard-card" style="padding: 12px 16px; display: block;">
+            <div class="status-row">
+                <!-- Left Section: Loop, Current, Next -->
+                <div class="status-left">
+                    <!-- Loop Toggle -->
+                    <div class="status-item no-shrink">
+                        <span class="status-label">Loop</span>
+                        <button id="loopToggle"
+                                class="mode-toggle-btn"
+                                data-enabled="{{ loop_enabled | default(true) | tojson }}"
+                                onclick="toggleLoop()"
+                                title="Click to enable/disable loop rotation"
+                                style="padding: 6px 14px; border-radius: 4px; border: none; cursor: pointer; font-weight: 600; font-size: 13px;">
+                            <span id="loopToggleLabel">{{ 'Enabled' if loop_enabled | default(true) else 'Disabled' }}</span>
+                        </button>
+                    </div>
+                    <!-- Current Plugin -->
+                    <div class="status-item flex-1">
+                        <span class="status-label">Current</span>
+                        <span id="currentPlugin" class="status-value">...</span>
+                    </div>
+                    <!-- Next Plugin -->
+                    <div class="status-item flex-1">
+                        <span class="status-label">Next</span>
+                        <span id="nextPlugin" class="status-value">...</span>
+                    </div>
+                </div>
+                <!-- Right Section: Status/Countdown -->
+                <div class="status-right">
+                    <span class="status-label countdown-label" style="margin-right: 8px;">Changes in</span>
+                    <span id="countdown" class="status-value" style="white-space: nowrap;">--:--</span>
+                    <button id="skipButton" onclick="skipToNext()" title="Skip to next plugin"
+                            style="position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: var(--accent-primary); color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;">
+                        ▶
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Featured Image Card -->
+        <div class="featured-image-card">
+            <div class="image-container">
+                <img src="{{ url_for('static', filename='images/current_image.png') }}" alt="Current Image">
+            </div>
+        </div>
+
+        <!-- Plugins Section -->
+        <div class="plugins-section">
+            <div class="plugins-header">
+                <h2 class="plugins-title">Plugins</h2>
+                <div class="plugins-controls">
+                    <button class="sort-toggle" id="sortToggle" title="Reorder plugins">Sort</button>
+                    <button class="view-toggle" id="viewToggle" title="Switch view">List</button>
+                </div>
+            </div>
+
+            <div class="sort-hint" id="sortHint">Drag plugins to reorder. Click "Save" when done.</div>
+
+            <div class="plugins-container" id="pluginsContainer">
+                {% for plugin in plugins %}
+                <a href="{{ url_for('plugin.plugin_page', plugin_id=plugin.id) }}"
+                   class="plugin-card"
+                   data-plugin-id="{{ plugin.id }}"
+                   title="{{ plugin.display_name }}"
+                   draggable="false">
+                    <div class="plugin-icon">
+                        <img src="{{ url_for('plugin.image', plugin_id=plugin.id, filename='icon.png') }}"
+                             alt="{{ plugin.display_name }}">
+                    </div>
+                    <span class="plugin-name">{{ plugin.display_name }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <script>
+            // View mode (grid/list)
+            const viewToggle = document.getElementById('viewToggle');
+            const pluginsContainer = document.getElementById('pluginsContainer');
+            let currentView = localStorage.getItem('dashpi-plugins-view') || 'grid';
+
+            function updateView() {
+                if (currentView === 'list') {
+                    pluginsContainer.classList.add('list-view');
+                    viewToggle.textContent = 'Grid';
+                } else {
+                    pluginsContainer.classList.remove('list-view');
+                    viewToggle.textContent = 'List';
+                }
+            }
+
+            viewToggle.addEventListener('click', () => {
+                currentView = currentView === 'grid' ? 'list' : 'grid';
+                localStorage.setItem('dashpi-plugins-view', currentView);
+                updateView();
+            });
+
+            updateView();
+
+            // Sort mode
+            const sortToggle = document.getElementById('sortToggle');
+            const sortHint = document.getElementById('sortHint');
+            let isSorting = false;
+            let draggedItem = null;
+
+            function enableSorting() {
+                isSorting = true;
+                sortToggle.classList.add('active');
+                sortToggle.textContent = 'Save';
+                sortHint.classList.add('visible');
+                pluginsContainer.classList.add('sorting');
+
+                document.querySelectorAll('.plugin-card').forEach(item => {
+                    item.draggable = true;
+                    item.addEventListener('dragstart', handleDragStart);
+                    item.addEventListener('dragend', handleDragEnd);
+                    item.addEventListener('dragover', handleDragOver);
+                    item.addEventListener('dragleave', handleDragLeave);
+                    item.addEventListener('drop', handleDrop);
+                    item.addEventListener('click', preventClick);
+                });
+            }
+
+            function disableSorting() {
+                isSorting = false;
+                sortToggle.classList.remove('active');
+                sortToggle.textContent = 'Sort';
+                sortHint.classList.remove('visible');
+                pluginsContainer.classList.remove('sorting');
+
+                document.querySelectorAll('.plugin-card').forEach(item => {
+                    item.draggable = false;
+                    item.removeEventListener('dragstart', handleDragStart);
+                    item.removeEventListener('dragend', handleDragEnd);
+                    item.removeEventListener('dragover', handleDragOver);
+                    item.removeEventListener('dragleave', handleDragLeave);
+                    item.removeEventListener('drop', handleDrop);
+                    item.removeEventListener('click', preventClick);
+                });
+
+                // Save order
+                savePluginOrder();
+            }
+
+            function preventClick(e) {
+                if (isSorting) {
+                    e.preventDefault();
+                }
+            }
+
+            function handleDragStart(e) {
+                draggedItem = this;
+                this.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            }
+
+            function handleDragEnd(e) {
+                this.classList.remove('dragging');
+                document.querySelectorAll('.plugin-card').forEach(item => {
+                    item.classList.remove('drag-over');
+                });
+            }
+
+            function handleDragOver(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (this !== draggedItem) {
+                    this.classList.add('drag-over');
+                }
+            }
+
+            function handleDragLeave(e) {
+                this.classList.remove('drag-over');
+            }
+
+            function handleDrop(e) {
+                e.preventDefault();
+                this.classList.remove('drag-over');
+
+                if (this !== draggedItem) {
+                    const items = Array.from(pluginsContainer.children);
+                    const draggedIndex = items.indexOf(draggedItem);
+                    const targetIndex = items.indexOf(this);
+
+                    if (draggedIndex < targetIndex) {
+                        this.parentNode.insertBefore(draggedItem, this.nextSibling);
+                    } else {
+                        this.parentNode.insertBefore(draggedItem, this);
+                    }
+                }
+            }
+
+            async function savePluginOrder() {
+                const order = Array.from(pluginsContainer.children).map(item => item.dataset.pluginId);
+                try {
+                    const response = await fetch('{{ url_for("main.save_plugin_order") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ order: order })
+                    });
+                    if (!response.ok) {
+                        console.error('Failed to save plugin order');
+                    }
+                } catch (error) {
+                    console.error('Error saving plugin order:', error);
+                }
+            }
+
+            sortToggle.addEventListener('click', () => {
+                if (isSorting) {
+                    disableSorting();
+                } else {
+                    enableSorting();
+                }
+            });
+        </script>
+    </div>
+
+    <!-- Global Refresh Status Polling -->
+    <script>
+    window.mainStatus = (function() {
+        const STORAGE_KEY = 'dashpi-show-main-status';
+        const toggle = document.getElementById('showMainStatus');
+        const bar = document.getElementById('mainStatus');
+        const icon = document.getElementById('mainStatusIcon');
+        const text = document.getElementById('mainStatusText');
+
+        let hideTimeout = null;
+        let refreshInProgress = false;
+        let refreshStartTimestamp = 0;
+        let pollTimer = null;
+
+        // Restore toggle state from localStorage
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            toggle.checked = saved === 'true';
+        } catch (e) { toggle.checked = false; }
+
+        toggle.addEventListener('change', function() {
+            try { localStorage.setItem(STORAGE_KEY, toggle.checked); } catch (e) {}
+            if (toggle.checked) { startPolling(); }
+            else { stopPolling(); hideBar(); }
+        });
+
+        function showBar() {
+            bar.style.display = 'flex';
+        }
+
+        function hideBar() {
+            bar.style.display = 'none';
+        }
+
+        function setBarStyle(stage) {
+            bar.classList.remove('status-success', 'status-error', 'status-active');
+            if (stage === 'displayed' || stage === 'rendering') {
+                bar.classList.add('status-success');
+            } else if (stage === 'error' || stage === 'unidentified') {
+                bar.classList.add('status-error');
+            } else {
+                bar.classList.add('status-active');
+            }
+        }
+
+        const stageIcons = {
+            refreshing:  '&#9881;',    generating:  '&#9881;',
+            processing:  '&#9881;',    displaying:  '&#128228;',
+            displayed:   '&#9989;',    idle:        '&#128164;',
+            error:       '&#9888;',    starting:    '&#9881;',
+            recording:   '&#127908;',  detecting:   '&#129504;',
+            detected:    '&#127925;',  identifying: '&#128269;',
+            rendering:   '&#127912;',  unidentified:'&#10067;',
+        };
+
+        const activeStages = new Set([
+            'refreshing', 'generating', 'processing', 'displaying',
+            'starting', 'recording', 'detecting', 'detected', 'identifying', 'rendering'
+        ]);
+        const terminalStages = new Set(['displayed', 'idle', 'error', 'unidentified']);
+
+        function updateBar(stageIcon, message, stage) {
+            icon.innerHTML = stageIcon;
+            text.textContent = message || stage;
+            setBarStyle(stage);
+        }
+
+        async function pollStatus() {
+            try {
+                const r = await fetch('/static/images/plugins/refresh_status.json?t=' + Date.now());
+                if (!r.ok) return;
+                const data = await r.json();
+                if (!data || typeof data.stage !== 'string') return;
+
+                const isActive = activeStages.has(data.stage);
+                const isTerminal = terminalStages.has(data.stage);
+
+                if (isActive) {
+                    if (!refreshInProgress) {
+                        refreshInProgress = true;
+                        refreshStartTimestamp = data.timestamp;
+                    }
+                    if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
+
+                    if (data.plugin_id && data.has_plugin_status) {
+                        try {
+                            const pr = await fetch('/images/' + encodeURIComponent(data.plugin_id) + '/status.json?t=' + Date.now());
+                            if (pr.ok) {
+                                const ps = await pr.json();
+                                if (ps && typeof ps.timestamp === 'number' && ps.timestamp >= refreshStartTimestamp - 2) {
+                                    updateBar(stageIcons[ps.stage] || stageIcons.generating, ps.detail, ps.stage);
+                                    showBar();
+                                    return;
+                                }
+                            }
+                        } catch (e) {}
+                    }
+
+                    updateBar(stageIcons[data.stage] || stageIcons.generating, data.detail, data.stage);
+                    showBar();
+                    return;
+                }
+
+                if (refreshInProgress && isTerminal) {
+                    refreshInProgress = false;
+                    updateBar(stageIcons[data.stage] || stageIcons.idle, data.detail, data.stage);
+                    showBar();
+                    if (hideTimeout) clearTimeout(hideTimeout);
+                    hideTimeout = setTimeout(hideBar, 4000);
+                }
+            } catch (e) {}
+        }
+
+        function startPolling() {
+            if (pollTimer) return;
+            pollTimer = setInterval(pollStatus, 800);
+        }
+
+        function stopPolling() {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        }
+
+        if (toggle.checked) startPolling();
+
+        return {};
+    })();
+    </script>
+</body>
+</html>

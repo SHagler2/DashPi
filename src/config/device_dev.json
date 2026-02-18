@@ -1,0 +1,50 @@
+{
+    "name": "DashPi Development",
+    "display_type": "mock",
+    "resolution": [
+        800,
+        480
+    ],
+    "orientation": "horizontal",
+    "plugin_order": [
+        "calendar",
+        "ai_image",
+        "ai_text",
+        "clock",
+        "comic",
+        "countdown",
+        "github",
+        "image_album",
+        "image_folder",
+        "image_upload",
+        "apod",
+        "image_url",
+        "newspaper",
+        "rss",
+        "screenshot",
+        "todo_list",
+        "unsplash",
+        "weather",
+        "wpotd",
+        "year_progress"
+    ],
+    "loop_config": {
+        "loops": [
+            {
+                "name": "Default",
+                "start_time": "00:00",
+                "end_time": "24:00",
+                "plugin_order": [],
+                "current_plugin_index": null
+            }
+        ],
+        "rotation_interval_seconds": 300,
+        "active_loop": null
+    },
+    "refresh_info": {
+        "refresh_time": null,
+        "image_hash": null,
+        "refresh_type": null,
+        "plugin_id": null
+    }
+}

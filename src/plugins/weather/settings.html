@@ -1,0 +1,334 @@
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<!-- Location Search - Line 1 -->
+<div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+    <label class="form-label" style="margin: 0; white-space: nowrap;">Location:</label>
+    <input type="text" id="citySearch" placeholder="Enter city name (e.g., Dallas, TX)" style="flex: 1; min-width: 200px;" class="form-input" />
+    <button type="button" id="searchCityBtn" class="action-button compact">Search</button>
+</div>
+<div id="cityResults" style="margin-bottom: 10px;"></div>
+
+<!-- Coordinates and Map Button - Line 2 -->
+<div class="form-group" style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+    <span>Latitude:</span>
+    <input readonly type="text" id="latitude" name="latitude" class="form-input" style="width: 100px;" />
+    <span>Longitude:</span>
+    <input readonly type="text" id="longitude" name="longitude" class="form-input" style="width: 100px;" />
+    <button type="button" id="openMap" class="action-button compact">Select on Map</button>
+</div>
+
+<div class="form-group">
+    <label for="weatherProvider" class="form-label">Weather Provider:</label>
+    <select id="weatherProvider" name="weatherProvider" class="form-input" onchange="updateTitleOptions(this.value)">
+        <option value="OpenMeteo">Open-Meteo</option>
+        <option value="OpenWeatherMap">OpenWeatherMap</option>
+    </select>
+
+    <label for="units" class="form-label">Units:</label>
+    <select id="units" name="units" class="form-input">
+        <option value="imperial">Imperial (°F)</option>
+        <option value="metric">Metric (°C)</option>
+        <option value="standard">Standard (K)</option>
+    </select>
+</div>
+
+<div class="form-group" id="titleOptionWrapper">
+    <label class="form-label">Title:</label>
+
+    <div class="form-group">
+        <input type="radio" id="title-location" name="titleSelection" value="location">
+        <label for="title-location">Location</label>
+
+        <input type="radio" id="title-custom" name="titleSelection" value="custom">
+        <label for="title-custom">Custom</label>
+        <input type="text" id="customTitle" name="customTitle" class="form-input" placeholder="Type something..." />
+    </div>
+</div>
+
+<div class="form-group">
+    <label for="displayMetrics" class="form-label">Display: </label>
+
+    <div class="form-group">
+      <input type="checkbox" id="displayRefreshTime" name="displayRefreshTime" onclick="this.value=this.checked ? 'true' : 'false';">
+      <span>Refresh Time</span>
+    </div>
+
+    <div class="form-group">
+        <input type="checkbox" id="displayMetrics" name="displayMetrics" onclick="this.value=this.checked ? 'true' : 'false';">
+        <span>Metrics</span>
+    </div>
+
+    <div class="form-group">
+        <input type="checkbox" id="displayGraph" name="displayGraph" onclick="this.value=this.checked ? 'true' : 'false';">
+        <span>Weather Graph</span>
+    </div>
+
+    <div class="form-group">
+        <input type="checkbox" id="displayRain" name="displayRain" onclick="this.value=this.checked ? 'true' : 'false';">
+        <span>Rain Amount</span>
+    </div>
+	
+
+    <div class="form-group">
+        <input type="checkbox" id="moonPhase" name="moonPhase" onclick="this.value=this.checked ? 'true' : 'false';">
+        <span>Moon Phase</span>
+    </div>
+	
+	<div class="form-group">
+		<input type="checkbox" id="displayGraphIcons" name="displayGraphIcons" onclick="this.value=this.checked ? 'true' : 'false';">
+		<span>Graph icons every</span>
+		<select id="graphIconStep" name="graphIconStep" class="form-input">
+			<option value="1">1</option>
+			<option value="2" selected>2</option>
+			<option value="4">4</option>
+			<option value="6">6</option>
+			<option value="12">12</option>
+		</select>
+		<span>hours</span>
+	</div>
+
+    <div class="form-group">
+        <input type="checkbox" id="displayForecast" name="displayForecast" onclick="this.value=this.checked ? 'true' : 'false';">
+        <span>Forecast</span>
+        <select id="forecastDays" name="forecastDays" class="form-input">
+            <option value=3>3</option>
+            <option value=5>5</option>
+            <option value=7>7</option>
+        </select>
+        <span>days</span>
+    </div>
+
+    <div class="form-group">
+        <label for="weatherTimeZone" class="form-label">Time Zone:</label>
+        <select id="weatherTimeZone" name="weatherTimeZone" class="form-input">
+            <option value="locationTimeZone">Use Location Time Zone</option>
+            <option value="localTimeZone">Use Local Time Zone</option>
+        </select>
+    </div>
+
+</div>
+
+<div id="mapModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button" onclick="closeModal('mapModal')">×</span>
+        <h2 id="modalTitle">Select Location</h2>
+        <div class="separator"></div>
+        <div id="map" style="width: 100%; height: 200px; margin: 10px 0px;"></div>
+        <button id="closeMap" class="action-button">Save</button>
+    </div>
+</div>
+
+<script>
+
+    function updateTitleOptions(provider) {
+        const titleLocationRadio = document.getElementById('title-location');
+        const titleLocationLabel = document.querySelector('label[for="title-location"]');
+        const titleCustomRadio = document.getElementById('title-custom');
+        const customTitleInput = document.getElementById('customTitle');
+        const titleTimeZone = document.getElementById('weatherTimeZone');
+        const titleTimeZoneLabel = document.querySelector('label[for="weatherTimeZone"]');
+        const apiKeyLabel = document.querySelector('.api-key-label');
+
+        if (provider === 'OpenMeteo') {
+            // Hide or disable "Location" radio option
+            titleLocationRadio.style.display = 'none';
+            titleLocationLabel.style.display = 'none';
+            titleLocationRadio.disabled = true;
+            titleTimeZone.style.display = 'none';
+            titleTimeZoneLabel.style.display = 'none';
+            titleTimeZone.disabled = true;
+
+            // Select and enable "Custom"
+            titleCustomRadio.checked = true;
+            titleCustomRadio.disabled = false;
+            customTitleInput.disabled = false;
+
+            // Hide API Key required label for Open-Meteo
+            if (apiKeyLabel) apiKeyLabel.style.display = 'none';
+        } else {
+            // Show and enable both options
+            titleLocationRadio.style.display = '';
+            titleLocationLabel.style.display = '';
+            titleLocationRadio.disabled = false;
+
+            titleCustomRadio.disabled = false;
+            customTitleInput.disabled = false;
+
+            titleTimeZone.style.display = '';
+            titleTimeZoneLabel.style.display = '';
+            titleTimeZone.disabled = false;
+
+            // Show API Key required label for OpenWeatherMap
+            if (apiKeyLabel) apiKeyLabel.style.display = '';
+        }
+    }
+
+    // City Search Function
+    async function searchCity() {
+        const cityName = document.getElementById('citySearch').value.trim();
+        const resultsDiv = document.getElementById('cityResults');
+
+        if (!cityName) {
+            resultsDiv.innerHTML = '<div style="color: #dc3545; font-size: 14px;">Please enter a city name</div>';
+            return;
+        }
+
+        resultsDiv.innerHTML = '<div style="font-size: 14px; color: #666;">Searching...</div>';
+
+        try {
+            const response = await fetch('/search_city', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ city_name: cityName })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.cities) {
+                let html = '<div style="font-size: 14px; margin-bottom: 8px; font-weight: bold;">Select a location:</div>';
+                result.cities.forEach(city => {
+                    html += `
+                        <button type="button"
+                                onclick="selectCity(${city.latitude}, ${city.longitude}, '${city.display.replace(/'/g, "\\'")}')"
+                                style="display: block; width: 100%; padding: 10px; margin-bottom: 8px; background: #f8f9fa; border: 1px solid #ccc; border-radius: 4px; text-align: left; cursor: pointer; font-size: 14px;">
+                            <strong>${city.display}</strong> (${city.country})
+                        </button>
+                    `;
+                });
+                resultsDiv.innerHTML = html;
+            } else {
+                resultsDiv.innerHTML = `<div style="color: #dc3545; font-size: 14px;">${result.error || 'No cities found'}</div>`;
+            }
+        } catch (error) {
+            resultsDiv.innerHTML = '<div style="color: #dc3545; font-size: 14px;">Error searching for city</div>';
+        }
+    }
+
+    function selectCity(lat, lon, displayName) {
+        document.getElementById('latitude').value = lat;
+        document.getElementById('longitude').value = lon;
+        document.getElementById('cityResults').innerHTML =
+            `<div style="padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; font-size: 14px; color: #155724;">
+                ✓ Selected: ${displayName}<br>
+                <span style="font-size: 12px;">Lat: ${lat}, Lon: ${lon}</span>
+            </div>`;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+
+        const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        const $latitude = document.querySelector('#latitude');
+        const $longitude = document.querySelector('#longitude');
+        const $openMap = document.querySelector('#openMap');
+        const $mapModal = document.querySelector('#mapModal');
+        const $closeMap = document.querySelector('#closeMap');
+
+        // City search button handler
+        document.getElementById('searchCityBtn').addEventListener('click', searchCity);
+
+        // Allow Enter key in city search
+        document.getElementById('citySearch').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchCity();
+            }
+        });
+
+        let latitude = +$latitude.value;
+        let longitude = +$longitude.value;
+        let zoom = latitude && longitude ? 4.5 : 2.5;
+        let selectedTitle = 'location';
+        let weatherProvider = 'OpenMeteo';
+
+        let map, marker;
+
+        $openMap.addEventListener('click', () => {
+            openModal('mapModal')
+            setTimeout(() => {
+                if (!map) {
+                    map = L.map('map').setView([latitude, longitude], zoom);
+                    L.tileLayer(OSM_TILE_URL).addTo(map);
+                    marker = L.marker([latitude, longitude], { draggable: true }).addTo(map);
+
+                    map.on('click', event => {
+                        marker.setLatLng(event.latlng);
+                    });
+                }
+            }, 100);
+        });
+
+        $closeMap.addEventListener('click', () => {
+            const position = marker.getLatLng().wrap();
+            $latitude.value = position.lat;
+            $longitude.value = position.lng;
+            closeModal('mapModal');
+        });
+
+        if (loadPluginSettings) {
+            document.getElementById('latitude').value = pluginSettings.latitude;
+            document.getElementById('longitude').value = pluginSettings.longitude;
+
+            document.getElementById('units').value = pluginSettings.units;
+
+            document.getElementById('displayRefreshTime').checked = pluginSettings.displayRefreshTime;
+            document.getElementById('displayRefreshTime').value = pluginSettings.displayRefreshTime;
+
+            document.getElementById('displayMetrics').checked = pluginSettings.displayMetrics;
+            document.getElementById('displayMetrics').value = pluginSettings.displayMetrics;
+
+            document.getElementById('displayGraph').checked = pluginSettings.displayGraph;
+            document.getElementById('displayGraph').value = pluginSettings.displayGraph;
+
+			document.getElementById('displayRain').checked = pluginSettings.displayRain;
+            document.getElementById('displayRain').value = pluginSettings.displayRain;
+			
+			document.getElementById('displayGraphIcons').checked = pluginSettings.displayGraphIcons;
+            document.getElementById('displayGraphIcons').value = pluginSettings.displayGraphIcons;
+			
+            document.getElementById('displayForecast').checked = pluginSettings.displayForecast;
+            document.getElementById('displayForecast').value = pluginSettings.displayForecast;
+
+            document.getElementById('forecastDays').value = pluginSettings.forecastDays;
+
+            document.getElementById('moonPhase').checked = pluginSettings.moonPhase;
+            document.getElementById('moonPhase').value = pluginSettings.moonPhase;
+
+            document.getElementById('weatherTimeZone').value = pluginSettings.weatherTimeZone;
+            
+            selectedTitle = pluginSettings.titleSelection || 'location';
+            weatherProvider = pluginSettings.weatherProvider || 'OpenMeteo';
+
+            document.getElementById('customTitle').value = pluginSettings.customTitle || '';
+        } else {
+            // set default values - Dallas, Texas with all options enabled
+            document.getElementById('latitude').value = "32.7767";
+            document.getElementById('longitude').value = "-96.7970";
+            document.getElementById('units').value = "imperial";
+            document.getElementById('displayRefreshTime').checked = true;
+            document.getElementById('displayRefreshTime').value = "true";
+            document.getElementById('displayMetrics').checked = true;
+            document.getElementById('displayMetrics').value = "true";
+            document.getElementById('displayGraph').checked = true;
+            document.getElementById('displayGraph').value = "true";
+            document.getElementById('displayRain').checked = true;
+            document.getElementById('displayRain').value = "true";
+            document.getElementById('displayGraphIcons').checked = true;
+            document.getElementById('displayGraphIcons').value = "true";
+            document.getElementById('graphIconStep').value = "2";
+            document.getElementById('displayForecast').checked = true;
+            document.getElementById('displayForecast').value = "true";
+            document.getElementById('forecastDays').value = "7";
+            document.getElementById('moonPhase').checked = true;
+            document.getElementById('moonPhase').value = "true";
+            document.getElementById('weatherTimeZone').value = "locationTimeZone";
+            document.getElementById('customTitle').value = "Dallas, Texas";
+            selectedTitle = "custom";
+            weatherProvider = "OpenMeteo";
+        }
+
+        document.getElementById('weatherProvider').value = weatherProvider;
+        document.querySelector(`input[name="titleSelection"][value="${selectedTitle}"]`).checked = true;
+        updateTitleOptions(weatherProvider)
+    });
+</script>
