@@ -80,6 +80,11 @@ class ISSTracker(BasePlugin):
         timezone_name = device_config.get_config("timezone", default="UTC")
         time_format = device_config.get_config("time_format", default="12h")
 
+        # Use city name from settings if available, fall back to nearest landmark
+        obs_city = settings.get("cityName", "").split(",")[0].strip()
+        if not obs_city:
+            obs_city = _nearest_city(lat, lon, landmarks_path)
+
         if mode == "nadir":
             img = self._render_nadir(
                 dimensions,
@@ -95,6 +100,7 @@ class ISSTracker(BasePlugin):
                 time_format,
                 tle_lines,
                 now_utc,
+                obs_city,
             )
         elif mode == "prepass":
             active_pass = _get_active_pass(now_utc, passes, prepass_minutes)
@@ -140,6 +146,7 @@ class ISSTracker(BasePlugin):
         time_format,
         tle_lines,
         now_utc,
+        obs_city="",
     ):
         w, h = dimensions
         info_h = int(h * 0.18)
@@ -201,6 +208,7 @@ class ISSTracker(BasePlugin):
             units,
             timezone_name,
             time_format,
+            obs_city,
         )
 
         return img
@@ -347,6 +355,7 @@ class ISSTracker(BasePlugin):
         units,
         timezone_name,
         time_format,
+        obs_city="",
     ):
         # Background
         draw.rectangle([(0, map_h), (w, h)], fill=(0, 0, 0))
@@ -418,8 +427,11 @@ class ISSTracker(BasePlugin):
                 time_str = rise_local.strftime("%I:%M %p").lstrip("0")
 
             max_el = next_pass.get("max_elevation", 0)
-            pass_text = f"Next pass: {time_str}"
-            el_text = f"Max el: {max_el:.0f}\u00b0"
+            if obs_city:
+                pass_text = f"Next pass over {obs_city}: {time_str}"
+            else:
+                pass_text = f"Next pass: {time_str}"
+            el_text = f"Max elevation: {max_el:.0f}\u00b0"
 
             # Right-align
             if font:
@@ -668,7 +680,7 @@ class ISSTracker(BasePlugin):
         info_items = [
             ("Rise", rise_str),
             ("Set", set_str),
-            ("Max El", f"{max_el:.0f}\u00b0"),
+            ("Max Elevation", f"{max_el:.0f}\u00b0"),
             ("Duration", duration_str),
         ]
 
@@ -776,7 +788,7 @@ class ISSTracker(BasePlugin):
 
             items = [
                 ("Time", rise_str),
-                ("Peak El", f"{max_el:.0f}\u00b0"),
+                ("Peak Elevation", f"{max_el:.0f}\u00b0"),
                 ("Duration", duration_str),
             ]
 
@@ -968,6 +980,29 @@ def _get_crew_count():
     except Exception as e:
         logger.warning(f"Failed to get crew count: {e}")
         return 0
+
+
+def _nearest_city(lat, lon, landmarks_path):
+    """Find the nearest city name to the observer's location."""
+    try:
+        with open(landmarks_path, "r") as f:
+            landmarks = json.load(f)
+    except Exception:
+        return ""
+
+    min_dist = float("inf")
+    nearest = None
+    for lm in landmarks:
+        d = _haversine(lat, lon, lm["lat"], lm["lon"])
+        if d < min_dist:
+            min_dist = d
+            nearest = lm
+
+    if nearest:
+        # Return just the city name (before the comma)
+        name = nearest["name"]
+        return name.split(",")[0].strip()
+    return ""
 
 
 def _reverse_geocode(lat, lon, landmarks_path):

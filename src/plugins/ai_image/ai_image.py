@@ -1,11 +1,9 @@
 from plugins.base_plugin.base_plugin import BasePlugin
-from openai import OpenAI
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import base64
 import random
 import html
-import feedparser
 from utils.http_client import get_http_session
 import logging
 
@@ -178,6 +176,8 @@ class AIImage(BasePlugin):
 
     def _fetch_news_headline(self, feed_urls):
         """Fetch headlines from RSS feeds and return a random one."""
+        import feedparser
+
         session = get_http_session()
         all_headlines = []
 
@@ -203,6 +203,8 @@ class AIImage(BasePlugin):
 
     def _generate_with_openai(self, settings, device_config, text_prompt, randomize_prompt, orientation, is_news=False):
         """Generate image using OpenAI DALL-E."""
+        from openai import OpenAI
+
         api_key = device_config.load_env_key("OPEN_AI_SECRET")
         if not api_key:
             logger.error("OpenAI API Key not configured")

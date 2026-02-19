@@ -32,6 +32,11 @@
         </select>
     </div>
 
+    <div class="form-group nowrap">
+        <label class="form-label">Dark Mode:</label>
+        <input type="checkbox" id="darkMode" name="darkMode" value="on">
+    </div>
+
     <div class="form-group">
         <label for="autoRefresh" class="form-label">Auto-Refresh Prices:</label>
         <div style="display: flex; gap: 10px; align-items: center;">
@@ -352,7 +357,8 @@
         const settings = {
             autoRefresh: document.getElementById('autoRefresh').value || '0',
             fontSize: document.getElementById('fontSize').value || 'normal',
-            title: document.getElementById('title').value || ''
+            title: document.getElementById('title').value || '',
+            darkMode: document.getElementById('darkMode').checked ? 'on' : 'off'
         };
         try {
             await fetch('/plugin/stocks/settings', {
@@ -369,6 +375,7 @@
     document.getElementById('autoRefresh')?.addEventListener('change', saveStocksSettings);
     document.getElementById('fontSize')?.addEventListener('change', saveStocksSettings);
     document.getElementById('title')?.addEventListener('blur', saveStocksSettings);
+    document.getElementById('darkMode')?.addEventListener('change', saveStocksSettings);
 
     document.addEventListener('DOMContentLoaded', async () => {
         loadSavedTickers();
@@ -379,6 +386,7 @@
         let fontSize = savedSettings.fontSize || "normal";
         let autoRefresh = savedSettings.autoRefresh || "0";
         let title = savedSettings.title || "";
+        let darkMode = savedSettings.darkMode === 'on' || savedSettings.darkMode === true;
 
         // Override with loop plugin settings if editing from loop
         if (typeof loadPluginSettings !== 'undefined' && loadPluginSettings) {
@@ -386,10 +394,14 @@
             document.getElementById('tickers').value = pluginSettings.tickers || '';
             fontSize = pluginSettings.fontSize || fontSize;
             autoRefresh = pluginSettings.autoRefresh || autoRefresh;
+            if (pluginSettings.darkMode !== undefined) {
+                darkMode = pluginSettings.darkMode === 'on' || pluginSettings.darkMode === true;
+            }
         }
 
         document.getElementById('title').value = title;
         document.getElementById('fontSize').value = fontSize;
         document.getElementById('autoRefresh').value = autoRefresh;
+        document.getElementById('darkMode').checked = darkMode;
     });
 </script>

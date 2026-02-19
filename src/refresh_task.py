@@ -153,14 +153,15 @@ class RefreshTask:
                         sleep_time = 10
                         logger.info("First run after boot, using 10s startup delay")
 
-                    # Update status with next change countdown
-                    if sleep_time >= 3600:
-                        remaining = f"{sleep_time / 3600:.1f}h"
-                    elif sleep_time >= 60:
-                        remaining = f"{int(sleep_time / 60)}m"
-                    else:
-                        remaining = f"{int(sleep_time)}s"
-                    self._set_global_status("idle", f"Next change in {remaining}")
+                    # Update status with next change countdown (skip for very short intervals like continuous Shazam)
+                    if sleep_time >= 15:
+                        if sleep_time >= 3600:
+                            remaining = f"{sleep_time / 3600:.1f}h"
+                        elif sleep_time >= 60:
+                            remaining = f"{int(sleep_time / 60)}m"
+                        else:
+                            remaining = f"{int(sleep_time)}s"
+                        self._set_global_status("idle", f"Next change in {remaining}")
 
                     # Wait for sleep_time or until notified
                     self.condition.wait(timeout=sleep_time)
@@ -242,6 +243,12 @@ class RefreshTask:
                         self._set_global_status("generating", f"Generating {plugin_name}...", plugin_name, plugin_id)
                         image = refresh_action.execute(plugin, self.device_config, current_dt)
 
+                        # Plugin returned None — skip display update (e.g., Shazam grace period)
+                        if image is None:
+                            logger.info(f"Plugin returned None, skipping display update. | plugin_id: {plugin_id}")
+                            self._set_global_status("displayed", f"No update needed: {plugin_name}", plugin_name, plugin_id)
+                            continue
+
                         # Add plugin icon overlay if enabled
                         if self.device_config.get_config("show_plugin_icon", default=False):
                             image = self._add_plugin_icon_overlay(image, plugin_id)
@@ -251,11 +258,15 @@ class RefreshTask:
 
                         refresh_info = refresh_action.get_refresh_info()
                         refresh_info.update({"refresh_time": current_dt.isoformat(), "image_hash": image_hash})
-                        # check if image is the same as current image
-                        if image_hash != latest_refresh.image_hash:
+                        # Manual updates always force display refresh; auto/loop skip if unchanged
+                        is_manual = isinstance(refresh_action, ManualRefresh)
+                        if is_manual or image_hash != latest_refresh.image_hash:
                             self._set_global_status("displaying", f"Sending to display: {plugin_name}...", plugin_name, plugin_id)
                             logger.info(f"Updating display. | refresh_info: {refresh_info}")
-                            self.display_manager.display_image(image, image_settings=plugin.config.get("image_settings", []))
+                            brightness_override = {}
+                            if isinstance(refresh_action, LoopRefresh) and refresh_action.loop.brightness is not None:
+                                brightness_override = {"brightness": refresh_action.loop.brightness}
+                            self.display_manager.display_image(image, image_settings=plugin.config.get("image_settings", []), image_settings_override=brightness_override)
                             # Simple log for easy scanning of display history
                             logger.info(f"DISPLAYED: {plugin_name}")
                             self._set_global_status("displayed", f"Displayed: {plugin_name}", plugin_name, plugin_id)
@@ -648,6 +659,8 @@ class LoopRefresh(RefreshAction):
             logger.info(f"Refreshing plugin data ({reason}). | plugin_id: '{self.plugin_reference.plugin_id}'")
             # Generate a new image with plugin's settings (or empty dict if none)
             image = plugin.generate_image(self.plugin_reference.plugin_settings, device_config)
+            if image is None:
+                return None  # Plugin opted to skip (e.g., grace period)
             image.save(plugin_image_path)
             self.plugin_reference.latest_refresh_time = current_dt.isoformat()
         else:

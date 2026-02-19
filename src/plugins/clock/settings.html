@@ -18,6 +18,7 @@
         {% endfor %}
     </div>
     <input type="hidden" id="selected-clock-face" name="selectedClockFace" value="{{ clock_faces[0].Name }}" />
+    <input type="hidden" id="autoRefresh" name="autoRefresh" value="1" />
 </div>
 <div class="form-group">
     <div class="form-group">
@@ -68,6 +69,8 @@
             selectedOption.classList.add('selected');
             selectedClockFaceInput.value = selectedOption.getAttribute('data-face-name');
         }
+
+        document.getElementById('autoRefresh').value = pluginSettings?.autoRefresh || '1';
 
         if (pluginSettings.primaryColor) {
             document.querySelector("[name=primaryColor]").value = pluginSettings.primaryColor;

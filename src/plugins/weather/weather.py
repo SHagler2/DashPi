@@ -6,8 +6,6 @@ from utils.layout_utils import draw_rounded_rect
 import os
 import logging
 from datetime import datetime, timedelta, timezone, date
-from astral import moon
-import pytz
 from io import BytesIO
 import math
 from utils.http_client import get_http_session
@@ -104,6 +102,8 @@ class Weather(BasePlugin):
 
         weather_provider = settings.get('weatherProvider', 'OpenWeatherMap')
         title = settings.get('customTitle', '')
+
+        import pytz
 
         timezone = device_config.get_config("timezone", default="America/New_York")
         time_format = device_config.get_config("time_format", default="12h")
@@ -854,6 +854,7 @@ class Weather(BasePlugin):
             target_date: date = dt.date() + timedelta(days=1)
 
             try:
+                from astral import moon
                 phase_age = moon.phase(target_date)
                 phase_name_north_hemi = get_moon_phase_name(phase_age)
                 LUNAR_CYCLE_DAYS = 29.530588853
@@ -1181,6 +1182,8 @@ class Weather(BasePlugin):
     
     def parse_timezone(self, weatherdata):
         """Parse timezone from weather data"""
+        import pytz
+
         if 'timezone' in weatherdata:
             logger.info(f"Using timezone from weather data: {weatherdata['timezone']}")
             return pytz.timezone(weatherdata['timezone'])

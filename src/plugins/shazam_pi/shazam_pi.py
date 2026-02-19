@@ -39,6 +39,8 @@ class ShazamPi(BasePlugin):
         self._class_names = None
         self._shazam = None
         self._last_song = None
+        self._consecutive_misses = 0
+        self._last_song_time = 0
         self._last_weather = None
         self._last_weather_fetch = None
         self._recording_duration = None
@@ -89,6 +91,8 @@ class ShazamPi(BasePlugin):
             if song:
                 self._last_song = song
                 self._shazam_fail_count = 0
+                self._consecutive_misses = 0
+                self._last_song_time = time.time()
                 self._set_status("rendering", f"Found: {song['title']} by {song['artist']}")
                 return self._render_song(song, dimensions, settings)
 
@@ -101,6 +105,8 @@ class ShazamPi(BasePlugin):
             if song:
                 self._last_song = song
                 self._shazam_fail_count = 0
+                self._consecutive_misses = 0
+                self._last_song_time = time.time()
                 self._set_status("rendering", f"Found: {song['title']} by {song['artist']}")
                 return self._render_song(song, dimensions, settings)
 
@@ -111,9 +117,18 @@ class ShazamPi(BasePlugin):
                 dimensions, settings, device_config, top_class, top_score
             )
 
-        # 4. No music: show idle display
-        logger.info("No music detected, showing idle display")
+        # 4. No music detected — apply grace period before showing idle
+        self._consecutive_misses += 1
         self._shazam_fail_count = 0
+        time_since_song = time.time() - self._last_song_time if self._last_song_time else float('inf')
+
+        if self._last_song and (self._consecutive_misses < 3 or time_since_song < 600):
+            logger.info(f"No music detected, keeping last song (miss #{self._consecutive_misses}, {time_since_song:.0f}s since last song)")
+            self._set_status("idle", f"No music (miss #{self._consecutive_misses}, keeping last song)")
+            return None  # Skip display update — keep whatever is currently shown
+
+        logger.info("No music detected, showing idle display")
+        self._last_song = None
         self._set_status("idle", f"No music detected ({top_class} {top_score:.0%})")
         return self._render_idle(dimensions, settings, device_config, status_note="No Music Detected")
 
@@ -195,8 +210,8 @@ class ShazamPi(BasePlugin):
             from ai_edge_litert.interpreter import Interpreter
             self._interpreter = Interpreter(model_path=ML_MODEL_PATH)
         except (ModuleNotFoundError, ImportError):
-            import tflite_runtime.Interpreter as tfl
-            self._interpreter = tfl.Interpreter(model_path=ML_MODEL_PATH)
+            from tflite_runtime.interpreter import Interpreter
+            self._interpreter = Interpreter(model_path=ML_MODEL_PATH)
 
         input_details = self._interpreter.get_input_details()
         self._waveform_input_index = input_details[0]['index']
@@ -311,9 +326,13 @@ class ShazamPi(BasePlugin):
             image = self._add_title_overlay(
                 image, song['title'], song.get('artist', '')
             )
-            # In fit mode (non-pixelated), add rotated "Now Playing..." in the left letterbox bar
-            if fit_mode == 'fit' and not pixelated:
-                image = self._add_now_playing_label(image)
+            # In fit mode (non-pixelated), add rotated label in the left letterbox bar
+            show_label = settings.get("showLetterboxLabel") in ("on", True)
+            if show_label and fit_mode == 'fit' and not pixelated:
+                letterbox_label = settings.get("letterboxLabel", "").strip()
+                if letterbox_label == "":
+                    letterbox_label = "Now Playing..."
+                image = self._add_now_playing_label(image, letterbox_label)
 
         logger.info("=== ShazamPi Plugin: Song image generated ===")
         return image
@@ -372,8 +391,8 @@ class ShazamPi(BasePlugin):
         logger.info(f"Applied pixelated effect: {pixel_size}x{pixel_size} grid, led_style={led_style}")
         return canvas
 
-    def _add_now_playing_label(self, image):
-        """Add rotated 'Now Playing...' text in the left black letterbox bar."""
+    def _add_now_playing_label(self, image, text="Now Playing..."):
+        """Add rotated label text in the left black letterbox bar."""
         img = image.copy()
         width, height = img.size
 
@@ -389,8 +408,6 @@ class ShazamPi(BasePlugin):
 
         if bar_width < 20:
             return img
-
-        text = "Now Playing..."
 
         # Find font size that fits text within the display height
         try:

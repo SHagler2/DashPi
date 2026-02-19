@@ -6,13 +6,10 @@ from plugins.calendar.constants import LOCALE_MAP, FONT_SIZES
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 from utils.text_utils import get_text_dimensions, truncate_text
 from utils.layout_utils import draw_rounded_rect
-import icalendar
-import recurring_ical_events
 from io import BytesIO
 import logging
 from datetime import datetime, timedelta, date
 from utils.http_client import get_http_session
-import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +21,8 @@ class Calendar(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        import pytz
+
         calendar_urls = settings.get('calendarURLs[]')
         calendar_colors = settings.get('calendarColors[]')
         view = settings.get("viewMode")
@@ -42,7 +41,7 @@ class Calendar(BasePlugin):
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":
             dimensions = dimensions[::-1]
-        
+
         timezone = device_config.get_config("timezone", default="America/New_York")
         time_format = device_config.get_config("time_format", default="12h")
         tz = pytz.timezone(timezone)
@@ -419,6 +418,8 @@ class Calendar(BasePlugin):
         return image
     
     def fetch_ics_events(self, calendar_urls, colors, tz, start_range, end_range):
+        import recurring_ical_events
+
         parsed_events = []
 
         for calendar_url, color in zip(calendar_urls, colors):
@@ -486,6 +487,8 @@ class Calendar(BasePlugin):
         return start, end, all_day
 
     def fetch_calendar(self, calendar_url):
+        import icalendar
+
         # workaround for webcal urls
         if calendar_url.startswith("webcal://"):
             calendar_url = calendar_url.replace("webcal://", "https://")

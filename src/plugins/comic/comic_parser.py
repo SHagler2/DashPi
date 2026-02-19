@@ -1,4 +1,3 @@
-import feedparser
 import html
 import re
 
@@ -64,6 +63,8 @@ COMICS = {
 
 
 def get_panel(comic_name):
+    import feedparser
+
     feed = feedparser.parse(COMICS[comic_name]["feed"])
     try:
         element = COMICS[comic_name]["element"](feed)

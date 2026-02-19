@@ -39,14 +39,16 @@ class DisplayManager:
         else:
             raise ValueError(f"Unsupported display type: {display_type}")
 
-    def display_image(self, image, image_settings=None):
-        
+    def display_image(self, image, image_settings=None, image_settings_override=None):
+
         """
         Delegates image rendering to the appropriate display instance.
 
         Args:
             image (PIL.Image): The image to be displayed.
             image_settings (list, optional): List of settings to modify image rendering.
+            image_settings_override (dict, optional): Override for image enhancement settings
+                (e.g. per-loop brightness). Merged on top of global image_settings.
 
         Raises:
             ValueError: If no valid display instance is found.
@@ -54,7 +56,7 @@ class DisplayManager:
 
         if not hasattr(self, "display"):
             raise ValueError("No valid display instance initialized.")
-        
+
         # Save the image
         logger.info(f"Saving image to {self.device_config.current_image_file}")
         image.save(self.device_config.current_image_file)
@@ -63,7 +65,10 @@ class DisplayManager:
         image = change_orientation(image, self.device_config.get_config("orientation"))
         image = resize_image(image, self.device_config.get_resolution(), image_settings)
         if self.device_config.get_config("inverted_image"): image = image.rotate(180)
-        image = apply_image_enhancement(image, self.device_config.get_config("image_settings"))
+        effective_settings = self.device_config.get_config("image_settings") or {}
+        if image_settings_override:
+            effective_settings = {**effective_settings, **image_settings_override}
+        image = apply_image_enhancement(image, effective_settings)
 
         # Pass to the concrete instance to render to the device.
         self.display.display_image(image, image_settings)

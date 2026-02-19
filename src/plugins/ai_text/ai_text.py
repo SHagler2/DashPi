@@ -1,5 +1,4 @@
 from plugins.base_plugin.base_plugin import BasePlugin
-from openai import OpenAI
 from datetime import datetime
 from PIL import Image, ImageDraw
 from utils.app_utils import get_font
@@ -115,6 +114,8 @@ class AIText(BasePlugin):
 
     def _generate_with_openai(self, settings, device_config, text_prompt):
         """Generate text using OpenAI."""
+        from openai import OpenAI
+
         api_key = device_config.load_env_key("OPEN_AI_SECRET")
         if not api_key:
             raise RuntimeError("OpenAI API Key not configured. Add OPEN_AI_SECRET in Settings > API Keys.")

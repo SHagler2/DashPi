@@ -1,7 +1,6 @@
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw
 from io import BytesIO
-import feedparser
 import logging
 import re
 from utils.app_utils import get_font
@@ -139,10 +138,12 @@ class Rss(BasePlugin):
         return html.unescape(clean).strip()
     
     def parse_rss_feed(self, url, timeout=10):
+        import feedparser
+
         session = get_http_session()
         resp = session.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
-        
+
         # Parse the feed content
         feed = feedparser.parse(resp.content)
         items = []

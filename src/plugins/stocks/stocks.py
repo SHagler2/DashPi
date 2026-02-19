@@ -122,6 +122,16 @@ class Stocks(BasePlugin):
         bg_color = settings.get("backgroundColor", "#ffffff")
         text_color = settings.get("textColor", "#000000")
 
+        dark_mode = settings.get("darkMode") in ("on", True)
+        if dark_mode:
+            bg_color = "#1a1a1a"
+            text_color = "#e0e0e0"
+            positive_color = "#00c853"
+            negative_color = "#ff5252"
+        else:
+            positive_color = "#006400"
+            negative_color = "#8B0000"
+
         image = Image.new("RGBA", dimensions, bg_color)
         draw = ImageDraw.Draw(image)
 
@@ -160,9 +170,6 @@ class Stocks(BasePlugin):
         grid_gap = int(width * 0.015)
         grid_area = (margin, y_top, width - margin * 2, y_bottom - footer_h - y_top)
         cells = calculate_grid(grid_area, rows, columns, grid_gap)
-
-        positive_color = "#006400"
-        negative_color = "#8B0000"
 
         # Pre-measure line heights for even distribution
         sym_h = int(symbol_size * 1.15)
@@ -229,10 +236,16 @@ class Stocks(BasePlugin):
             draw.text((ix, iy), change_text, font=change_font, fill=chg_color)
             iy += change_line_h + gap
 
-            # Details: Vol, H, L
-            for detail in [f"Vol: {stock['volume']}", f"H: {stock['high_formatted']}", f"L: {stock['low_formatted']}"]:
-                draw.text((ix, iy), detail, font=detail_font, fill=text_color)
-                iy += detail_line_h + gap * 2 // 3
+            # Details: Vol, H/52W H, L/52W L
+            mid_x = ix + iw // 2
+            draw.text((ix, iy), f"Vol: {stock['volume']}", font=detail_font, fill=text_color)
+            iy += detail_line_h + gap * 2 // 3
+            draw.text((ix, iy), f"H: {stock['high_formatted']}", font=detail_font, fill=text_color)
+            draw.text((mid_x, iy), f"52W H: {stock['week52_high_formatted']}", font=detail_font, fill=text_color)
+            iy += detail_line_h + gap * 2 // 3
+            draw.text((ix, iy), f"L: {stock['low_formatted']}", font=detail_font, fill=text_color)
+            draw.text((mid_x, iy), f"52W L: {stock['week52_low_formatted']}", font=detail_font, fill=text_color)
+            iy += detail_line_h + gap * 2 // 3
 
         # Footer
         fy = y_bottom - footer_h
@@ -284,6 +297,8 @@ class Stocks(BasePlugin):
                         "volume": format_large_number(info.get("volume") or info.get("regularMarketVolume")),
                         "high_formatted": format_price(info.get("dayHigh") or info.get("regularMarketDayHigh")),
                         "low_formatted": format_price(info.get("dayLow") or info.get("regularMarketDayLow")),
+                        "week52_high_formatted": format_price(info.get("fiftyTwoWeekHigh")),
+                        "week52_low_formatted": format_price(info.get("fiftyTwoWeekLow")),
                         "is_positive": change >= 0
                     })
 

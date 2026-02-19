@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from utils.app_utils import get_font
 from utils.text_utils import get_text_dimensions
 import logging
-import pytz
 
 logger = logging.getLogger(__name__)
 class Countdown(BasePlugin):
@@ -14,6 +13,8 @@ class Countdown(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        import pytz
+
         title = settings.get('title')
         countdown_date_str = settings.get('date')
 

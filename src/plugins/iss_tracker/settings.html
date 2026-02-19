@@ -11,6 +11,7 @@
 
 <!-- Coordinates and Map Button -->
 <div class="form-group" style="display: flex; align-items: center; gap: 15px; margin-bottom: 5px;">
+    <input type="hidden" id="cityName" name="cityName" />
     <span>Latitude:</span>
     <input readonly type="text" id="latitude" name="latitude" class="form-input" style="width: 100px;" />
     <span>Longitude:</span>
@@ -31,6 +32,7 @@
 <div class="form-group">
     <label for="autoRefresh" class="form-label">Auto Refresh:</label>
     <select id="autoRefresh" name="autoRefresh" class="form-input">
+        <option value="0.5">Every 30 seconds</option>
         <option value="1">Every 1 minute</option>
         <option value="2">Every 2 minutes</option>
         <option value="5">Every 5 minutes</option>
@@ -102,6 +104,7 @@
     function selectCity(lat, lon, displayName) {
         document.getElementById('latitude').value = lat;
         document.getElementById('longitude').value = lon;
+        document.getElementById('cityName').value = displayName;
         document.getElementById('locationSource').innerHTML =
             '<span style="color: #155724;">Custom location set</span>';
         document.getElementById('cityResults').innerHTML =
@@ -134,15 +137,16 @@
         if (loadPluginSettings) {
             document.getElementById('latitude').value = pluginSettings.latitude || '';
             document.getElementById('longitude').value = pluginSettings.longitude || '';
+            document.getElementById('cityName').value = pluginSettings.cityName || '';
             document.getElementById('units').value = pluginSettings.units || 'metric';
-            document.getElementById('autoRefresh').value = pluginSettings.autoRefresh || '5';
+            document.getElementById('autoRefresh').value = pluginSettings.autoRefresh || '0.5';
             document.getElementById('prepassTrigger').value = pluginSettings.prepassTrigger || '20';
             hasCustomLocation = !!(pluginSettings.latitude && pluginSettings.longitude);
         } else {
             document.getElementById('latitude').value = "";
             document.getElementById('longitude').value = "";
             document.getElementById('units').value = "metric";
-            document.getElementById('autoRefresh').value = "5";
+            document.getElementById('autoRefresh').value = "0.5";
             document.getElementById('prepassTrigger').value = "20";
         }
 

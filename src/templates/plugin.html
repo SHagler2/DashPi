@@ -36,7 +36,11 @@
 
         async function handleAction(action) {
             const loadingIndicator = document.getElementById('loadingIndicator');
-            loadingIndicator.style.display = 'block';
+            const statusEnabled = window.pluginStatus && document.getElementById('showPluginStatus') && document.getElementById('showPluginStatus').checked;
+            // Show spinner only when live status bar is off (or for loop actions)
+            if (!statusEnabled || action === 'add_to_loop' || action === 'save_to_loop') {
+                loadingIndicator.style.display = 'block';
+            }
 
             // Gather plugin settings form data
             const form = document.getElementById('settingsForm');
@@ -150,35 +154,25 @@
                 return; // Exit early for save_to_loop
             }
 
-            // Send data to the server
+            // Show live status bar for "Update Now" (non-blocking)
+            if (window.pluginStatus) {
+                window.pluginStatus.showImmediate();
+            }
+
+            // Send data to the server (non-blocking — track via status polling)
             try {
                 const response = await fetch(url, {method: method, body: formData});
                 const result = await response.json();
                 // Handle the response
-                if (response.ok) {
-                    showResponseModal('success', `Success! ${result.message}`);
-                } else {
+                if (!response.ok) {
                     showResponseModal('failure', `Error!  ${result.error}`);
+                    if (window.pluginStatus) window.pluginStatus.hideOnError();
                 }
                 closeModal('scheduleModal');
-
-                if (clearFormOnSubmit) {
-                    form.reset()
-                    uploadedFiles = {};
-                    document.querySelectorAll('input[clear-on-submit]').forEach(input => {
-                        input.value = '';
-                        input.dispatchEvent(new Event('change'));
-                    });
-                    document.querySelectorAll('[delete-on-submit]').forEach(div => {
-                        div.remove();
-                    });
-                    if (action == "add_to_loop"){
-                        scheduleForm.reset()
-                    }
-                }
             } catch (error) {
                 console.error('Error:', error);
-                alert('An error occurred while processing your request.');
+                showResponseModal('failure', 'An error occurred while processing your request.');
+                if (window.pluginStatus) window.pluginStatus.hideOnError();
             } finally {
                 // Hide loading indicator after the action is complete
                 loadingIndicator.style.display = 'none';
@@ -353,10 +347,22 @@
                     <h1 class="app-title">{{ plugin.display_name }}</h1>
                     {% if api_key and api_key.required %}<span class="api-key-label" title="{{api_key.service}} (Set {{api_key.expected_key}} in .env)">Requires API Key</span>{% endif %}
                 </div>
+                {% if not loop_edit_mode %}
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--text-secondary); white-space: nowrap;">
+                    <input type="checkbox" id="showPluginStatus" style="width: 16px; height: 16px; cursor: pointer;" />
+                    Live Status
+                </label>
+                {% endif %}
             </div>
             <div id="loadingIndicator" class="loading-indicator"></div>
         </div>
         <div class="separator"></div>
+
+        <!-- Live Refresh Status -->
+        <div id="pluginStatus" class="live-status-card">
+            <span id="pluginStatusIcon" class="live-status-icon">&#9881;</span>
+            <span id="pluginStatusText" class="live-status-text">Ready</span>
+        </div>
 
         <!-- Include plugin settings -->
         <form id = "settingsForm" class="settings-form" onsubmit="return false;">
@@ -458,6 +464,7 @@
                 <div style="display: flex; gap: 10px;">
                     <input type="number" id="editRefreshInterval" min="1" value="30" class="form-input" style="flex: 1;">
                     <select id="editIntervalUnit" class="form-input" style="flex: 0 0 120px;">
+                        <option value="1">Seconds</option>
                         <option value="60">Minutes</option>
                         <option value="3600">Hours</option>
                         <option value="86400">Days</option>
@@ -476,9 +483,12 @@
                     } else if (totalSeconds >= 3600 && totalSeconds % 3600 === 0) {
                         unitSelect.value = '3600';
                         intervalInput.value = totalSeconds / 3600;
-                    } else {
+                    } else if (totalSeconds >= 60 && totalSeconds % 60 === 0) {
                         unitSelect.value = '60';
-                        intervalInput.value = Math.max(1, Math.round(totalSeconds / 60));
+                        intervalInput.value = totalSeconds / 60;
+                    } else {
+                        unitSelect.value = '1';
+                        intervalInput.value = totalSeconds;
                     }
                 });
             </script>
@@ -494,6 +504,163 @@
             </div>
         </form>
     </div>
+
+    <!-- Live Status Polling -->
+    {% if not loop_edit_mode %}
+    <script>
+    (function() {
+        const STORAGE_KEY = 'dashpi-plugin-status-enabled';
+        const toggle = document.getElementById('showPluginStatus');
+        const bar = document.getElementById('pluginStatus');
+        const icon = document.getElementById('pluginStatusIcon');
+        const text = document.getElementById('pluginStatusText');
+
+        let hideTimeout = null;
+        let refreshInProgress = false;
+        let refreshStartTimestamp = 0;
+        let pollTimer = null;
+
+        // Restore toggle state from localStorage (default to checked)
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            toggle.checked = saved === null ? true : saved === 'true';
+        } catch (e) { toggle.checked = true; }
+
+        function applyToggleState() {
+            if (toggle.checked) {
+                bar.classList.remove('status-disabled');
+                startPolling();
+            } else {
+                stopPolling();
+                hideBar();
+                bar.classList.add('status-disabled');
+            }
+        }
+
+        toggle.addEventListener('change', function() {
+            try { localStorage.setItem(STORAGE_KEY, toggle.checked); } catch (e) {}
+            applyToggleState();
+        });
+
+        function showBar() {
+            bar.style.visibility = 'visible';
+        }
+
+        function hideBar() {
+            bar.style.visibility = 'hidden';
+        }
+
+        function setBarStyle(stage) {
+            bar.classList.remove('status-success', 'status-error', 'status-active');
+            if (stage === 'displayed' || stage === 'rendering') {
+                bar.classList.add('status-success');
+            } else if (stage === 'error' || stage === 'unidentified') {
+                bar.classList.add('status-error');
+            } else {
+                bar.classList.add('status-active');
+            }
+        }
+
+        const stageIcons = {
+            refreshing:  '&#9881;',    generating:  '&#9881;',
+            processing:  '&#9881;',    displaying:  '&#128228;',
+            displayed:   '&#9989;',    idle:        '&#128164;',
+            error:       '&#9888;',    starting:    '&#9881;',
+            recording:   '&#127908;',  detecting:   '&#129504;',
+            detected:    '&#127925;',  identifying: '&#128269;',
+            rendering:   '&#127912;',  unidentified:'&#10067;',
+        };
+
+        const activeStages = new Set([
+            'refreshing', 'generating', 'processing', 'displaying',
+            'starting', 'recording', 'detecting', 'detected', 'identifying', 'rendering'
+        ]);
+        const terminalStages = new Set(['displayed', 'idle', 'error', 'unidentified']);
+
+        function updateBar(stageIcon, message, stage) {
+            icon.innerHTML = stageIcon;
+            text.textContent = message || stage;
+            setBarStyle(stage);
+        }
+
+        async function pollStatus() {
+            try {
+                const r = await fetch('/static/images/plugins/refresh_status.json?t=' + Date.now());
+                if (!r.ok) return;
+                const data = await r.json();
+                if (!data || typeof data.stage !== 'string') return;
+
+                const isActive = activeStages.has(data.stage);
+                const isTerminal = terminalStages.has(data.stage);
+
+                if (isActive) {
+                    if (!refreshInProgress) {
+                        refreshInProgress = true;
+                        refreshStartTimestamp = data.timestamp;
+                    }
+                    if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
+
+                    // Try plugin-specific status.json for granular stages
+                    if (data.plugin_id && data.has_plugin_status) {
+                        try {
+                            const pr = await fetch('/images/' + encodeURIComponent(data.plugin_id) + '/status.json?t=' + Date.now());
+                            if (pr.ok) {
+                                const ps = await pr.json();
+                                if (ps && typeof ps.timestamp === 'number' && ps.timestamp >= refreshStartTimestamp - 2) {
+                                    updateBar(stageIcons[ps.stage] || stageIcons.generating, ps.detail, ps.stage);
+                                    showBar();
+                                    return;
+                                }
+                            }
+                        } catch (e) {}
+                    }
+
+                    updateBar(stageIcons[data.stage] || stageIcons.generating, data.detail, data.stage);
+                    showBar();
+                    return;
+                }
+
+                // Refresh just completed — show result then auto-hide
+                if (refreshInProgress && isTerminal) {
+                    refreshInProgress = false;
+                    updateBar(stageIcons[data.stage] || stageIcons.idle, data.detail, data.stage);
+                    showBar();
+                    if (hideTimeout) clearTimeout(hideTimeout);
+                    hideTimeout = setTimeout(hideBar, 4000);
+                }
+            } catch (e) {}
+        }
+
+        function startPolling() {
+            if (pollTimer) return;
+            pollTimer = setInterval(pollStatus, 800);
+        }
+
+        function stopPolling() {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        }
+
+        // Apply initial toggle state
+        applyToggleState();
+
+        // Expose for handleAction to call
+        window.pluginStatus = {
+            showImmediate: function() {
+                refreshInProgress = true;
+                refreshStartTimestamp = Date.now() / 1000;
+                updateBar(stageIcons.refreshing, 'Starting update...', 'refreshing');
+                showBar();
+                startPolling();
+            },
+            hideOnError: function() {
+                refreshInProgress = false;
+                hideBar();
+                if (!toggle.checked) stopPolling();
+            }
+        };
+    })();
+    </script>
+    {% endif %}
 
     <!-- Success/Error Modal -->
     {% include 'response_modal.html' %}
@@ -518,6 +685,7 @@
                     <div style="display: flex; gap: 10px;">
                         <input type="number" id="refresh_interval" name="refresh_interval" min="1" value="30" required class="form-input" style="flex: 1;">
                         <select id="interval_unit" name="interval_unit" class="form-input" style="flex: 0 0 120px;">
+                            <option value="seconds">Seconds</option>
                             <option value="minutes" selected>Minutes</option>
                             <option value="hours">Hours</option>
                             <option value="days">Days</option>

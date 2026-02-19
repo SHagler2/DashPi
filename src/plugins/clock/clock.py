@@ -5,7 +5,6 @@ from PIL import Image, ImageColor, ImageDraw, ImageFont
 import logging
 import math
 from datetime import datetime
-import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +54,8 @@ class Clock(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        import pytz
+
         clock_face = settings.get('selectedClockFace')
         primary_color = ImageColor.getcolor(settings.get('primaryColor') or "white", "RGB")
         secondary_color = ImageColor.getcolor(settings.get('secondaryColor') or "black", "RGB")

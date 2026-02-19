@@ -5,7 +5,6 @@ from utils.app_utils import get_font
 from utils.text_utils import get_text_dimensions
 from utils.layout_utils import draw_dotted_rect
 import logging
-import pytz
 
 logger = logging.getLogger(__name__)
 class YearProgress(BasePlugin):
@@ -15,6 +14,8 @@ class YearProgress(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        import pytz
+
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":
             dimensions = dimensions[::-1]

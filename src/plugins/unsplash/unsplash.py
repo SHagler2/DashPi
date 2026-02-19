@@ -3,7 +3,6 @@ from utils.image_loader import _is_low_resource_device
 from utils.http_client import get_http_session
 import logging
 import random
-import requests  # For exception handling
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +79,7 @@ class Unsplash(BasePlugin):
                 image_url = data["urls"][image_size]
                 logger.debug("Retrieved random image URL")
 
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             logger.error(f"Error fetching image from Unsplash API: {e}")
             raise RuntimeError("Failed to fetch image from Unsplash API, please check logs.")
         except (KeyError, IndexError) as e:
