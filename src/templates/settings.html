@@ -28,15 +28,13 @@
                 });
 
                 const result = await response.json();
-                if (response.ok) {
-                    showResponseModal('success', `Success! ${result.message}`);
-                } else {
+                if (!response.ok) {
                     showResponseModal('failure', `Error!  ${result.error}`);
                     form.reset();
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('An error occurred while processing your request.');
+                showResponseModal('failure', 'An error occurred while processing your request.');
             }
         }
 

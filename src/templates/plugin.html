@@ -90,7 +90,6 @@
                     });
                     const result = await response.json();
                     if (response.ok) {
-                        showResponseModal('success', `Success! ${result.message}`);
                         closeModal('scheduleModal');
                         form.reset();
                         scheduleForm.reset();
@@ -107,7 +106,7 @@
                     }
                 } catch (error) {
                     console.error('Error:', error);
-                    alert('An error occurred while processing your request.');
+                    showResponseModal('failure', 'An error occurred while processing your request.');
                 } finally {
                     loadingIndicator.style.display = 'none';
                 }

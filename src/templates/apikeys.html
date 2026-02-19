@@ -387,9 +387,8 @@
                 const result = await response.json();
                 
                 if (response.ok) {
-                    showResponseModal('success', result.message);
                     // Reload page to refresh
-                    setTimeout(() => window.location.reload(), 1500);
+                    setTimeout(() => window.location.reload(), 500);
                 } else {
                     showResponseModal('failure', result.error);
                 }

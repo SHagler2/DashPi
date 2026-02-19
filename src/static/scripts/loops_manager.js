@@ -252,7 +252,6 @@ document.getElementById('loopForm')?.addEventListener('submit', async (e) => {
 
         const result = await response.json();
         if (response.ok) {
-            sessionStorage.setItem('storedMessage', JSON.stringify({ type: 'success', text: result.message }));
             location.reload();
         } else {
             showResponseModal('failure', result.error);
@@ -285,7 +284,6 @@ document.getElementById('pluginForm')?.addEventListener('submit', async (e) => {
 
         const result = await response.json();
         if (response.ok) {
-            sessionStorage.setItem('storedMessage', JSON.stringify({ type: 'success', text: result.message }));
             location.reload();
         } else {
             showResponseModal('failure', result.error);
@@ -369,7 +367,6 @@ document.getElementById('editPluginForm')?.addEventListener('submit', async (e) 
 
         const result = await response.json();
         if (response.ok) {
-            sessionStorage.setItem('storedMessage', JSON.stringify({ type: 'success', text: result.message }));
             location.reload();
         } else {
             showResponseModal('failure', result.error);
@@ -392,7 +389,6 @@ async function deleteLoop(loopName) {
 
         const result = await response.json();
         if (response.ok) {
-            sessionStorage.setItem('storedMessage', JSON.stringify({ type: 'success', text: result.message }));
             location.reload();
         } else {
             showResponseModal('failure', result.error);
@@ -420,7 +416,6 @@ async function toggleRandomize(loopName) {
                 btn.style.color = result.randomize ? 'white' : 'var(--text-primary)';
                 btn.textContent = result.randomize ? 'Random' : 'Sequential';
             }
-            showResponseModal('success', result.message);
         } else {
             showResponseModal('failure', result.error);
         }
@@ -471,7 +466,6 @@ async function removePluginFromLoop(loopName, pluginId) {
 
         const result = await response.json();
         if (response.ok) {
-            sessionStorage.setItem('storedMessage', JSON.stringify({ type: 'success', text: result.message }));
             location.reload();
         } else {
             showResponseModal('failure', result.error);
@@ -494,9 +488,7 @@ async function saveRotationInterval() {
         });
 
         const result = await response.json();
-        if (response.ok) {
-            showResponseModal('success', result.message);
-        } else {
+        if (!response.ok) {
             showResponseModal('failure', result.error);
         }
     } catch (error) {
@@ -515,15 +507,8 @@ window.onclick = function(event) {
     }
 }
 
-// Show stored message on page load
+// Initialize on page load
 window.addEventListener('DOMContentLoaded', () => {
-    const storedMessage = sessionStorage.getItem('storedMessage');
-    if (storedMessage) {
-        const { type, text } = JSON.parse(storedMessage);
-        showResponseModal(type, text);
-        sessionStorage.removeItem('storedMessage');
-    }
-
     // Edit plugin buttons navigate to full settings page
     document.querySelectorAll('.edit-plugin-btn').forEach(btn => {
         btn.addEventListener('click', function() {
