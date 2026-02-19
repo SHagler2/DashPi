@@ -60,6 +60,38 @@ disable_service() {
   fi
 }
 
+cleanup_clean_boot() {
+  echo "Removing clean boot configuration"
+
+  # Remove splash service
+  systemctl disable dashpi-splash.service 2>/dev/null
+  rm -f /etc/systemd/system/dashpi-splash.service
+  echo_success "\tRemoved dashpi-splash.service"
+
+  # Unmask getty on tty1
+  systemctl unmask getty@tty1.service 2>/dev/null
+  echo_success "\tUnmasked getty@tty1.service"
+
+  # Remove tmpfiles config
+  rm -f /etc/tmpfiles.d/dashpi-fbcon.conf
+  echo_success "\tRemoved fbcon cursor config"
+
+  # Remove splash image
+  rm -f "$INSTALL_PATH/splash.fb"
+
+  # Restore cmdline.txt from backup
+  for f in /boot/firmware/cmdline.txt.dashpi.bak /boot/cmdline.txt.dashpi.bak; do
+    if [ -f "$f" ]; then
+      cp "$f" "${f%.dashpi.bak}"
+      rm "$f"
+      echo_success "\tRestored original cmdline.txt"
+      break
+    fi
+  done
+
+  systemctl daemon-reload
+}
+
 remove_files() {
   echo "Removing application files"
   # Remove device.json if it exists
@@ -108,6 +140,7 @@ check_permissions
 confirm_uninstall
 stop_service
 disable_service
+cleanup_clean_boot
 remove_files
 
 echo_success "Uninstallation complete."

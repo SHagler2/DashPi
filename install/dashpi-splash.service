@@ -1,0 +1,17 @@
+[Unit]
+Description=DashPi Splash Screen
+DefaultDependencies=no
+After=sysinit.target
+Before=dashpi.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -c 'echo 0 > /sys/class/graphics/fbcon/cursor_blink 2>/dev/null || true'
+ExecStartPre=/bin/sh -c 'printf "\033[?25l" > /dev/tty1 2>/dev/null || true'
+ExecStartPre=/bin/sh -c 'cat /usr/local/dashpi/splash.fb > /dev/fb0 2>/dev/null || true'
+ExecStart=/usr/local/dashpi/venv_dashpi/bin/python /usr/local/dashpi/show_splash.py
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=sysinit.target

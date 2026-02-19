@@ -20,6 +20,18 @@
     </div>
 
     <div class="form-group">
+        <label for="fitMode" class="form-label">Display Mode</label>
+        <select id="fitMode" name="fitMode" class="form-input">
+            <option value="fit">Fit (Letterbox - Full image visible)</option>
+            <option value="fill">Fill (Crop - No black bars)</option>
+        </select>
+        <small style="display: block; margin-top: 5px; color: #666;">
+            Fit: Shows entire image with black bars if needed<br>
+            Fill: Crops edges to fill screen completely
+        </small>
+    </div>
+
+    <div class="form-group">
         <label for="color" class="form-label">Color:</label>
         <select id="color" name="color" class="form-input">
             <option value="">Any</option>
@@ -54,6 +66,7 @@
             document.getElementById('search_query').value = pluginSettings.search_query || '';
             document.getElementById('collections').value = pluginSettings.collections || '';
             document.getElementById('content_filter').value = pluginSettings.content_filter || 'low';
+            document.getElementById('fitMode').value = pluginSettings.fitMode || 'fit';
             document.getElementById('color').value = pluginSettings.color || '';
             document.getElementById('orientation').value = pluginSettings.orientation || '';
         }

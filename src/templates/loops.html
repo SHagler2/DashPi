@@ -66,7 +66,7 @@
                         {% if loop_item.name == loop_config.active_loop %}
                         <span style="display: inline-block; margin-left: 10px; padding: 4px 10px; background: var(--success-color); color: white; border-radius: 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.5px;">ACTIVE</span>
                         {% endif %}
-                        <div style="margin-top: 6px; font-size: 13px; color: var(--text-secondary); font-weight: 400;">{{ loop_item.start_time }} - {{ loop_item.end_time }}{% if loop_item.brightness is defined and loop_item.brightness is not none %} · Brightness: {{ loop_item.brightness }}{% endif %}</div>
+                        <div style="margin-top: 6px; font-size: 13px; color: var(--text-secondary); font-weight: 400;">{{ loop_item.start_time }} - {{ loop_item.end_time }}</div>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <button onclick="toggleRandomize('{{ loop_item.name }}')"
@@ -76,7 +76,7 @@
                                 title="Toggle random plugin order">
                             {{ 'Random' if loop_item.randomize else 'Sequential' }}
                         </button>
-                        <button onclick="openEditLoopModal('{{ loop_item.name }}', '{{ loop_item.start_time }}', '{{ loop_item.end_time }}', {{ loop_item.brightness | default(none) | tojson }})"
+                        <button onclick="openEditLoopModal('{{ loop_item.name }}', '{{ loop_item.start_time }}', '{{ loop_item.end_time }}')"
                                 class="action-button" style="background: var(--button-bg); padding: 8px 14px; font-size: 14px; font-weight: 500; color: var(--text-primary);">
                             Edit
                         </button>
@@ -167,18 +167,6 @@
                 <div style="margin: 15px 0;">
                     <label>End Time:</label>
                     <input type="time" id="endTime" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-                <div style="margin: 15px 0;">
-                    <label>Display Brightness: <span id="brightnessValue">1.0</span></label>
-                    <input type="range" id="loopBrightness" min="0" max="2" step="0.1" value="1.0"
-                           oninput="document.getElementById('brightnessValue').textContent = this.value"
-                           style="width: 100%;">
-                    <small style="display: block; margin-top: 4px; color: #666;">Override global brightness for this loop. 1.0 = normal.</small>
-                    <label style="display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px;">
-                        <input type="checkbox" id="useGlobalBrightness" style="width: 16px; height: 16px;"
-                               onchange="document.getElementById('loopBrightness').disabled = this.checked;">
-                        Use global brightness (no override)
-                    </label>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button type="submit" style="flex: 1; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save</button>

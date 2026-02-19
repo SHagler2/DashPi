@@ -70,6 +70,9 @@ class AdaptiveImageLoader:
     MAX_MEGAPIXELS_LOW_RESOURCE = 20  # ~20MP max for Pi Zero (512MB RAM)
     MAX_MEGAPIXELS_HIGH_RESOURCE = 100  # ~100MP max for Pi 3/4 (1-4GB RAM)
 
+    # Max download size in bytes (10MB) to avoid slow transfers
+    MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024
+
     def __init__(self):
         self.is_low_resource = _is_low_resource_device()
         self.max_megapixels = self.MAX_MEGAPIXELS_LOW_RESOURCE if self.is_low_resource else self.MAX_MEGAPIXELS_HIGH_RESOURCE
@@ -146,13 +149,13 @@ class AdaptiveImageLoader:
             megapixels = original_pixels / 1_000_000
             logger.info(f"Loaded image: {original_size[0]}x{original_size[1]} ({img.mode} mode, {megapixels:.1f}MP)")
 
-            # Check if image exceeds safe size limit
-            if megapixels > self.max_megapixels:
-                logger.error(f"Image too large: {megapixels:.1f}MP exceeds {self.max_megapixels}MP limit")
-                logger.error(f"Skipping image to prevent out-of-memory crash")
-                img.close()
+            # Apply draft mode for large images before pixel decode
+            if megapixels > 4:
+                draft_target = (dimensions[0] * 2, dimensions[1] * 2)
+                img.draft('RGB', draft_target)
+                img.load()
+                logger.warning(f"Large image ({megapixels:.1f}MP), draft decoded to {img.size[0]}x{img.size[1]}")
                 gc.collect()
-                return None
 
             if resize:
                 img = self._process_and_resize(img, dimensions, original_size, fit_mode)
@@ -239,23 +242,21 @@ class AdaptiveImageLoader:
             megapixels = original_pixels / 1_000_000
             logger.info(f"Loaded image: {original_size[0]}x{original_size[1]} ({img.mode} mode, {megapixels:.1f}MP)")
 
-            # Check if image exceeds safe size limit
-            if megapixels > self.max_megapixels:
-                logger.error(f"Image too large: {megapixels:.1f}MP exceeds {self.max_megapixels}MP limit")
-                logger.error(f"Skipping image to prevent out-of-memory crash")
-                img.close()
-                gc.collect()
-                return None
+            # Always apply draft mode for large images BEFORE loading pixel data.
+            # draft() tells the JPEG decoder to decode at reduced resolution,
+            # preventing the full image from ever being allocated in memory.
+            # Target 2x display dimensions — plenty for quality resizing.
+            draft_target = (dimensions[0] * 2, dimensions[1] * 2)
+            if megapixels > 2:
+                img.draft('RGB', draft_target)
+                logger.debug(f"Draft mode applied: will decode at ~{img.size[0]}x{img.size[1]} instead of {original_size[0]}x{original_size[1]}")
+
+            # Force pixel decode (with draft mode active, this is memory-safe)
+            img.load()
+            logger.debug(f"Image decoded: {img.size[0]}x{img.size[1]}")
+            gc.collect()
 
             if resize:
-                # Apply draft mode for massive memory savings during decode
-                img.draft('RGB', (dimensions[0] * 2, dimensions[1] * 2))
-                logger.debug(f"Draft mode applied - PIL will decode at reduced resolution")
-
-                # Force load with draft mode
-                img.load()
-                logger.debug(f"Image decoded: {img.size[0]}x{img.size[1]} (draft mode reduced from {original_size[0]}x{original_size[1]})")
-
                 img = self._process_and_resize(img, dimensions, original_size, fit_mode)
             else:
                 # Even without resizing, apply EXIF orientation correction
@@ -291,7 +292,16 @@ class AdaptiveImageLoader:
             img = Image.open(BytesIO(response.content))
             original_size = img.size
             original_pixels = original_size[0] * original_size[1]
-            logger.info(f"Downloaded image: {original_size[0]}x{original_size[1]} ({img.mode} mode, {original_pixels/1_000_000:.1f}MP)")
+            megapixels = original_pixels / 1_000_000
+            logger.info(f"Downloaded image: {original_size[0]}x{original_size[1]} ({img.mode} mode, {megapixels:.1f}MP)")
+
+            # Apply draft mode for large images before pixel decode
+            if megapixels > 4:
+                draft_target = (dimensions[0] * 2, dimensions[1] * 2)
+                img.draft('RGB', draft_target)
+                img.load()
+                logger.warning(f"Large image ({megapixels:.1f}MP), draft decoded to {img.size[0]}x{img.size[1]}")
+                gc.collect()
 
             if resize:
                 img = self._process_and_resize(img, dimensions, original_size, fit_mode)
@@ -319,13 +329,13 @@ class AdaptiveImageLoader:
             megapixels = original_pixels / 1_000_000
             logger.info(f"Loaded image: {original_size[0]}x{original_size[1]} ({img.mode} mode, {megapixels:.1f}MP)")
 
-            # Check if image exceeds safe size limit
-            if megapixels > self.max_megapixels:
-                logger.error(f"Image too large: {megapixels:.1f}MP exceeds {self.max_megapixels}MP limit")
-                logger.error(f"Skipping image to prevent out-of-memory crash")
-                img.close()
+            # Apply draft mode for large images BEFORE loading pixel data
+            if megapixels > 4:
+                draft_target = (dimensions[0] * 2, dimensions[1] * 2)
+                img.draft('RGB', draft_target)
+                img.load()
+                logger.warning(f"Large image ({megapixels:.1f}MP), draft decoded to {img.size[0]}x{img.size[1]}")
                 gc.collect()
-                return None
 
             if resize:
                 img = self._process_and_resize(img, dimensions, original_size, fit_mode)

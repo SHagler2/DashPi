@@ -1,13 +1,12 @@
 [Unit]
 Description=DashPi App
-After=network-online.target
+After=dashpi-splash.service
 Wants=network-online.target
 
 [Service]
 User=root
 RuntimeDirectory=dashpi
 WorkingDirectory=/run/dashpi
-ExecStartPre=/bin/sh -c 'echo 0 > /sys/class/graphics/fbcon/cursor_blink; printf "\033[?25l" > /dev/tty1'
 ExecStart=/usr/local/bin/dashpi run
 Restart=on-failure
 RestartSec=60
@@ -15,7 +14,7 @@ KillSignal=SIGINT
 StandardOutput=journal
 StandardError=journal
 CPUQuota=40%
-MemoryMax=200M
+MemoryMax=300M
 
 [Install]
 WantedBy=multi-user.target

@@ -84,24 +84,23 @@ class LoopManager:
         """Returns the loop with the specified name."""
         return next((loop for loop in self.loops if loop.name == loop_name), None)
 
-    def add_loop(self, name, start_time, end_time, brightness=None):
+    def add_loop(self, name, start_time, end_time):
         """Creates and adds a new loop with the given time range."""
         if self.get_loop(name):
             logger.warning(f"Loop '{name}' already exists.")
             return False
-        self.loops.append(Loop(name, start_time, end_time, brightness=brightness))
+        self.loops.append(Loop(name, start_time, end_time))
         # Invalidate cache since loops changed
         self._cached_active_loop = None
         return True
 
-    def update_loop(self, old_name, new_name, start_time, end_time, brightness=None):
+    def update_loop(self, old_name, new_name, start_time, end_time):
         """Updates an existing loop's name and time range."""
         loop = self.get_loop(old_name)
         if loop:
             loop.name = new_name
             loop.start_time = start_time
             loop.end_time = end_time
-            loop.brightness = brightness
             # Invalidate cached time range since times changed
             loop._cached_time_range_minutes = None
             # Invalidate active loop cache since loop properties changed
@@ -175,7 +174,7 @@ class Loop:
         randomize (bool): If True, randomly select next plugin instead of sequential order.
     """
 
-    def __init__(self, name, start_time, end_time, plugin_order=None, current_plugin_index=None, randomize=False, next_plugin_index=None, brightness=None):
+    def __init__(self, name, start_time, end_time, plugin_order=None, current_plugin_index=None, randomize=False, next_plugin_index=None):
         self.name = name
         self.start_time = start_time
         self.end_time = end_time
@@ -183,7 +182,6 @@ class Loop:
         self.current_plugin_index = current_plugin_index
         self.randomize = randomize
         self.next_plugin_index = next_plugin_index  # Pre-computed next plugin
-        self.brightness = brightness  # Per-loop brightness override (None = use global)
 
         # Cache time range calculation to avoid repeated string parsing
         self._cached_time_range_minutes = None
@@ -313,7 +311,7 @@ class Loop:
         return self._cached_time_range_minutes
 
     def to_dict(self):
-        result = {
+        return {
             "name": self.name,
             "start_time": self.start_time,
             "end_time": self.end_time,
@@ -322,9 +320,6 @@ class Loop:
             "randomize": self.randomize,
             "next_plugin_index": self.next_plugin_index
         }
-        if self.brightness is not None:
-            result["brightness"] = self.brightness
-        return result
 
     @classmethod
     def from_dict(cls, data):
@@ -336,7 +331,6 @@ class Loop:
             current_plugin_index=data.get("current_plugin_index"),
             randomize=data.get("randomize", False),
             next_plugin_index=data.get("next_plugin_index"),
-            brightness=data.get("brightness")
         )
 
 

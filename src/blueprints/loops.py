@@ -33,13 +33,12 @@ def create_loop():
     name = data.get("name")
     start_time = data.get("start_time")
     end_time = data.get("end_time")
-    brightness = data.get("brightness")
 
     # Validation
     if not name or not start_time or not end_time:
         return jsonify({"error": "Missing required fields"}), 400
 
-    if not loop_manager.add_loop(name, start_time, end_time, brightness=brightness):
+    if not loop_manager.add_loop(name, start_time, end_time):
         return jsonify({"error": f"Loop '{name}' already exists"}), 400
 
     device_config.write_config()
@@ -57,9 +56,8 @@ def update_loop():
     new_name = data.get("new_name")
     start_time = data.get("start_time")
     end_time = data.get("end_time")
-    brightness = data.get("brightness")
 
-    if not loop_manager.update_loop(old_name, new_name, start_time, end_time, brightness=brightness):
+    if not loop_manager.update_loop(old_name, new_name, start_time, end_time):
         return jsonify({"error": f"Loop '{old_name}' not found"}), 404
 
     device_config.write_config()

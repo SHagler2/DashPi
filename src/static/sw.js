@@ -1,5 +1,5 @@
 // DashPi Service Worker
-const CACHE_NAME = 'dashpi-v1';
+const CACHE_NAME = 'dashpi-v3';
 const STATIC_ASSETS = [
   '/',
   '/static/styles/main.css',

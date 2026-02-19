@@ -416,6 +416,10 @@ class AIImage(BasePlugin):
                 f"News headline: \"{from_prompt}\"\n"
                 "Create a vivid editorial illustration prompt for this headline. "
                 "Think bold, dramatic, evocative, symbolic imagery in editorial illustration style. "
+                "Focus on the emotion or human impact rather than politics or violence. "
+                "Use rich, vibrant colors. "
+                "Avoid cliche metaphors like scales of justice, broken chains, or chess pieces. "
+                "Design for a single strong focal point with minimal background clutter. "
                 "Do not include any text or words in the image. Keep it 20 words or less. "
                 "Just provide the prompt, no explanation."
             )

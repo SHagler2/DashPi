@@ -5,6 +5,7 @@ import subprocess
 
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps
+Image.MAX_IMAGE_PIXELS = 200_000_000  # Allow up to 200MP (default 89MP triggers warnings)
 
 logger = logging.getLogger(__name__)
 
@@ -179,18 +180,26 @@ def handle_request_files(request_files, form_data=None):
         file_save_dir = resolve_path(os.path.join("static", "images", "saved"))
         file_path = os.path.join(file_save_dir, file_name)
 
-        # Open the image and apply EXIF transformation before saving
+        # Save the raw upload to disk first (no PIL, no memory spike)
+        file.save(file_path)
+
+        # Fix EXIF orientation in-place for JPEGs
+        # Skip for very large images to avoid OOM on Pi
         if extension in {'jpg', 'jpeg'}:
             try:
-                with Image.open(file) as img:
-                    img = ImageOps.exif_transpose(img)
-                    img.save(file_path)
+                with Image.open(file_path) as img:
+                    w, h = img.size
+                    megapixels = (w * h) / 1_000_000
+                    if megapixels > 50:
+                        logger.info(f"Skipping EXIF for {file_name} ({megapixels:.0f}MP) - too large")
+                    else:
+                        transposed = ImageOps.exif_transpose(img)
+                        if transposed is not img:
+                            transposed.save(file_path)
+                            transposed.close()
+                import gc; gc.collect()
             except Exception as e:
                 logger.warning(f"EXIF processing error for {file_name}: {e}")
-                file.save(file_path)
-        else:
-            # Directly save non-JPEG files
-            file.save(file_path)
 
         if is_list:
             file_location_map.setdefault(key, [])

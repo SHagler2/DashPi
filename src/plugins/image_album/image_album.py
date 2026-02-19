@@ -53,14 +53,15 @@ class ImmichProvider:
         logger.debug(f"Found {len(all_items)} total assets in album")
         return all_items
 
-    def get_image(self, album: str, dimensions: tuple[int, int], resize: bool = True) -> Image.Image | None:
+    def get_image(self, album: str, dimensions: tuple[int, int], resize: bool = True, fit_mode: str = 'fill') -> Image.Image | None:
         """
         Get a random image from the album.
 
         Args:
             album: Album name
             dimensions: Target dimensions (width, height)
-            resize: Whether to let loader resize (False when padding will be applied)
+            resize: Whether to let loader resize
+            fit_mode: How to fit image ('fit', 'fill')
 
         Returns:
             PIL Image or None on error
@@ -88,13 +89,13 @@ class ImmichProvider:
         logger.debug(f"Downloading from: {asset_url}")
 
         # Use adaptive image loader for memory-efficient processing
-        # Let loader resize when requested (when no padding will be applied)
         img = self.image_loader.from_url(
             asset_url,
             dimensions,
             timeout_ms=40000,
             resize=resize,
-            headers=self.headers
+            headers=self.headers,
+            fit_mode=fit_mode
         )
 
         if not img:
@@ -129,10 +130,19 @@ class ImageAlbum(BasePlugin):
         album_provider = settings.get("albumProvider")
         logger.info(f"Album provider: {album_provider}")
 
-        # Check padding options to determine resize strategy
-        use_padding = settings.get('padImage') == "true"
-        background_option = settings.get('backgroundOption', 'blur')
-        logger.debug(f"Settings: pad_image={use_padding}, background_option={background_option}")
+        # Display mode: fit (letterbox), fill (crop), or blur (blurred background)
+        # Migrate old padImage setting if fitMode not set
+        fit_mode = settings.get('fitMode')
+        if not fit_mode:
+            if settings.get('padImage') == 'true':
+                fit_mode = 'blur' if settings.get('backgroundOption', 'blur') == 'blur' else 'fit'
+            else:
+                fit_mode = 'fill'
+
+        logger.debug(f"Settings: fit_mode={fit_mode}")
+
+        # For blur mode, load without resize (manual padding needed)
+        use_native_resize = fit_mode in ('fit', 'fill')
 
         match album_provider:
             case "Immich":
@@ -155,8 +165,7 @@ class ImageAlbum(BasePlugin):
                 logger.info(f"Album: {album}")
 
                 provider = ImmichProvider(url, key, self.image_loader)
-                # Let loader resize when no padding needed, otherwise load full-size for padding
-                img = provider.get_image(album, dimensions, resize=not use_padding)
+                img = provider.get_image(album, dimensions, resize=use_native_resize, fit_mode=fit_mode)
 
                 if not img:
                     logger.error("Failed to retrieve image from Immich")
@@ -169,18 +178,10 @@ class ImageAlbum(BasePlugin):
             logger.error("Image is None after provider processing")
             raise RuntimeError("Failed to load image, please check logs.")
 
-        # Apply padding if requested (image was loaded at full size)
-        if use_padding:
-            logger.debug(f"Applying padding with {background_option} background")
-            if background_option == "blur":
-                img = pad_image_blur(img, dimensions)
-            else:
-                background_color = ImageColor.getcolor(
-                    settings.get('backgroundColor') or "white",
-                    img.mode
-                )
-                img = ImageOps.pad(img, dimensions, color=background_color, method=Image.Resampling.LANCZOS)
-        # else: loader already resized to fit with proper aspect ratio
+        # Blur mode: manual padding with blurred background
+        if fit_mode == 'blur':
+            logger.debug("Applying blur background padding")
+            img = pad_image_blur(img, dimensions)
 
         logger.info("=== Image Album Plugin: Image generation complete ===")
         return img

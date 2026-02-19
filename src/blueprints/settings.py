@@ -54,9 +54,15 @@ def save_settings():
             "time_format": form_data.get("timeFormat"),
             "image_settings": {
                 "saturation": float(form_data.get("saturation", "1.0")),
-                "brightness": float(form_data.get("brightness", "1.0")),
                 "sharpness": float(form_data.get("sharpness", "1.0")),
                 "contrast": float(form_data.get("contrast", "1.0"))
+            },
+            "brightness_schedule": {
+                "enabled": "brightnessScheduleEnabled" in form_data,
+                "day_brightness": float(form_data.get("dayBrightness", "1.0")),
+                "night_brightness": float(form_data.get("nightBrightness", "0.6")),
+                "day_start": form_data.get("dayStart", "07:00"),
+                "night_start": form_data.get("nightStart", "21:00"),
             }
         }
         device_config.update_config(settings)

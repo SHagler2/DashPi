@@ -7,24 +7,15 @@ function openCreateLoopModal() {
     document.getElementById('loopName').value = '';
     document.getElementById('startTime').value = '07:00';
     document.getElementById('endTime').value = '18:00';
-    document.getElementById('loopBrightness').value = '1.0';
-    document.getElementById('brightnessValue').textContent = '1.0';
-    document.getElementById('useGlobalBrightness').checked = true;
-    document.getElementById('loopBrightness').disabled = true;
     document.getElementById('loopModal').style.display = 'block';
 }
 
-function openEditLoopModal(name, startTime, endTime, brightness) {
+function openEditLoopModal(name, startTime, endTime) {
     document.getElementById('modalTitle').textContent = 'Edit Loop';
     document.getElementById('oldLoopName').value = name;
     document.getElementById('loopName').value = name;
     document.getElementById('startTime').value = startTime;
     document.getElementById('endTime').value = endTime;
-    const useGlobal = brightness === null || brightness === undefined;
-    document.getElementById('useGlobalBrightness').checked = useGlobal;
-    document.getElementById('loopBrightness').disabled = useGlobal;
-    document.getElementById('loopBrightness').value = useGlobal ? '1.0' : brightness;
-    document.getElementById('brightnessValue').textContent = useGlobal ? '1.0' : brightness;
     document.getElementById('loopModal').style.display = 'block';
 }
 
@@ -235,13 +226,11 @@ document.getElementById('loopForm')?.addEventListener('submit', async (e) => {
     const name = document.getElementById('loopName').value;
     const startTime = document.getElementById('startTime').value;
     const endTime = document.getElementById('endTime').value;
-    const useGlobal = document.getElementById('useGlobalBrightness').checked;
-    const brightness = useGlobal ? null : parseFloat(document.getElementById('loopBrightness').value);
 
     const endpoint = oldName ? '/update_loop' : '/create_loop';
     const payload = oldName
-        ? { old_name: oldName, new_name: name, start_time: startTime, end_time: endTime, brightness }
-        : { name, start_time: startTime, end_time: endTime, brightness };
+        ? { old_name: oldName, new_name: name, start_time: startTime, end_time: endTime }
+        : { name, start_time: startTime, end_time: endTime };
 
     try {
         const response = await fetch(endpoint, {

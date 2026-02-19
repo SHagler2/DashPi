@@ -49,40 +49,37 @@ class ImageFolder(BasePlugin):
             raise RuntimeError(f"No image files found in folder: {folder_path}")
 
         logger.debug(f"Found {len(image_files)} image file(s) in folder")
-        image_url = random.choice(image_files)
-        logger.info(f"Selected random image: {os.path.basename(image_url)}")
-        logger.debug(f"Full path: {image_url}")
+        image_path = random.choice(image_files)
+        logger.info(f"Selected random image: {os.path.basename(image_path)}")
+        logger.debug(f"Full path: {image_path}")
 
-        # Check padding options
-        use_padding = settings.get('padImage') == "true"
-        background_option = settings.get('backgroundOption', 'blur')
-        logger.debug(f"Settings: pad_image={use_padding}, background_option={background_option}")
+        # Display mode: fit (letterbox), fill (crop), or blur (blurred background)
+        # Migrate old padImage setting if fitMode not set
+        fit_mode = settings.get('fitMode')
+        if not fit_mode:
+            if settings.get('padImage') == 'true':
+                fit_mode = 'blur' if settings.get('backgroundOption', 'blur') == 'blur' else 'fit'
+            else:
+                fit_mode = 'fill'
+
+        logger.debug(f"Settings: fit_mode={fit_mode}")
 
         try:
-            # Use adaptive loader for memory-efficient processing
-            # Load without auto-resize first to handle padding options
-            # Note: Loader automatically handles EXIF orientation correction
-            img = self.image_loader.from_file(image_url, dimensions, resize=False)
+            # For blur mode, load without resize (manual padding needed)
+            # For fit/fill, let the image loader handle it natively
+            use_native_resize = fit_mode in ('fit', 'fill')
+            img = self.image_loader.from_file(image_path, dimensions, resize=use_native_resize, fit_mode=fit_mode)
 
             if not img:
                 raise RuntimeError("Failed to load image from file")
 
-            if use_padding:
-                logger.debug(f"Applying padding with {background_option} background")
-                if background_option == "blur":
-                    img = pad_image_blur(img, dimensions)
-                else:
-                    background_color = ImageColor.getcolor(settings.get('backgroundColor') or "white", img.mode)
-                    img = ImageOps.pad(img, dimensions, color=background_color, method=Image.Resampling.LANCZOS)
-            else:
-                # No padding requested, scale to fit dimensions (crop to preserve aspect ratio)
-                logger.debug(f"Scaling to fit dimensions: {dimensions[0]}x{dimensions[1]}")
-                img = ImageOps.fit(img, dimensions, method=Image.LANCZOS)
+            # Blur mode: manual padding with blurred background
+            if fit_mode == 'blur':
+                logger.debug("Applying blur background padding")
+                img = pad_image_blur(img, dimensions)
 
+            logger.info("=== Image Folder Plugin: Image generation complete ===")
             return img
         except Exception as e:
-            logger.error(f"Error loading image from {image_url}: {e}")
+            logger.error(f"Error loading image from {image_path}: {e}")
             raise RuntimeError("Failed to load image, please check logs.")
-
-        logger.info("=== Image Folder Plugin: Image generation complete ===")
-        return img

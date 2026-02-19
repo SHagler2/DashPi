@@ -128,6 +128,65 @@ install_app_service() {
   fi
 }
 
+setup_clean_boot() {
+  echo "Configuring clean boot experience."
+
+  # 1. Update kernel cmdline for quiet boot
+  CMDLINE_FILE="/boot/firmware/cmdline.txt"
+  if [ ! -f "$CMDLINE_FILE" ]; then
+    CMDLINE_FILE="/boot/cmdline.txt"
+  fi
+
+  if [ -f "$CMDLINE_FILE" ]; then
+    CMDLINE=$(cat "$CMDLINE_FILE" | tr -d '\n')
+    PARAMS_TO_ADD="quiet splash loglevel=0 logo.nologo vt.global_cursor_default=0 consoleblank=1"
+    MODIFIED=false
+    for param in $PARAMS_TO_ADD; do
+      if ! echo "$CMDLINE" | grep -q "$param"; then
+        CMDLINE="$CMDLINE $param"
+        MODIFIED=true
+      fi
+    done
+    if [ "$MODIFIED" = true ]; then
+      cp "$CMDLINE_FILE" "${CMDLINE_FILE}.dashpi.bak"
+      echo "$CMDLINE" > "$CMDLINE_FILE"
+      echo_success "\tUpdated $CMDLINE_FILE with quiet boot parameters"
+    else
+      echo_success "\tKernel cmdline already configured"
+    fi
+  fi
+
+  # 2. Suppress GPU rainbow splash via config.txt
+  CONFIG_TXT="/boot/firmware/config.txt"
+  if [ ! -f "$CONFIG_TXT" ]; then
+    CONFIG_TXT="/boot/config.txt"
+  fi
+  if [ -f "$CONFIG_TXT" ]; then
+    if ! grep -q "disable_splash=1" "$CONFIG_TXT"; then
+      echo "disable_splash=1" >> "$CONFIG_TXT"
+      echo_success "\tDisabled GPU rainbow splash in config.txt"
+    fi
+  fi
+
+  # 3. Mask getty on tty1 (SSH unaffected, tty2+ still available)
+  systemctl mask getty@tty1.service > /dev/null 2>&1
+  echo_success "\tMasked getty@tty1.service"
+
+  # 4. Install tmpfiles config for fbcon cursor
+  cp "$SCRIPT_DIR/dashpi-fbcon.conf" /etc/tmpfiles.d/
+  echo_success "\tInstalled fbcon cursor config"
+
+  # 5. Install splash animation script
+  cp "$SCRIPT_DIR/show_splash.py" "$INSTALL_PATH/show_splash.py"
+  echo_success "\tInstalled splash animation script"
+
+  # 6. Install and enable splash service
+  cp "$SCRIPT_DIR/dashpi-splash.service" /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable dashpi-splash.service > /dev/null 2>&1
+  echo_success "\tInstalled and enabled dashpi-splash.service"
+}
+
 install_executable() {
   echo "Adding executable to ${BINPATH}/$APPNAME"
   cp $SCRIPT_DIR/dashpi $BINPATH/
@@ -240,6 +299,7 @@ create_venv
 install_executable
 install_config
 install_app_service
+setup_clean_boot
 
 echo "Update JS and CSS files"
 bash $SCRIPT_DIR/update_vendors.sh > /dev/null

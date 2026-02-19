@@ -1,5 +1,7 @@
-import json
 import logging
+from datetime import datetime
+
+import pytz
 
 from utils.image_utils import resize_image, change_orientation, apply_image_enhancement
 from display.mock_display import MockDisplay
@@ -39,7 +41,7 @@ class DisplayManager:
         else:
             raise ValueError(f"Unsupported display type: {display_type}")
 
-    def display_image(self, image, image_settings=None, image_settings_override=None):
+    def display_image(self, image, image_settings=None):
 
         """
         Delegates image rendering to the appropriate display instance.
@@ -47,8 +49,6 @@ class DisplayManager:
         Args:
             image (PIL.Image): The image to be displayed.
             image_settings (list, optional): List of settings to modify image rendering.
-            image_settings_override (dict, optional): Override for image enhancement settings
-                (e.g. per-loop brightness). Merged on top of global image_settings.
 
         Raises:
             ValueError: If no valid display instance is found.
@@ -61,14 +61,48 @@ class DisplayManager:
         logger.info(f"Saving image to {self.device_config.current_image_file}")
         image.save(self.device_config.current_image_file)
 
+        # Convert to RGB once at the start of the pipeline
+        if image.mode not in ('RGB', 'L'):
+            image = image.convert('RGB')
+
         # Resize and adjust orientation
         image = change_orientation(image, self.device_config.get_config("orientation"))
         image = resize_image(image, self.device_config.get_resolution(), image_settings)
         if self.device_config.get_config("inverted_image"): image = image.rotate(180)
         effective_settings = self.device_config.get_config("image_settings") or {}
-        if image_settings_override:
-            effective_settings = {**effective_settings, **image_settings_override}
+        effective_settings["brightness"] = self._get_scheduled_brightness()
         image = apply_image_enhancement(image, effective_settings)
 
         # Pass to the concrete instance to render to the device.
         self.display.display_image(image, image_settings)
+
+    def _get_scheduled_brightness(self):
+        """Determine the current brightness based on the day/night schedule.
+
+        Returns the appropriate brightness value (float) based on current time
+        and the configured schedule. Falls back to day_brightness if schedule
+        is disabled or not configured.
+        """
+        schedule = self.device_config.get_config("brightness_schedule") or {}
+        day_brightness = schedule.get("day_brightness", 1.0)
+
+        if not schedule.get("enabled"):
+            return day_brightness
+
+        night_brightness = schedule.get("night_brightness", 0.6)
+        day_start = schedule.get("day_start", "07:00")
+        night_start = schedule.get("night_start", "21:00")
+
+        # Get current time in device timezone
+        tz_str = self.device_config.get_config("timezone", default="UTC")
+        current_time = datetime.now(pytz.timezone(tz_str)).strftime("%H:%M")
+
+        # Determine if current time is in the "day" window
+        if day_start <= night_start:
+            # Non-wrapping: day is day_start <= t < night_start
+            is_day = day_start <= current_time < night_start
+        else:
+            # Wrapping across midnight: day if t >= day_start OR t < night_start
+            is_day = current_time >= day_start or current_time < night_start
+
+        return day_brightness if is_day else night_brightness

@@ -196,7 +196,7 @@ class ArtMuseum(BasePlugin):
                     logger.debug(f"Chicago artwork on page {page} is '{artwork_type}' ({art_type}), skipping...")
                     continue
 
-                image_url = f"{CHICAGO_IIIF_URL}/{image_id}/full/843,/0/default.jpg"
+                image_url = f"{CHICAGO_IIIF_URL}/{image_id}/full/1024,/0/default.jpg"
 
                 return {
                     "title": art.get("title", ""),
@@ -210,11 +210,25 @@ class ArtMuseum(BasePlugin):
 
         raise RuntimeError("Could not find a matching Chicago artwork after 20 attempts.")
 
+    @staticmethod
+    def _truncate_to_width(draw, text, font, max_width):
+        """Binary search for the longest prefix that fits within max_width."""
+        lo, hi = 10, len(text)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            bbox = draw.textbbox((0, 0), text[:mid] + "...", font=font)
+            if bbox[2] - bbox[0] <= max_width:
+                lo = mid
+            else:
+                hi = mid - 1
+        return text[:lo] + "..."
+
     def _add_title_overlay(self, image, title, subtitle=""):
         """Add title and subtitle overlay at the bottom of the image."""
-        img = image.copy()
-        draw = ImageDraw.Draw(img, 'RGBA')
-        width, height = img.size
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+        draw = ImageDraw.Draw(image, 'RGBA')
+        width, height = image.size
         padding = max(10, int(height * 0.01))
 
         font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -239,14 +253,13 @@ class ArtMuseum(BasePlugin):
         title_w = title_bbox[2] - title_bbox[0]
         title_h = title_bbox[3] - title_bbox[1]
 
-        # Truncate title if too wide
+        # Truncate title if too wide (binary search for optimal length)
         max_text_width = width - (padding * 4)
         display_title = title
         if title_w > max_text_width:
-            while title_w > max_text_width and len(display_title) > 10:
-                display_title = display_title[:-4] + "..."
-                title_bbox = draw.textbbox((0, 0), display_title, font=title_font)
-                title_w = title_bbox[2] - title_bbox[0]
+            display_title = self._truncate_to_width(draw, title, title_font, max_text_width)
+            title_bbox = draw.textbbox((0, 0), display_title, font=title_font)
+            title_w = title_bbox[2] - title_bbox[0]
 
         # Measure subtitle
         sub_h = 0
@@ -256,10 +269,7 @@ class ArtMuseum(BasePlugin):
             sub_w = sub_bbox[2] - sub_bbox[0]
             sub_h = sub_bbox[3] - sub_bbox[1]
             if sub_w > max_text_width:
-                while sub_w > max_text_width and len(display_sub) > 10:
-                    display_sub = display_sub[:-4] + "..."
-                    sub_bbox = draw.textbbox((0, 0), display_sub, font=sub_font)
-                    sub_w = sub_bbox[2] - sub_bbox[0]
+                display_sub = self._truncate_to_width(draw, subtitle, sub_font, max_text_width)
 
         # Calculate bar height
         content_height = title_h + (sub_h + 4 if subtitle else 0)
@@ -297,4 +307,4 @@ class ArtMuseum(BasePlugin):
                                   font=sub_font, fill=(0, 0, 0, 255))
             draw.text((sub_x, sub_y), display_sub, font=sub_font, fill=(200, 200, 200, 255))
 
-        return img
+        return image
