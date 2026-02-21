@@ -156,3 +156,15 @@ class Config:
     def get_loop_manager(self):
         """Returns the loop manager."""
         return self.loop_manager
+
+    def get_loop_override(self):
+        """Returns the current loop override dict, or None if no override is active."""
+        return self.config.get("loop_override")
+
+    def set_loop_override(self, override_dict):
+        """Sets a loop override (pin plugin or override loop) and persists."""
+        self.update_value("loop_override", override_dict, write=True)
+
+    def clear_loop_override(self):
+        """Clears any active loop override and persists."""
+        self.update_value("loop_override", None, write=True)

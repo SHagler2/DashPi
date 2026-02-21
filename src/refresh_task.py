@@ -138,7 +138,25 @@ class RefreshTask:
                     sleep_time = loop_manager.rotation_interval_seconds
 
                     # Check if current plugin has auto-refresh - use shorter interval if so
-                    auto_refresh_seconds = self._get_auto_refresh_seconds()
+                    # When a plugin is pinned, use the pinned plugin's auto-refresh settings
+                    # (not the tracked settings which could be stale from a previous plugin)
+                    loop_override_early = self.device_config.get_loop_override()
+                    if loop_override_early and loop_override_early.get("type") == "plugin":
+                        pinned_id = loop_override_early.get("plugin_id")
+                        pinned_settings = self.device_config.get_config(
+                            f"plugin_last_settings_{pinned_id}", default={}
+                        )
+                        pinned_ar = pinned_settings.get("autoRefresh")
+                        if pinned_ar:
+                            try:
+                                auto_refresh_seconds = int(float(pinned_ar) * 60)
+                            except (ValueError, TypeError):
+                                auto_refresh_seconds = self._get_auto_refresh_seconds()
+                        else:
+                            auto_refresh_seconds = self._get_auto_refresh_seconds()
+                    else:
+                        auto_refresh_seconds = self._get_auto_refresh_seconds()
+
                     use_auto_refresh = False
                     if auto_refresh_seconds:
                         if auto_refresh_seconds < sleep_time:
@@ -154,18 +172,23 @@ class RefreshTask:
                         sleep_time = 3
                         logger.info("First run after boot, using 3s startup delay")
 
-                    # Update status with next change countdown (skip for very short intervals like continuous Shazam)
-                    if sleep_time >= 15:
-                        if sleep_time >= 3600:
-                            remaining = f"{sleep_time / 3600:.1f}h"
-                        elif sleep_time >= 60:
-                            remaining = f"{int(sleep_time / 60)}m"
-                        else:
-                            remaining = f"{int(sleep_time)}s"
-                        self._set_global_status("idle", f"Next change in {remaining}")
+                    # If a manual update was queued while we were processing, skip the wait
+                    if self.manual_update_request:
+                        logger.info("Manual update already queued, skipping wait")
+                    else:
+                        # Update status with next change countdown (skip for very short intervals like continuous Shazam)
+                        if sleep_time >= 15:
+                            if sleep_time >= 3600:
+                                remaining = f"{sleep_time / 3600:.1f}h"
+                            elif sleep_time >= 60:
+                                remaining = f"{int(sleep_time / 60)}m"
+                            else:
+                                remaining = f"{int(sleep_time)}s"
+                            self._set_global_status("idle", f"Next change in {remaining}",
+                                                    countdown_seconds=int(sleep_time))
 
-                    # Wait for sleep_time or until notified
-                    self.condition.wait(timeout=sleep_time)
+                        # Wait for sleep_time or until notified
+                        self.condition.wait(timeout=sleep_time)
                     self.first_run = False
                     self.refresh_result = {}
                     self.refresh_event.clear()
@@ -193,9 +216,13 @@ class RefreshTask:
                         # Check if loop rotation is enabled
                         loop_enabled = self.device_config.get_config("loop_enabled", default=True)
 
+                        # Check for override (pin plugin or override loop)
+                        loop_override = self.device_config.get_loop_override()
+                        plugin_pin_active = loop_override and loop_override.get("type") == "plugin"
+
                         # Check if loop rotation is overdue (takes priority over auto-refresh)
                         loop_rotation_due = False
-                        if loop_enabled:
+                        if loop_enabled and not plugin_pin_active:
                             loop_manager = self.device_config.get_loop_manager()
                             rotation_interval = loop_manager.rotation_interval_seconds
                             if self.last_loop_rotation_time:
@@ -205,29 +232,52 @@ class RefreshTask:
                                 # No rotation tracked yet - first run, do rotation
                                 loop_rotation_due = True
 
-                        if loop_rotation_due:
+                        # If a plugin is pinned and we're showing the wrong one, switch immediately
+                        if plugin_pin_active and latest_refresh and latest_refresh.plugin_id != loop_override.get("plugin_id"):
+                            pinned_id = loop_override.get("plugin_id")
+                            logger.info(f"Switching to pinned plugin: {pinned_id}")
+                            plugin_settings = self.device_config.get_config(
+                                f"plugin_last_settings_{pinned_id}", default={}
+                            )
+                            refresh_action = AutoRefresh(pinned_id, plugin_settings)
+                            pname = self._get_display_name(pinned_id)
+                            self._set_global_status("refreshing", f"Pinned: {pname}...", pname, pinned_id)
+                        elif loop_rotation_due:
                             # Loop rotation takes priority over auto-refresh
                             logger.info(f"Running interval refresh check. | current_time: {current_dt.strftime('%Y-%m-%d %H:%M:%S')}")
 
                             loop_manager = self.device_config.get_loop_manager()
-                            loop, plugin_ref = self._determine_next_plugin_loop_mode(loop_manager, current_dt)
+                            loop, plugin_ref = self._determine_next_plugin_loop_mode(loop_manager, current_dt, override=loop_override)
                             if plugin_ref:
                                 refresh_action = LoopRefresh(loop, plugin_ref)
                                 pname = self._get_display_name(plugin_ref.plugin_id)
                                 self._set_global_status("refreshing", f"Loading {pname}...", pname, plugin_ref.plugin_id)
                         elif use_auto_refresh and self._should_auto_refresh(current_dt):
                             # Auto-refresh current plugin (only if loop rotation isn't due)
-                            logger.info(f"Auto-refreshing current plugin: {latest_refresh.plugin_id}")
-                            refresh_action = AutoRefresh(latest_refresh.plugin_id, self.auto_refresh_plugin_settings)
-                            pname = self._get_display_name(latest_refresh.plugin_id)
-                            self._set_global_status("refreshing", f"Auto-refreshing {pname}...", pname, latest_refresh.plugin_id)
-                        elif not loop_enabled:
-                            # Loop is disabled - on first boot cycle, force an immediate render
-                            # so the splash screen gets replaced quickly
+                            # When a plugin is pinned, always auto-refresh the PINNED plugin
+                            # (not whatever was last tracked in auto_refresh_plugin_settings)
+                            if plugin_pin_active:
+                                ar_plugin_id = loop_override.get("plugin_id")
+                                ar_settings = self.device_config.get_config(
+                                    f"plugin_last_settings_{ar_plugin_id}", default=self.auto_refresh_plugin_settings
+                                )
+                            else:
+                                ar_plugin_id = latest_refresh.plugin_id
+                                ar_settings = self.auto_refresh_plugin_settings
+                            logger.info(f"Auto-refreshing current plugin: {ar_plugin_id}")
+                            refresh_action = AutoRefresh(ar_plugin_id, ar_settings)
+                            pname = self._get_display_name(ar_plugin_id)
+                            self._set_global_status("refreshing", f"Auto-refreshing {pname}...", pname, ar_plugin_id)
+                        elif not loop_enabled or plugin_pin_active:
+                            # Loop is disabled or plugin is pinned — run in standalone mode
+                            # On first boot cycle, force an immediate render
                             first_boot_plugin_id = None
                             if not self._displayed_this_boot:
+                                # If plugin is pinned, use the pinned plugin
+                                if plugin_pin_active:
+                                    first_boot_plugin_id = loop_override.get("plugin_id")
                                 # Try latest_refresh first, then fall back to finding any plugin
-                                if latest_refresh and latest_refresh.plugin_id:
+                                elif latest_refresh and latest_refresh.plugin_id:
                                     first_boot_plugin_id = latest_refresh.plugin_id
                                 else:
                                     # No known last plugin - find any configured plugin to display
@@ -422,7 +472,7 @@ class RefreshTask:
         cfg = self.device_config.get_plugin(plugin_id)
         return cfg.get("display_name", plugin_id) if cfg else plugin_id
 
-    def _set_global_status(self, stage, detail="", plugin_name="", plugin_id=""):
+    def _set_global_status(self, stage, detail="", plugin_name="", plugin_id="", countdown_seconds=None):
         """Write current refresh status to a JSON file for the loops page to poll.
 
         Uses atomic write (write to temp file + rename) to prevent torn reads.
@@ -434,14 +484,18 @@ class RefreshTask:
                 plugin_status_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugins", plugin_id, "status.json")
                 has_plugin_status = os.path.exists(plugin_status_path)
 
+            now = time.time()
             status = {
                 "stage": stage,
                 "detail": detail,
                 "plugin_name": plugin_name,
                 "plugin_id": plugin_id,
                 "has_plugin_status": has_plugin_status,
-                "timestamp": time.time(),
+                "timestamp": now,
             }
+            # Include countdown target for frontend live countdown
+            if countdown_seconds is not None:
+                status["countdown_target"] = now + countdown_seconds
             fd, tmp_path = tempfile.mkstemp(dir=GLOBAL_STATUS_DIR, suffix='.tmp')
             os.fchmod(fd, 0o644)
             with os.fdopen(fd, 'w') as f:
@@ -577,9 +631,9 @@ class RefreshTask:
         }
         self.device_config.update_value("auto_refresh_tracking", tracking, write=False)  # Don't write immediately, will be batched
 
-    def _determine_next_plugin_loop_mode(self, loop_manager, current_dt):
+    def _determine_next_plugin_loop_mode(self, loop_manager, current_dt, override=None):
         """Determines the next plugin to refresh in loop mode based on the active loop and rotation."""
-        loop = loop_manager.determine_active_loop(current_dt)
+        loop = loop_manager.determine_active_loop(current_dt, override=override)
         if not loop:
             loop_manager.active_loop = None
             logger.info("No active loop determined.")

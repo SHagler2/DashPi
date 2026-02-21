@@ -1,4 +1,19 @@
 <div class="form-group">
+    <label for="autoRefresh" class="form-label">Auto Refresh:</label>
+    <select id="autoRefresh" name="autoRefresh" class="form-input">
+        <option value="0">Off</option>
+        <option value="5">Every 5 minutes</option>
+        <option value="10">Every 10 minutes</option>
+        <option value="15">Every 15 minutes</option>
+        <option value="30" selected>Every 30 minutes</option>
+        <option value="60">Every 1 hour</option>
+        <option value="120">Every 2 hours</option>
+        <option value="240">Every 4 hours</option>
+    </select>
+    <small style="display: block; margin-top: 4px; color: var(--text-secondary, #666);">How often to fetch a new photo while this plugin is displayed</small>
+</div>
+
+<div class="form-group">
     <label for="search_query" class="form-label">Search Query:</label>
     <input type="text" id="search_query" name="search_query" placeholder="Type something..." class="form-input">
     <small style="width: 100%; color: var(--text-primary);">Optional: Search for an image on Unsplash. If not provided, a random image will be fetched.</small>
@@ -28,6 +43,18 @@
         <small style="display: block; margin-top: 5px; color: #666;">
             Fit: Shows entire image with black bars if needed<br>
             Fill: Crops edges to fill screen completely
+        </small>
+    </div>
+
+    <div class="form-group">
+        <label for="showPhotoInfo" class="form-label">Show Photo Info</label>
+        <div class="toggle-container">
+            <input type="checkbox" id="showPhotoInfo" name="showPhotoInfo" class="toggle-checkbox" value="false"
+                onclick="this.value = this.checked ? 'true' : 'false'">
+            <label for="showPhotoInfo" class="toggle-label"></label>
+        </div>
+        <small style="display: block; margin-top: 5px; color: #666;">
+            Display photo description and photographer name at the bottom of the image
         </small>
     </div>
 
@@ -67,8 +94,11 @@
             document.getElementById('collections').value = pluginSettings.collections || '';
             document.getElementById('content_filter').value = pluginSettings.content_filter || 'low';
             document.getElementById('fitMode').value = pluginSettings.fitMode || 'fit';
+            document.getElementById('showPhotoInfo').checked = pluginSettings.showPhotoInfo === 'true';
+            document.getElementById('showPhotoInfo').value = pluginSettings.showPhotoInfo || 'false';
             document.getElementById('color').value = pluginSettings.color || '';
             document.getElementById('orientation').value = pluginSettings.orientation || '';
+            document.getElementById('autoRefresh').value = pluginSettings?.autoRefresh || '30';
         }
     });
 </script>

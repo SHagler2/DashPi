@@ -56,6 +56,20 @@
             </div>
         </div>
 
+        <!-- Override Banner -->
+        {% if loop_override %}
+        <div id="loopsOverrideBanner" class="override-banner visible">
+            {% if loop_override.type == 'loop' %}
+            <span class="override-icon">🔄</span>
+            <span><span class="override-label">Override</span> <span class="override-name">{{ loop_override.loop_name }}</span></span>
+            {% elif loop_override.type == 'plugin' %}
+            <span class="override-icon">📌</span>
+            <span><span class="override-label">Pinned</span> <span class="override-name">{{ plugins.get(loop_override.plugin_id, {}).get('display_name', loop_override.plugin_id) }}</span></span>
+            {% endif %}
+            <button onclick="clearOverride()" class="override-dismiss">Resume Schedule</button>
+        </div>
+        {% endif %}
+
         <!-- Loops List -->
         <div class="loop-list">
             {% for loop_item in loop_config.loops %}
@@ -69,6 +83,13 @@
                         <div style="margin-top: 6px; font-size: 13px; color: var(--text-secondary); font-weight: 400;">{{ loop_item.start_time }} - {{ loop_item.end_time }}</div>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
+                        {% set is_override = loop_override and loop_override.type == 'loop' and loop_override.loop_name == loop_item.name %}
+                        <button onclick="{% if is_override %}clearOverride(){% else %}activateLoopOverride('{{ loop_item.name }}'){% endif %}"
+                                class="action-button"
+                                style="padding: 8px 14px; font-size: 14px; font-weight: 500; background: {{ 'var(--warning-border, #ffc107)' if is_override else 'var(--accent-primary, #007bff)' }}; color: {{ 'var(--warning-text, #856404)' if is_override else 'white' }};"
+                                title="{{ 'Deactivate override' if is_override else 'Activate this loop as override' }}">
+                            {{ 'Deactivate' if is_override else 'Activate' }}
+                        </button>
                         <button onclick="toggleRandomize('{{ loop_item.name }}')"
                                 id="randomize-{{ loop_item.name }}"
                                 class="action-button"

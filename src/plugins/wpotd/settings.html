@@ -1,3 +1,19 @@
+<div class="form-group">
+    <label for="autoRefresh" class="form-label">Auto Refresh:</label>
+    <select id="autoRefresh" name="autoRefresh" class="form-input">
+        <option value="0">Off</option>
+        <option value="1">Every 1 minute</option>
+        <option value="5">Every 5 minutes</option>
+        <option value="10">Every 10 minutes</option>
+        <option value="15">Every 15 minutes</option>
+        <option value="30">Every 30 minutes</option>
+        <option value="60" selected>Every 1 hour</option>
+        <option value="120">Every 2 hours</option>
+        <option value="240">Every 4 hours</option>
+    </select>
+    <small style="display: block; margin-top: 4px; color: var(--text-secondary, #666);">How often to re-fetch the image while this plugin is displayed</small>
+</div>
+
 <span style="color: var(--text-primary);">If the date field is blank it will default to today's date. This is useful when adding to a playlist.</span>
 <div class="form-group">
     <label for="customDate" class="form-label">Date (optional)</label>
@@ -53,6 +69,7 @@
             $toggleShrink.checked = pluginSettings.shrinkToFitWpotd === 'true';
             $toggleShrink.value = pluginSettings.shrinkToFitWpotd;
             $fitMode.value = pluginSettings.fitMode || 'fit';
+            document.getElementById('autoRefresh').value = pluginSettings?.autoRefresh || '60';
 
         } else {
             $toggleRandom.checked = false;

@@ -148,10 +148,17 @@ def generate_startup_image(dimensions=(800,480)):
     return image
 
 def parse_form(request_form):
-    request_dict = request_form.to_dict()
+    # Use getlist to handle the hidden+checkbox pattern correctly.
+    # For checkboxes with a hidden fallback (hidden value="false", checkbox value="true"),
+    # the form sends both values when checked. We take the LAST value for scalar fields,
+    # which is the checkbox value when checked, or the hidden value when unchecked.
+    request_dict = {}
     for key in request_form.keys():
         if key.endswith('[]'):
             request_dict[key] = request_form.getlist(key)
+        else:
+            values = request_form.getlist(key)
+            request_dict[key] = values[-1] if values else ''
     return request_dict
 
 def handle_request_files(request_files, form_data=None):

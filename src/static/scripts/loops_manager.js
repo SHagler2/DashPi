@@ -610,3 +610,38 @@ async function savePluginOrder(loopName, pluginList) {
         location.reload();
     }
 }
+
+// Override Loop Management
+async function activateLoopOverride(loopName) {
+    try {
+        const response = await fetch('/api/override_loop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ loop_name: loopName })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showResponseModal('success', `Override active: ${loopName}`);
+            location.reload();
+        } else {
+            showResponseModal('failure', result.error);
+        }
+    } catch (error) {
+        showResponseModal('failure', 'Error activating override: ' + error.message);
+    }
+}
+
+async function clearOverride() {
+    try {
+        const response = await fetch('/api/clear_override', { method: 'POST' });
+        const result = await response.json();
+        if (result.success) {
+            showResponseModal('success', 'Schedule resumed');
+            location.reload();
+        } else {
+            showResponseModal('failure', result.error);
+        }
+    } catch (error) {
+        showResponseModal('failure', 'Error clearing override: ' + error.message);
+    }
+}

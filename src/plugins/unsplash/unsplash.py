@@ -1,6 +1,7 @@
 from plugins.base_plugin.base_plugin import BasePlugin
 from utils.image_loader import _is_low_resource_device
 from utils.http_client import get_http_session
+from PIL import ImageDraw, ImageFont
 import logging
 import random
 
@@ -73,11 +74,20 @@ class Unsplash(BasePlugin):
                 # Use selected image size (with automatic downgrade for low-RAM devices)
                 selected_photo = random.choice(results)
                 image_url = selected_photo["urls"][image_size]
+                photo_data = selected_photo
                 logger.debug(f"Selected random image from {len(results)} results")
             else:
                 # Use selected image size (with automatic downgrade for low-RAM devices)
                 image_url = data["urls"][image_size]
+                photo_data = data
                 logger.debug("Retrieved random image URL")
+
+            # Extract photo metadata
+            description = photo_data.get("description") or photo_data.get("alt_description") or ""
+            photographer = ""
+            user_data = photo_data.get("user")
+            if user_data:
+                photographer = user_data.get("name", "")
 
         except Exception as e:
             logger.error(f"Error fetching image from Unsplash API: {e}")
@@ -105,5 +115,63 @@ class Unsplash(BasePlugin):
             logger.error("Failed to load and process image")
             raise RuntimeError("Failed to load image, please check logs.")
 
+        # Add photo info overlay if enabled
+        if settings.get("showPhotoInfo") == "true" and (description or photographer):
+            image = self._add_photo_overlay(image, description, photographer)
+
         logger.info("=== Unsplash Plugin: Image generation complete ===")
         return image
+
+    def _add_photo_overlay(self, image, description, photographer):
+        """Add photo info overlay at the bottom of the image."""
+        img_with_overlay = image.copy()
+        draw = ImageDraw.Draw(img_with_overlay, 'RGBA')
+
+        width, height = img_with_overlay.size
+
+        # Build overlay text
+        if description and photographer:
+            # Truncate description if needed to leave room for photographer
+            max_desc_len = 60
+            if len(description) > max_desc_len:
+                description = description[:max_desc_len - 3] + "..."
+            overlay_text = f"{description} — by {photographer}"
+        elif photographer:
+            overlay_text = f"by {photographer}"
+        else:
+            overlay_text = description[:80] if len(description) > 80 else description
+
+        try:
+            font_size = max(16, int(height * 0.018))
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+        except Exception:
+            font = ImageFont.load_default()
+            logger.warning("Could not load custom font, using default")
+
+        # Calculate text size and position
+        bbox = draw.textbbox((0, 0), overlay_text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+
+        padding = max(10, int(height * 0.01))
+        text_x = (width - text_width) // 2
+        text_y = height - text_height - padding
+
+        # Semi-transparent black background
+        draw.rectangle(
+            [(0, text_y - padding), (width, height)],
+            fill=(0, 0, 0, 180)
+        )
+
+        # Black outline for contrast
+        outline_width = 2
+        for adj_x in range(-outline_width, outline_width + 1):
+            for adj_y in range(-outline_width, outline_width + 1):
+                if adj_x != 0 or adj_y != 0:
+                    draw.text((text_x + adj_x, text_y + adj_y), overlay_text, font=font, fill=(0, 0, 0, 255))
+
+        # White text
+        draw.text((text_x, text_y), overlay_text, font=font, fill=(255, 255, 255, 255))
+
+        logger.info(f"Added photo overlay: {overlay_text}")
+        return img_with_overlay

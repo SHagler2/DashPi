@@ -18,10 +18,12 @@ def get_version():
 def main_page():
     device_config = current_app.config['DEVICE_CONFIG']
     loop_enabled = device_config.get_config("loop_enabled", default=True)
+    loop_override = device_config.get_loop_override()
     return render_template('dash.html',
                          config=device_config.get_config(),
                          plugins=device_config.get_plugins(),
                          loop_enabled=loop_enabled,
+                         loop_override=loop_override,
                          version=get_version())
 
 @main_bp.route('/display')
@@ -144,6 +146,70 @@ def skip_to_next():
         return jsonify({"error": str(e)}), 500
 
 
+@main_bp.route('/api/pin_plugin', methods=['POST'])
+def pin_plugin():
+    """Pin a plugin to override the loop schedule."""
+    device_config = current_app.config['DEVICE_CONFIG']
+    refresh_task = current_app.config.get('REFRESH_TASK')
+
+    data = request.get_json() or {}
+    plugin_id = data.get('plugin_id')
+
+    if not plugin_id:
+        return jsonify({"error": "plugin_id is required"}), 400
+
+    plugin_config = device_config.get_plugin(plugin_id)
+    if not plugin_config:
+        return jsonify({"error": f"Plugin '{plugin_id}' not found"}), 404
+
+    try:
+        device_config.set_loop_override({"type": "plugin", "plugin_id": plugin_id})
+        if refresh_task:
+            refresh_task.signal_config_change()
+        plugin_name = plugin_config.get("display_name", plugin_id)
+        return jsonify({"success": True, "message": f"Pinned: {plugin_name}", "plugin_id": plugin_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@main_bp.route('/api/override_loop', methods=['POST'])
+def override_loop():
+    """Activate a loop override, bypassing the time-based schedule."""
+    device_config = current_app.config['DEVICE_CONFIG']
+    refresh_task = current_app.config.get('REFRESH_TASK')
+
+    data = request.get_json() or {}
+    loop_name = data.get('loop_name')
+
+    if not loop_name:
+        return jsonify({"error": "loop_name is required"}), 400
+
+    loop_manager = device_config.get_loop_manager()
+    loop = loop_manager.get_loop(loop_name)
+    if not loop:
+        return jsonify({"error": f"Loop '{loop_name}' not found"}), 404
+
+    try:
+        device_config.set_loop_override({"type": "loop", "loop_name": loop_name})
+        if refresh_task:
+            refresh_task.signal_config_change()
+        return jsonify({"success": True, "message": f"Override active: {loop_name}", "loop_name": loop_name})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@main_bp.route('/api/clear_override', methods=['POST'])
+def clear_override():
+    """Clear any active override and resume normal schedule."""
+    device_config = current_app.config['DEVICE_CONFIG']
+    refresh_task = current_app.config.get('REFRESH_TASK')
+
+    try:
+        device_config.clear_loop_override()
+        if refresh_task:
+            refresh_task.signal_config_change()
+        return jsonify({"success": True, "message": "Override cleared, resuming schedule"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @main_bp.route('/api/next_change_time')
 def get_next_change_time():
     """Get time remaining until next loop/display change."""
@@ -204,6 +270,14 @@ def get_next_change_time():
     display_manager = current_app.config.get('DISPLAY_MANAGER')
     current_brightness = display_manager.get_current_brightness() if display_manager else 1.0
 
+    # Get override info with display name
+    loop_override = device_config.get_loop_override()
+    if loop_override and loop_override.get("type") == "plugin":
+        override_plugin = device_config.get_plugin(loop_override.get("plugin_id"))
+        if override_plugin:
+            loop_override = dict(loop_override)  # Don't mutate config
+            loop_override["display_name"] = override_plugin.get("display_name", loop_override.get("plugin_id"))
+
     return jsonify({
         "success": True,
         "loop_enabled": loop_enabled,
@@ -211,8 +285,10 @@ def get_next_change_time():
         "remaining_seconds": int(remaining),
         "next_change_in": format_time(int(remaining)),
         "current_plugin": current_plugin_name,
+        "current_plugin_id": current_plugin_id,
         "next_plugin": next_plugin_name,
-        "current_brightness": current_brightness
+        "current_brightness": current_brightness,
+        "override": loop_override
     })
 
 @main_bp.route('/api/weather_location')

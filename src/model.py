@@ -115,11 +115,27 @@ class LoopManager:
         # Invalidate cache since loops changed
         self._cached_active_loop = None
 
-    def determine_active_loop(self, current_datetime):
-        """Determine the active loop based on the current time.
+    def determine_active_loop(self, current_datetime, override=None):
+        """Determine the active loop based on the current time or override.
+
+        Args:
+            current_datetime: Current datetime for time-based scheduling.
+            override: Optional override dict with 'type' and 'loop_name' keys.
+                      If type is 'loop', returns that loop regardless of time.
+                      If type is 'plugin', returns None (handled by refresh_task).
 
         Uses caching to avoid repeated recalculation when time hasn't changed.
         """
+        # Handle override
+        if override:
+            if override.get("type") == "loop":
+                loop = self.get_loop(override.get("loop_name"))
+                if loop and loop.plugin_order:
+                    return loop
+                logger.warning(f"Override loop '{override.get('loop_name')}' not found or empty")
+            elif override.get("type") == "plugin":
+                return None  # Plugin pin handled by refresh_task
+
         current_time = current_datetime.strftime("%H:%M")
 
         # Return cached result if time hasn't changed

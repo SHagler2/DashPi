@@ -197,6 +197,10 @@
                     if (currentPluginEl && data.current_plugin) {
                         currentPluginEl.textContent = data.current_plugin;
                     }
+                    // Track current plugin ID for pin functionality
+                    if (data.current_plugin_id) {
+                        currentPluginId = data.current_plugin_id;
+                    }
                     if (nextPluginEl) {
                         nextPluginEl.textContent = loopEnabled ? (data.next_plugin || '...') : '-';
                     }
@@ -215,10 +219,75 @@
                             brightnessEl.style.fontWeight = '500';
                         }
                     }
+
+                    // Update override banner
+                    updateOverrideBanner(data.override, data.current_plugin);
                 }
             } catch (error) {
                 console.error('Error fetching countdown:', error);
                 countdownSeconds = 0;
+            }
+        }
+
+        // Store current plugin ID for pin functionality
+        let currentPluginId = null;
+
+        function updateOverrideBanner(override, currentPlugin) {
+            const banner = document.getElementById('overrideBanner');
+            const iconEl = document.getElementById('overrideIcon');
+            const labelEl = document.getElementById('overrideLabel');
+            const nameEl = document.getElementById('overrideName');
+            const pinBtn = document.getElementById('pinButton');
+
+            if (override) {
+                if (override.type === 'plugin') {
+                    iconEl.textContent = '📌';
+                    labelEl.textContent = 'Pinned';
+                    nameEl.textContent = override.display_name || currentPlugin;
+                    if (pinBtn) pinBtn.style.display = 'none';
+                } else if (override.type === 'loop') {
+                    iconEl.textContent = '🔄';
+                    labelEl.textContent = 'Override';
+                    nameEl.textContent = override.loop_name;
+                    if (pinBtn) pinBtn.style.display = '';
+                }
+                banner.classList.add('visible');
+            } else {
+                banner.classList.remove('visible');
+                if (pinBtn) pinBtn.style.display = '';
+            }
+        }
+
+        async function pinCurrentPlugin() {
+            // Use the plugin_id tracked from the API response
+            if (!currentPluginId) {
+                console.error('No current plugin ID available');
+                return;
+            }
+            try {
+                const pinResp = await fetch('/api/pin_plugin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ plugin_id: currentPluginId })
+                });
+                const result = await pinResp.json();
+                if (result.success) {
+                    updateCountdown();
+                }
+            } catch (error) {
+                console.error('Error pinning plugin:', error);
+            }
+        }
+
+        async function clearOverride() {
+            try {
+                const response = await fetch('/api/clear_override', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    updateCountdown();
+                }
+            } catch (error) {
+                console.error('Error clearing override:', error);
             }
         }
 
@@ -410,6 +479,7 @@
                     <div class="status-item flex-1">
                         <span class="status-label">Current</span>
                         <span id="currentPlugin" class="status-value">...</span>
+                        <button id="pinButton" onclick="pinCurrentPlugin()" title="Pin this plugin" class="pin-btn">📌</button>
                     </div>
                     <!-- Next Plugin -->
                     <div class="status-item flex-1">
@@ -427,6 +497,13 @@
                     </button>
                 </div>
             </div>
+        </div>
+
+        <!-- Override Banner -->
+        <div id="overrideBanner" class="override-banner">
+            <span id="overrideIcon" class="override-icon"></span>
+            <span><span id="overrideLabel" class="override-label"></span> <span id="overrideName" class="override-name"></span></span>
+            <button onclick="clearOverride()" class="override-dismiss">Resume Schedule</button>
         </div>
 
         <!-- Featured Image Card -->
@@ -618,7 +695,6 @@
         const icon = document.getElementById('mainStatusIcon');
         const text = document.getElementById('mainStatusText');
 
-        let hideTimeout = null;
         let refreshInProgress = false;
         let refreshStartTimestamp = 0;
         let pollTimer = null;
@@ -629,18 +705,28 @@
             toggle.checked = saved === 'true';
         } catch (e) { toggle.checked = false; }
 
+        function applyToggleState() {
+            if (toggle.checked) {
+                bar.classList.remove('status-disabled');
+                startPolling();
+            } else {
+                stopPolling();
+                hideBar();
+                bar.classList.add('status-disabled');
+            }
+        }
+
         toggle.addEventListener('change', function() {
             try { localStorage.setItem(STORAGE_KEY, toggle.checked); } catch (e) {}
-            if (toggle.checked) { startPolling(); }
-            else { stopPolling(); hideBar(); }
+            applyToggleState();
         });
 
         function showBar() {
-            bar.style.display = 'flex';
+            bar.style.visibility = 'visible';
         }
 
         function hideBar() {
-            bar.style.display = 'none';
+            bar.style.visibility = 'hidden';
         }
 
         function setBarStyle(stage) {
@@ -691,7 +777,6 @@
                         refreshInProgress = true;
                         refreshStartTimestamp = data.timestamp;
                     }
-                    if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
 
                     if (data.plugin_id && data.has_plugin_status) {
                         try {
@@ -712,12 +797,24 @@
                     return;
                 }
 
-                if (refreshInProgress && isTerminal) {
+                if (isTerminal) {
                     refreshInProgress = false;
-                    updateBar(stageIcons[data.stage] || stageIcons.idle, data.detail, data.stage);
+                    // Live countdown: compute remaining from countdown_target
+                    let detail = data.detail;
+                    if (data.stage === 'idle' && data.countdown_target) {
+                        const remaining = Math.max(0, Math.round(data.countdown_target - Date.now() / 1000));
+                        if (remaining >= 3600) {
+                            detail = `Next change in ${(remaining / 3600).toFixed(1)}h`;
+                        } else if (remaining >= 60) {
+                            const m = Math.floor(remaining / 60);
+                            const s = remaining % 60;
+                            detail = `Next change in ${m}m ${s.toString().padStart(2, '0')}s`;
+                        } else {
+                            detail = `Next change in ${remaining}s`;
+                        }
+                    }
+                    updateBar(stageIcons[data.stage] || stageIcons.idle, detail, data.stage);
                     showBar();
-                    if (hideTimeout) clearTimeout(hideTimeout);
-                    hideTimeout = setTimeout(hideBar, 4000);
                 }
             } catch (e) {}
         }
@@ -731,7 +828,7 @@
             if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         }
 
-        if (toggle.checked) startPolling();
+        applyToggleState();
 
         return {};
     })();
