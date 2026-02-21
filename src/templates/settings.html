@@ -42,14 +42,6 @@
             }
         }
 
-        function toggleCollapsible(button) {
-            const content = button.nextElementSibling;
-            const icon = button.querySelector(".collapsible-icon");
-            button.classList.toggle("active");
-            content.style.display = content.style.display === "block" ? "none" : "block";
-            icon.textContent = content.style.display === "block" ? "▲" : "▼";
-        }
-
         async function handleShutdown(reboot) {
             if (reboot) {
                 showResponseModal('success', 'The system is rebooting. The UI will be unavailable until the reboot is complete.');
@@ -185,96 +177,90 @@
                     </label>
                 </div>
 
-                <div class="collapsible">
-                    <button type="button" class="collapsible-header" onclick="toggleCollapsible(this)">
-                        Image Settings <span class="collapsible-icon">▼</span>
-                    </button>
-                    <div class="settings-container collapsible-content">
-                        <div class="form-group">
-                            <label for="saturation" class="form-label" style="min-width: 100px;">Saturation:</label>
-                            <span id="saturation-value">{{ device_settings.get('image_settings', {}).get('saturation', 1.0) }}</span>
-                            <input
-                                type="range"
-                                id="saturation"
-                                name="saturation"
-                                class="form-input"
-                                min="0" max="2" step="0.1"
-                                value="{{ device_settings.get('image_settings', {}).get('saturation', 1.0) }}"
-                                style="max-width: 400px;"
-                                oninput="updateSliderValue(this)"
-                            />
-                        </div>
-                        <div class="form-group">
-                            <label for="contrast" class="form-label" style="min-width: 100px;">Contrast:</label>
-                            <span id="contrast-value">{{ device_settings.get('image_settings', {}).get('contrast', 1.0) }}</span>
-                            <input
-                                type="range"
-                                id="contrast"
-                                name="contrast"
-                                class="form-input"
-                                min="0" max="2" step="0.1"
-                                value="{{ device_settings.get('image_settings', {}).get('contrast', 1.0) }}"
-                                style="max-width: 400px;"
-                                oninput="updateSliderValue(this)"
-                            />
-                         </div>
-                        <div class="form-group">
-                            <label for="sharpness" class="form-label" style="min-width: 100px;">Sharpness:</label>
-                            <span id="sharpness-value">{{ device_settings.get('image_settings', {}).get('sharpness', 1.0) }}</span>
-                            <input
-                                type="range"
-                                id="sharpness"
-                                name="sharpness"
-                                class="form-input"
-                                min="0" max="2" step="0.1"
-                                value="{{ device_settings.get('image_settings', {}).get('sharpness', 1.0) }}"
-                                style="max-width: 400px;"
-                                oninput="updateSliderValue(this)"
-                            />
-                        </div>
-                        <!-- Brightness Day/Night Schedule -->
-                        {% set bs = device_settings.get('brightness_schedule', {}) %}
-                        {% set bs_enabled = bs.get('enabled', false) %}
-                        {% set day_brightness = bs.get('day_brightness', device_settings.get('image_settings', {}).get('brightness', 1.0)) %}
-                        {% set night_brightness = bs.get('night_brightness', 0.6) %}
-                        {% set day_start = bs.get('day_start', '07:00') %}
-                        {% set night_start = bs.get('night_start', '21:00') %}
+                <div class="separator" style="margin: 16px 0;"></div>
+                <div class="form-group">
+                    <label for="saturation" class="form-label" style="min-width: 100px;">Saturation:</label>
+                    <span id="saturation-value">{{ device_settings.get('image_settings', {}).get('saturation', 1.0) }}</span>
+                    <input
+                        type="range"
+                        id="saturation"
+                        name="saturation"
+                        class="form-input"
+                        min="0" max="2" step="0.1"
+                        value="{{ device_settings.get('image_settings', {}).get('saturation', 1.0) }}"
+                        style="max-width: 400px;"
+                        oninput="updateSliderValue(this)"
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="contrast" class="form-label" style="min-width: 100px;">Contrast:</label>
+                    <span id="contrast-value">{{ device_settings.get('image_settings', {}).get('contrast', 1.0) }}</span>
+                    <input
+                        type="range"
+                        id="contrast"
+                        name="contrast"
+                        class="form-input"
+                        min="0" max="2" step="0.1"
+                        value="{{ device_settings.get('image_settings', {}).get('contrast', 1.0) }}"
+                        style="max-width: 400px;"
+                        oninput="updateSliderValue(this)"
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="sharpness" class="form-label" style="min-width: 100px;">Sharpness:</label>
+                    <span id="sharpness-value">{{ device_settings.get('image_settings', {}).get('sharpness', 1.0) }}</span>
+                    <input
+                        type="range"
+                        id="sharpness"
+                        name="sharpness"
+                        class="form-input"
+                        min="0" max="2" step="0.1"
+                        value="{{ device_settings.get('image_settings', {}).get('sharpness', 1.0) }}"
+                        style="max-width: 400px;"
+                        oninput="updateSliderValue(this)"
+                    />
+                </div>
+                <!-- Brightness Day/Night Schedule -->
+                {% set bs = device_settings.get('brightness_schedule', {}) %}
+                {% set bs_enabled = bs.get('enabled', false) %}
+                {% set day_brightness = bs.get('day_brightness', device_settings.get('image_settings', {}).get('brightness', 1.0)) %}
+                {% set night_brightness = bs.get('night_brightness', 0.6) %}
+                {% set day_start = bs.get('day_start', '07:00') %}
+                {% set night_start = bs.get('night_start', '21:00') %}
 
-                        <div class="form-group nowrap" style="margin-bottom: 8px;">
-                            <label class="form-label" for="brightnessScheduleEnabled">Schedule Brightness</label>
-                            <input type="checkbox" id="brightnessScheduleEnabled" name="brightnessScheduleEnabled"
-                                   {% if bs_enabled %}checked{% endif %}
-                                   onchange="toggleBrightnessSchedule()">
-                        </div>
+                <div class="form-group nowrap" style="margin-bottom: 8px;">
+                    <label class="form-label" for="brightnessScheduleEnabled">Schedule Brightness</label>
+                    <input type="checkbox" id="brightnessScheduleEnabled" name="brightnessScheduleEnabled"
+                           {% if bs_enabled %}checked{% endif %}
+                           onchange="toggleBrightnessSchedule()">
+                </div>
 
-                        <!-- Single brightness (when schedule off) -->
-                        <div id="brightnessSingle" class="form-group" {% if bs_enabled %}style="display: none;"{% endif %}>
-                            <label for="dayBrightness" class="form-label" style="min-width: 100px;">Brightness:</label>
-                            <span id="dayBrightness-value">{{ day_brightness }}</span>
-                            <input type="range" id="dayBrightness" name="dayBrightness" class="form-input"
-                                   min="0" max="2" step="0.1" value="{{ day_brightness }}"
-                                   style="max-width: 400px;" oninput="updateSliderValue(this)"/>
-                        </div>
+                <!-- Single brightness (when schedule off) -->
+                <div id="brightnessSingle" class="form-group" {% if bs_enabled %}style="display: none;"{% endif %}>
+                    <label for="dayBrightness" class="form-label" style="min-width: 100px;">Brightness:</label>
+                    <span id="dayBrightness-value">{{ day_brightness }}</span>
+                    <input type="range" id="dayBrightness" name="dayBrightness" class="form-input"
+                           min="0" max="2" step="0.1" value="{{ day_brightness }}"
+                           style="max-width: 400px;" oninput="updateSliderValue(this)"/>
+                </div>
 
-                        <!-- Day/Night rows (when schedule on) -->
-                        <div id="brightnessScheduleRows" {% if not bs_enabled %}style="display: none;"{% endif %}>
-                            <div class="form-group" style="align-items: center;">
-                                <label class="form-label" style="min-width: 50px;">Day:</label>
-                                <input type="time" id="dayStart" name="dayStart" value="{{ day_start }}" class="form-input" style="max-width: 120px;">
-                                <span id="dayBrightnessScheduled-value" style="min-width: 24px; text-align: center;">{{ day_brightness }}</span>
-                                <input type="range" id="dayBrightnessScheduled" name="dayBrightnessScheduled" class="form-input"
-                                       min="0" max="2" step="0.1" value="{{ day_brightness }}"
-                                       style="max-width: 300px;" oninput="updateSliderValue(this); syncBrightness('day')"/>
-                            </div>
-                            <div class="form-group" style="align-items: center;">
-                                <label class="form-label" style="min-width: 50px;">Night:</label>
-                                <input type="time" id="nightStart" name="nightStart" value="{{ night_start }}" class="form-input" style="max-width: 120px;">
-                                <span id="nightBrightness-value" style="min-width: 24px; text-align: center;">{{ night_brightness }}</span>
-                                <input type="range" id="nightBrightness" name="nightBrightness" class="form-input"
-                                       min="0" max="2" step="0.1" value="{{ night_brightness }}"
-                                       style="max-width: 300px;" oninput="updateSliderValue(this)"/>
-                            </div>
-                        </div>
+                <!-- Day/Night rows (when schedule on) -->
+                <div id="brightnessScheduleRows" {% if not bs_enabled %}style="display: none;"{% endif %}>
+                    <div class="form-group" style="align-items: center;">
+                        <label class="form-label" style="min-width: 50px;">Day:</label>
+                        <input type="time" id="dayStart" name="dayStart" value="{{ day_start }}" class="form-input" style="max-width: 120px;">
+                        <span id="dayBrightnessScheduled-value" style="min-width: 24px; text-align: center;">{{ day_brightness }}</span>
+                        <input type="range" id="dayBrightnessScheduled" name="dayBrightnessScheduled" class="form-input"
+                               min="0" max="2" step="0.1" value="{{ day_brightness }}"
+                               style="max-width: 300px;" oninput="updateSliderValue(this); syncBrightness('day')"/>
+                    </div>
+                    <div class="form-group" style="align-items: center;">
+                        <label class="form-label" style="min-width: 50px;">Night:</label>
+                        <input type="time" id="nightStart" name="nightStart" value="{{ night_start }}" class="form-input" style="max-width: 120px;">
+                        <span id="nightBrightness-value" style="min-width: 24px; text-align: center;">{{ night_brightness }}</span>
+                        <input type="range" id="nightBrightness" name="nightBrightness" class="form-input"
+                               min="0" max="2" step="0.1" value="{{ night_brightness }}"
+                               style="max-width: 300px;" oninput="updateSliderValue(this)"/>
                     </div>
                 </div>
             </div>
