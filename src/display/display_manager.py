@@ -31,7 +31,8 @@ class DisplayManager:
         """
         
         self.device_config = device_config
-     
+        self._display_blanked = False
+
         display_type = device_config.get_config("display_type", default="lcd")
 
         if display_type == "mock":
@@ -57,9 +58,22 @@ class DisplayManager:
         if not hasattr(self, "display"):
             raise ValueError("No valid display instance initialized.")
 
-        # Save the image
+        # Save the image (always, so web UI preview stays current)
         logger.info(f"Saving image to {self.device_config.current_image_file}")
         image.save(self.device_config.current_image_file)
+
+        # Check scheduled brightness — 0 means blank the display
+        brightness = self._get_scheduled_brightness()
+        if brightness == 0:
+            if not self._display_blanked:
+                self.display.blank_display()
+                self._display_blanked = True
+            return
+
+        # Restore display if it was blanked
+        if self._display_blanked:
+            self.display.unblank_display()
+            self._display_blanked = False
 
         # Convert to RGB once at the start of the pipeline
         if image.mode not in ('RGB', 'L'):
@@ -70,14 +84,18 @@ class DisplayManager:
         image = resize_image(image, self.device_config.get_resolution(), image_settings)
         if self.device_config.get_config("inverted_image"): image = image.rotate(180)
         effective_settings = self.device_config.get_config("image_settings") or {}
-        effective_settings["brightness"] = self._get_scheduled_brightness()
+        effective_settings["brightness"] = brightness
         image = apply_image_enhancement(image, effective_settings)
 
         # Pass to the concrete instance to render to the device.
         self.display.display_image(image, image_settings)
 
+    def get_current_brightness(self):
+        """Return the current scheduled brightness value for API use."""
+        return self._get_scheduled_brightness()
+
     def _get_scheduled_brightness(self):
-        """Determine the current brightness based on the day/night schedule.
+        """Determine the current brightness based on the day/evening/night schedule.
 
         Returns the appropriate brightness value (float) based on current time
         and the configured schedule. Falls back to day_brightness if schedule
@@ -89,20 +107,33 @@ class DisplayManager:
         if not schedule.get("enabled"):
             return day_brightness
 
-        night_brightness = schedule.get("night_brightness", 0.6)
+        evening_brightness = schedule.get("evening_brightness", 0.6)
+        night_brightness = schedule.get("night_brightness", 0.3)
         day_start = schedule.get("day_start", "07:00")
-        night_start = schedule.get("night_start", "21:00")
+        evening_start = schedule.get("evening_start", "18:00")
+        night_start = schedule.get("night_start", "22:00")
 
         # Get current time in device timezone
         tz_str = self.device_config.get_config("timezone", default="UTC")
         current_time = datetime.now(pytz.timezone(tz_str)).strftime("%H:%M")
 
-        # Determine if current time is in the "day" window
-        if day_start <= night_start:
-            # Non-wrapping: day is day_start <= t < night_start
-            is_day = day_start <= current_time < night_start
+        # Determine which period the current time falls into.
+        # Periods are ordered: day_start -> evening_start -> night_start
+        # Night wraps across midnight back to day_start.
+        times = [day_start, evening_start, night_start]
+        if times == sorted(times):
+            # Non-wrapping: all times in chronological order
+            if current_time >= night_start or current_time < day_start:
+                return night_brightness
+            elif current_time >= evening_start:
+                return evening_brightness
+            else:
+                return day_brightness
         else:
-            # Wrapping across midnight: day if t >= day_start OR t < night_start
-            is_day = current_time >= day_start or current_time < night_start
-
-        return day_brightness if is_day else night_brightness
+            # Wrapping across midnight: night_start is after midnight
+            if current_time >= day_start and current_time < evening_start:
+                return day_brightness
+            elif current_time >= evening_start and current_time < night_start:
+                return evening_brightness
+            else:
+                return night_brightness

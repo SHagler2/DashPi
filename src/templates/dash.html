@@ -203,6 +203,18 @@
                     if (countdownLabelEl) {
                         countdownLabelEl.textContent = loopEnabled ? 'Changes in' : 'Status';
                     }
+
+                    // Update brightness indicator
+                    const brightnessEl = document.getElementById('brightnessIndicator');
+                    if (brightnessEl && data.current_brightness !== undefined) {
+                        if (data.current_brightness === 0) {
+                            brightnessEl.textContent = 'Display Off';
+                            brightnessEl.style.fontWeight = '700';
+                        } else {
+                            brightnessEl.textContent = 'Brightness: ' + Math.round(data.current_brightness * 100) + '%';
+                            brightnessEl.style.fontWeight = '500';
+                        }
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching countdown:', error);
@@ -422,6 +434,7 @@
             <div class="image-container">
                 <img src="{{ url_for('static', filename='images/current_image.png') }}" alt="Current Image">
             </div>
+            <div id="brightnessIndicator" style="text-align: center; padding: 4px 0 2px; font-size: 14px; color: var(--text-secondary, #888); font-weight: 500;"></div>
         </div>
 
         <!-- Plugins Section -->

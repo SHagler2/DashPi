@@ -20,10 +20,18 @@ class MockDisplay(AbstractDisplay):
         """Initialize mock display (no-op for development)."""
         logger.info(f"Mock display initialized: {self.width}x{self.height}")
         
+    def blank_display(self):
+        """Mock blank (no-op)."""
+        logger.info("Mock display blanked")
+
+    def unblank_display(self):
+        """Mock unblank (no-op)."""
+        logger.info("Mock display unblanked")
+
     def display_image(self, image, image_settings=None):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filepath = os.path.join(self.output_dir, f"display_{timestamp}.png")
         image.save(filepath, "PNG")
-        
+
         # Also save as latest.png for convenience
         image.save(os.path.join(self.output_dir, 'latest.png'), "PNG")

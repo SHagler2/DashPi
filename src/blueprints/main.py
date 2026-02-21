@@ -200,6 +200,10 @@ def get_next_change_time():
     # Check if loop is enabled
     loop_enabled = device_config.get_config("loop_enabled", default=True)
 
+    # Get current brightness level
+    display_manager = current_app.config.get('DISPLAY_MANAGER')
+    current_brightness = display_manager.get_current_brightness() if display_manager else 1.0
+
     return jsonify({
         "success": True,
         "loop_enabled": loop_enabled,
@@ -207,7 +211,8 @@ def get_next_change_time():
         "remaining_seconds": int(remaining),
         "next_change_in": format_time(int(remaining)),
         "current_plugin": current_plugin_name,
-        "next_plugin": next_plugin_name
+        "next_plugin": next_plugin_name,
+        "current_brightness": current_brightness
     })
 
 @main_bp.route('/api/weather_location')

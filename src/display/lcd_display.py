@@ -15,6 +15,7 @@ class LcdDisplay(AbstractDisplay):
     """
 
     FB_DEVICE = "/dev/fb0"
+    FB_BLANK = "/sys/class/graphics/fb0/blank"
     SYSFS_VIRTUAL_SIZE = "/sys/class/graphics/fb0/virtual_size"
     SYSFS_BPP = "/sys/class/graphics/fb0/bits_per_pixel"
     SYSFS_STRIDE = "/sys/class/graphics/fb0/stride"
@@ -49,6 +50,9 @@ class LcdDisplay(AbstractDisplay):
                 write=True,
             )
 
+        # Ensure display is unblanked on startup (may have been left blanked)
+        self.unblank_display()
+
     def display_image(self, image, image_settings=None):
         """Write a PIL image to the framebuffer."""
 
@@ -66,6 +70,22 @@ class LcdDisplay(AbstractDisplay):
 
         with open(self.FB_DEVICE, "wb") as fb:
             fb.write(fb_bytes)
+
+    def blank_display(self):
+        """Turn off the display backlight by blanking the framebuffer."""
+        with open(self.FB_BLANK, 'w') as f:
+            f.write('1')
+        logger.info("Display blanked (backlight off)")
+
+    def unblank_display(self):
+        """Restore the display backlight by unblanking the framebuffer."""
+        # Disable console blanking to prevent kernel from re-blanking
+        with open('/dev/tty1', 'wb') as tty:
+            tty.write(b'\033[9;0]')  # setterm blank 0
+            tty.write(b'\033[13]')   # unblank console
+        with open(self.FB_BLANK, 'w') as f:
+            f.write('0')
+        logger.info("Display unblanked (backlight on)")
 
     # ---- format converters ------------------------------------------------
 

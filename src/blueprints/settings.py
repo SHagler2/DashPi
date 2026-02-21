@@ -60,9 +60,11 @@ def save_settings():
             "brightness_schedule": {
                 "enabled": "brightnessScheduleEnabled" in form_data,
                 "day_brightness": float(form_data.get("dayBrightness", "1.0")),
-                "night_brightness": float(form_data.get("nightBrightness", "0.6")),
+                "evening_brightness": float(form_data.get("eveningBrightness", "0.6")),
+                "night_brightness": float(form_data.get("nightBrightness", "0.3")),
                 "day_start": form_data.get("dayStart", "07:00"),
-                "night_start": form_data.get("nightStart", "21:00"),
+                "evening_start": form_data.get("eveningStart", "18:00"),
+                "night_start": form_data.get("nightStart", "22:00"),
             }
         }
         device_config.update_config(settings)

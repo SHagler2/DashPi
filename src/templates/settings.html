@@ -62,7 +62,8 @@
 
         function updateSliderValue(slider) {
             const valueDisplay = document.getElementById(`${slider.id}-value`);
-            valueDisplay.textContent = parseFloat(slider.value).toFixed(1);
+            const val = parseFloat(slider.value);
+            valueDisplay.textContent = val === 0 ? 'Off' : val.toFixed(1);
         }
 
         function toggleBrightnessSchedule() {
@@ -224,9 +225,11 @@
                 {% set bs = device_settings.get('brightness_schedule', {}) %}
                 {% set bs_enabled = bs.get('enabled', false) %}
                 {% set day_brightness = bs.get('day_brightness', device_settings.get('image_settings', {}).get('brightness', 1.0)) %}
-                {% set night_brightness = bs.get('night_brightness', 0.6) %}
+                {% set evening_brightness = bs.get('evening_brightness', 0.6) %}
+                {% set night_brightness = bs.get('night_brightness', 0.3) %}
                 {% set day_start = bs.get('day_start', '07:00') %}
-                {% set night_start = bs.get('night_start', '21:00') %}
+                {% set evening_start = bs.get('evening_start', '18:00') %}
+                {% set night_start = bs.get('night_start', '22:00') %}
 
                 <div class="form-group nowrap" style="margin-bottom: 8px;">
                     <label class="form-label" for="brightnessScheduleEnabled">Schedule Brightness</label>
@@ -238,7 +241,7 @@
                 <!-- Single brightness (when schedule off) -->
                 <div id="brightnessSingle" class="form-group" {% if bs_enabled %}style="display: none;"{% endif %}>
                     <label for="dayBrightness" class="form-label" style="min-width: 100px;">Brightness:</label>
-                    <span id="dayBrightness-value">{{ day_brightness }}</span>
+                    <span id="dayBrightness-value">{{ 'Off' if day_brightness == 0 else day_brightness }}</span>
                     <input type="range" id="dayBrightness" name="dayBrightness" class="form-input"
                            min="0" max="2" step="0.1" value="{{ day_brightness }}"
                            style="max-width: 400px;" oninput="updateSliderValue(this)"/>
@@ -249,15 +252,23 @@
                     <div class="form-group" style="align-items: center;">
                         <label class="form-label" style="min-width: 50px;">Day:</label>
                         <input type="time" id="dayStart" name="dayStart" value="{{ day_start }}" class="form-input" style="max-width: 120px;">
-                        <span id="dayBrightnessScheduled-value" style="min-width: 24px; text-align: center;">{{ day_brightness }}</span>
+                        <span id="dayBrightnessScheduled-value" style="min-width: 24px; text-align: center;">{{ 'Off' if day_brightness == 0 else day_brightness }}</span>
                         <input type="range" id="dayBrightnessScheduled" name="dayBrightnessScheduled" class="form-input"
                                min="0" max="2" step="0.1" value="{{ day_brightness }}"
                                style="max-width: 300px;" oninput="updateSliderValue(this); syncBrightness('day')"/>
                     </div>
                     <div class="form-group" style="align-items: center;">
+                        <label class="form-label" style="min-width: 50px;">Evening:</label>
+                        <input type="time" id="eveningStart" name="eveningStart" value="{{ evening_start }}" class="form-input" style="max-width: 120px;">
+                        <span id="eveningBrightness-value" style="min-width: 24px; text-align: center;">{{ 'Off' if evening_brightness == 0 else evening_brightness }}</span>
+                        <input type="range" id="eveningBrightness" name="eveningBrightness" class="form-input"
+                               min="0" max="2" step="0.1" value="{{ evening_brightness }}"
+                               style="max-width: 300px;" oninput="updateSliderValue(this)"/>
+                    </div>
+                    <div class="form-group" style="align-items: center;">
                         <label class="form-label" style="min-width: 50px;">Night:</label>
                         <input type="time" id="nightStart" name="nightStart" value="{{ night_start }}" class="form-input" style="max-width: 120px;">
-                        <span id="nightBrightness-value" style="min-width: 24px; text-align: center;">{{ night_brightness }}</span>
+                        <span id="nightBrightness-value" style="min-width: 24px; text-align: center;">{{ 'Off' if night_brightness == 0 else night_brightness }}</span>
                         <input type="range" id="nightBrightness" name="nightBrightness" class="form-input"
                                min="0" max="2" step="0.1" value="{{ night_brightness }}"
                                style="max-width: 300px;" oninput="updateSliderValue(this)"/>
