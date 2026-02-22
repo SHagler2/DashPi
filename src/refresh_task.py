@@ -149,7 +149,7 @@ class RefreshTask:
                         pinned_ar = pinned_settings.get("autoRefresh")
                         if pinned_ar:
                             try:
-                                auto_refresh_seconds = int(float(pinned_ar) * 60)
+                                auto_refresh_seconds = round(float(pinned_ar) * 60)
                             except (ValueError, TypeError):
                                 auto_refresh_seconds = self._get_auto_refresh_seconds()
                         else:
@@ -602,7 +602,7 @@ class RefreshTask:
             try:
                 minutes = float(auto_refresh)
                 if minutes > 0:
-                    return int(minutes * 60)
+                    return round(minutes * 60)
             except (ValueError, TypeError):
                 pass
         return None
