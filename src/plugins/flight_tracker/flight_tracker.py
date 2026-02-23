@@ -322,6 +322,8 @@ class FlightTracker(BasePlugin):
         draw.rectangle([(0, map_h), (w, h)], fill=(15, 18, 25))
         draw.line([(0, map_h), (w, map_h)], fill=(60, 65, 80), width=2)
 
+        is_vertical = h > w
+
         padding = int(w * 0.02)
         font_size = max(int(info_h * 0.18), 12)
         small_size = max(int(info_h * 0.15), 10)
@@ -343,6 +345,18 @@ class FlightTracker(BasePlugin):
         header = f"{count} aircraft within {radius_display} {unit_label}"
         hw = get_text_dimensions(draw, header, header_font)[0]
         draw.text(((w - hw) // 2, y_start), header, fill=accent_color, font=header_font)
+
+        # Vertical mode: simplified info strip (full details in horizontal only)
+        if is_vertical:
+            hint = "Aircraft details available in horizontal mode"
+            hint_w = draw.textbbox((0, 0), hint, font=font)[2]
+            draw.text(
+                ((w - hint_w) // 2, y_start + line_h + 2),
+                hint,
+                fill=(120, 120, 120),
+                font=font,
+            )
+            return
 
         # Right side: location
         lat_dir = "N" if lat >= 0 else "S"

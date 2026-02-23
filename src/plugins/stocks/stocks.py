@@ -197,17 +197,25 @@ class Stocks(BasePlugin):
             arrow_text = " +" if stock["is_positive"] else " -"
             stacked = (sym_w + price_w + int(iw * 0.1)) > iw
 
+            # Check if H/52W detail lines need to stack vertically
+            h_text = f"H: {stock['high_formatted']}"
+            h52_text = f"52W H: {stock['week52_high_formatted']}"
+            h_w = get_text_dimensions(draw, h_text, detail_font)[0]
+            h52_w = get_text_dimensions(draw, h52_text, detail_font)[0]
+            narrow_card = (h_w + h52_w + int(iw * 0.05)) > iw
+
             # Calculate total content height
             if stacked:
                 sym_line_h = sym_h + price_h
             else:
                 sym_line_h = max(sym_h, price_h)
-            total_content_h = sym_line_h + name_line_h + change_line_h + detail_line_h * 3
+            detail_lines = 5 if narrow_card else 3  # Vol, H, 52W H, L, 52W L vs side-by-side
+            total_content_h = sym_line_h + name_line_h + change_line_h + detail_line_h * detail_lines
 
             # Distribute remaining space evenly
             inner_h = ch - pad * 2
             extra = inner_h - total_content_h
-            num_gaps = 5
+            num_gaps = 5 + (2 if narrow_card else 0)
             gap = max(2, extra // num_gaps)
             iy = cy + pad
 
@@ -241,12 +249,25 @@ class Stocks(BasePlugin):
             mid_x = ix + iw // 2
             draw.text((ix, iy), f"Vol: {stock['volume']}", font=detail_font, fill=text_color)
             iy += detail_line_h + gap * 2 // 3
-            draw.text((ix, iy), f"H: {stock['high_formatted']}", font=detail_font, fill=text_color)
-            draw.text((mid_x, iy), f"52W H: {stock['week52_high_formatted']}", font=detail_font, fill=text_color)
-            iy += detail_line_h + gap * 2 // 3
-            draw.text((ix, iy), f"L: {stock['low_formatted']}", font=detail_font, fill=text_color)
-            draw.text((mid_x, iy), f"52W L: {stock['week52_low_formatted']}", font=detail_font, fill=text_color)
-            iy += detail_line_h + gap * 2 // 3
+
+            if narrow_card:
+                # Stack on separate lines
+                draw.text((ix, iy), h_text, font=detail_font, fill=text_color)
+                iy += detail_line_h + gap * 2 // 3
+                draw.text((ix, iy), h52_text, font=detail_font, fill=text_color)
+                iy += detail_line_h + gap * 2 // 3
+                draw.text((ix, iy), f"L: {stock['low_formatted']}", font=detail_font, fill=text_color)
+                iy += detail_line_h + gap * 2 // 3
+                draw.text((ix, iy), f"52W L: {stock['week52_low_formatted']}", font=detail_font, fill=text_color)
+                iy += detail_line_h + gap * 2 // 3
+            else:
+                # Side-by-side (horizontal mode)
+                draw.text((ix, iy), h_text, font=detail_font, fill=text_color)
+                draw.text((mid_x, iy), h52_text, font=detail_font, fill=text_color)
+                iy += detail_line_h + gap * 2 // 3
+                draw.text((ix, iy), f"L: {stock['low_formatted']}", font=detail_font, fill=text_color)
+                draw.text((mid_x, iy), f"52W L: {stock['week52_low_formatted']}", font=detail_font, fill=text_color)
+                iy += detail_line_h + gap * 2 // 3
 
         # Footer
         fy = y_bottom - footer_h

@@ -420,6 +420,8 @@ class ISSTracker(BasePlugin):
         # Background
         draw.rectangle([(0, map_h), (w, h)], fill=(0, 0, 0))
 
+        is_vertical = h > w
+
         font_size = max(int(info_h * 0.22), 12)
         small_font_size = max(int(info_h * 0.18), 10)
         font = get_font("Jost", font_size)
@@ -439,6 +441,31 @@ class ISSTracker(BasePlugin):
             fill=accent_color,
             font=font,
         )
+
+        # Vertical mode: simplified info strip (full details in horizontal only)
+        if is_vertical:
+            if units == "imperial":
+                alt_str = f"Alt: {alt_km * 0.621371:.0f} mi"
+            else:
+                alt_str = f"Alt: {alt_km:.0f} km"
+            lat_dir = "N" if lat >= 0 else "S"
+            lon_dir = "E" if lon >= 0 else "W"
+            coord_str = f"{abs(lat):.1f}\u00b0{lat_dir}, {abs(lon):.1f}\u00b0{lon_dir}"
+            draw.text(
+                (padding, y_base + line_spacing),
+                f"{alt_str}  |  {coord_str}",
+                fill=text_color,
+                font=small_font,
+            )
+            hint = "Pass details available in horizontal mode"
+            hint_w = draw.textbbox((0, 0), hint, font=small_font)[2]
+            draw.text(
+                ((w - hint_w) // 2, y_base + line_spacing * 2),
+                hint,
+                fill=(120, 120, 120),
+                font=small_font,
+            )
+            return
 
         # Line 2: Alt, Speed, Crew
         if units == "imperial":

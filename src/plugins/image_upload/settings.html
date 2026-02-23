@@ -65,6 +65,13 @@
 
 <!-- Display uploaded & existing file names -->
 <div class="form-group">
+    <div id="fileListHeader" style="display: none; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+        <span style="font-size: 0.85em; color: var(--text-secondary, #888);" id="fileCount"></span>
+        <button type="button" onclick="clearAllFiles()"
+            style="background: none; border: none; color: #f44336; font-size: 0.8em; font-weight: 600; cursor: pointer; padding: 2px 6px;">
+            Clear All
+        </button>
+    </div>
     <div id="fileNames" class="file-name-list"></div>
 </div>
 
@@ -159,6 +166,8 @@
         hiddenInput.id = `hidden-${fileName}`;
         hiddenInput.setAttribute('delete-on-submit', '');
         hiddenFileInputs.appendChild(hiddenInput);
+
+        updateFileListHeader();
     }
 
     function removeExistingFile(fileName) {
@@ -177,6 +186,44 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ file_path: filePath })
             }).catch(err => console.error('Delete failed:', err));
+        }
+
+        updateFileListHeader();
+    }
+
+    function clearAllFiles() {
+        const hiddenInputs = document.querySelectorAll('#hiddenFileInputs input[name="imageFiles[]"]');
+        if (!hiddenInputs.length) return;
+
+        if (!confirm(`Remove all ${hiddenInputs.length} image(s)? Files will be deleted from disk.`)) return;
+
+        // Collect all file paths, then remove from UI and delete from disk
+        const filePaths = Array.from(hiddenInputs).map(input => input.value);
+
+        document.getElementById('fileNames').innerHTML = '';
+        document.getElementById('hiddenFileInputs').innerHTML = '';
+
+        // Delete all from disk in parallel
+        filePaths.forEach(filePath => {
+            fetch('/delete_image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_path: filePath })
+            }).catch(err => console.error('Delete failed:', err));
+        });
+
+        updateFileListHeader();
+    }
+
+    function updateFileListHeader() {
+        const count = document.querySelectorAll('#hiddenFileInputs input[name="imageFiles[]"]').length;
+        const header = document.getElementById('fileListHeader');
+        const countEl = document.getElementById('fileCount');
+        if (count > 0) {
+            header.style.display = 'flex';
+            countEl.textContent = `${count} image${count !== 1 ? 's' : ''}`;
+        } else {
+            header.style.display = 'none';
         }
     }
 
