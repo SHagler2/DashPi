@@ -23,7 +23,7 @@ class Newspaper(BasePlugin):
 
         # Get target dimensions for image loading
         dimensions = device_config.get_resolution()
-        if device_config.get_config("orientation") == "horizontal":
+        if device_config.get_config("orientation") == "vertical":
             dimensions = dimensions[::-1]
 
         image = None
