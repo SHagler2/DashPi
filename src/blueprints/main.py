@@ -34,6 +34,11 @@ def display_page():
     """Fullscreen display view - shows just the current image with auto-refresh."""
     return render_template('display.html')
 
+@main_bp.route('/diagnostics')
+def diagnostics_page():
+    """System diagnostics page with live Pi metrics."""
+    return render_template('diagnostics.html')
+
 @main_bp.route('/api/current_image')
 def get_current_image():
     """Serve current_image.png with conditional request support (If-Modified-Since)."""
@@ -310,6 +315,97 @@ def get_weather_location():
     except Exception as e:
         logger.debug("Could not retrieve weather location from loops: %s", e)
     return jsonify({"latitude": None, "longitude": None})
+
+@main_bp.route('/api/diagnostics')
+def get_diagnostics():
+    """Return Pi system metrics for diagnostics panel."""
+    import psutil
+    metrics = {}
+    try:
+        # CPU
+        metrics["cpu_percent"] = psutil.cpu_percent(interval=0.5)
+        metrics["load_avg"] = list(os.getloadavg())
+
+        # Memory
+        mem = psutil.virtual_memory()
+        metrics["mem_total_mb"] = round(mem.total / 1024 / 1024)
+        metrics["mem_used_mb"] = round(mem.used / 1024 / 1024)
+        metrics["mem_percent"] = mem.percent
+        swap = psutil.swap_memory()
+        metrics["swap_used_mb"] = round(swap.used / 1024 / 1024)
+        metrics["swap_total_mb"] = round(swap.total / 1024 / 1024)
+
+        # Disk
+        disk = psutil.disk_usage('/')
+        metrics["disk_total_gb"] = round(disk.total / 1024 / 1024 / 1024, 1)
+        metrics["disk_used_gb"] = round(disk.used / 1024 / 1024 / 1024, 1)
+        metrics["disk_percent"] = disk.percent
+
+        # Temperature
+        try:
+            temps = psutil.sensors_temperatures()
+            if 'cpu_thermal' in temps:
+                metrics["temp_c"] = temps['cpu_thermal'][0].current
+            else:
+                # Fallback: read directly
+                with open('/sys/class/thermal/thermal_zone0/temp') as f:
+                    metrics["temp_c"] = round(int(f.read().strip()) / 1000, 1)
+        except Exception:
+            metrics["temp_c"] = None
+
+        # Uptime
+        metrics["uptime_seconds"] = int(time.time() - psutil.boot_time())
+
+        # Throttle status (Pi-specific)
+        try:
+            import subprocess
+            result = subprocess.run(['vcgencmd', 'get_throttled'], capture_output=True, text=True, timeout=2)
+            throttled = result.stdout.strip().split('=')[-1]
+            metrics["throttled"] = throttled
+            # Decode common flags
+            val = int(throttled, 16)
+            metrics["undervoltage_now"] = bool(val & 0x1)
+            metrics["throttled_now"] = bool(val & 0x4)
+            metrics["temp_limit_now"] = bool(val & 0x8)
+        except Exception:
+            metrics["throttled"] = None
+
+        # WiFi signal strength
+        try:
+            with open('/proc/net/wireless') as f:
+                for line in f:
+                    if 'wlan0' in line:
+                        parts = line.split()
+                        metrics["wifi_link_quality"] = int(float(parts[2]))
+                        metrics["wifi_signal_dbm"] = int(float(parts[3]))
+                        break
+        except Exception:
+            metrics["wifi_link_quality"] = None
+            metrics["wifi_signal_dbm"] = None
+
+        # Network I/O
+        try:
+            net = psutil.net_io_counters()
+            metrics["net_bytes_sent"] = net.bytes_sent
+            metrics["net_bytes_recv"] = net.bytes_recv
+        except Exception:
+            pass
+
+        # DashPi process stats
+        try:
+            proc = psutil.Process()
+            metrics["dashpi_cpu"] = proc.cpu_percent(interval=0)
+            metrics["dashpi_mem_mb"] = round(proc.memory_info().rss / 1024 / 1024)
+        except Exception:
+            pass
+
+    except ImportError:
+        return jsonify({"error": "psutil not installed"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify(metrics)
+
 
 def format_time(seconds):
     """Format seconds into human-readable time."""

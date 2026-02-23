@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Diagnostics - DashPi</title>
+    <script>
+        (function() {
+            const theme = localStorage.getItem('dashpi-theme') ||
+                         (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            if (theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='styles/main.css') }}">
+    <script src="{{ url_for('static', filename='scripts/dark_mode.js') }}"></script>
+    <style>
+        .diag-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            padding: 0 0 20px;
+        }
+        @media (min-width: 600px) {
+            .diag-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (min-width: 960px) {
+            .diag-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        .diag-card {
+            background: var(--bg-secondary, #2d2d2d);
+            border: 1px solid var(--border-color, #3a3a3a);
+            border-radius: 12px;
+            padding: 16px;
+            overflow: hidden;
+        }
+        .diag-card h3 {
+            margin: 0 0 12px;
+            font-size: 14px;
+            color: var(--text-secondary, #888);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .diag-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+        .diag-unit {
+            font-size: 16px;
+            font-weight: 400;
+            color: var(--text-secondary, #888);
+        }
+        .diag-detail {
+            font-size: 13px;
+            color: var(--text-secondary, #888);
+            margin-top: 6px;
+        }
+        .diag-bar-bg {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-primary, #1a1a2e);
+            border-radius: 4px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .diag-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease, background-color 0.5s ease;
+        }
+        .bar-green { background: #4caf50; }
+        .bar-yellow { background: #ff9800; }
+        .bar-red { background: #f44336; }
+        .diag-status {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-ok { background: rgba(76, 175, 80, 0.2); color: #4caf50; }
+        .status-warn { background: rgba(255, 152, 0, 0.2); color: #ff9800; }
+        .status-bad { background: rgba(244, 67, 54, 0.2); color: #f44336; }
+        .diag-chart {
+            width: 100%;
+            height: 60px;
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            margin-top: 10px;
+        }
+        .diag-chart-bar {
+            flex: 1;
+            background: #4caf50;
+            border-radius: 2px 2px 0 0;
+            min-width: 3px;
+            transition: height 0.3s ease;
+        }
+        .diag-flags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .diag-uptime {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .diag-error {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary, #888);
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+    <div class="frame">
+        <header class="header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button onclick="window.location.href='{{ url_for('main.main_page') }}'" class="back-button">← Back</button>
+                <h1>Diagnostics</h1>
+            </div>
+            <div class="header-actions">
+                <span id="diagLive" style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4caf50; animation: pulse 2s infinite;"></span>
+                    Live
+                </span>
+                <button class="settings-button dark-mode-toggle" title="Toggle Dark Mode" aria-label="Toggle Dark Mode"></button>
+            </div>
+        </header>
+
+    <div class="diag-grid" id="diagGrid">
+        <!-- CPU -->
+        <div class="diag-card">
+            <h3>CPU</h3>
+            <div>
+                <span class="diag-value" id="cpuValue">--</span>
+                <span class="diag-unit">%</span>
+            </div>
+            <div class="diag-detail" id="cpuLoad">Load: --</div>
+            <div class="diag-bar-bg">
+                <div class="diag-bar-fill bar-green" id="cpuBar" style="width: 0%"></div>
+            </div>
+            <div class="diag-chart" id="cpuChart"></div>
+        </div>
+
+        <!-- Memory -->
+        <div class="diag-card">
+            <h3>Memory</h3>
+            <div>
+                <span class="diag-value" id="memValue">--</span>
+                <span class="diag-unit">%</span>
+            </div>
+            <div class="diag-detail" id="memDetail">-- / -- MB</div>
+            <div class="diag-bar-bg">
+                <div class="diag-bar-fill bar-green" id="memBar" style="width: 0%"></div>
+            </div>
+            <div class="diag-detail" id="swapDetail">Swap: --</div>
+        </div>
+
+        <!-- Temperature -->
+        <div class="diag-card">
+            <h3>Temperature</h3>
+            <div>
+                <span class="diag-value" id="tempValue">--</span>
+                <span class="diag-unit">&deg;C</span>
+            </div>
+            <div class="diag-bar-bg">
+                <div class="diag-bar-fill bar-green" id="tempBar" style="width: 0%"></div>
+            </div>
+            <div class="diag-chart" id="tempChart"></div>
+        </div>
+
+        <!-- Disk -->
+        <div class="diag-card">
+            <h3>SD Card</h3>
+            <div>
+                <span class="diag-value" id="diskValue">--</span>
+                <span class="diag-unit">% used</span>
+            </div>
+            <div class="diag-detail" id="diskDetail">-- / -- GB</div>
+            <div class="diag-bar-bg">
+                <div class="diag-bar-fill bar-green" id="diskBar" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Uptime -->
+        <div class="diag-card">
+            <h3>Uptime</h3>
+            <div class="diag-uptime" id="uptimeValue">--</div>
+        </div>
+
+        <!-- Throttle Status -->
+        <div class="diag-card">
+            <h3>Power &amp; Thermal</h3>
+            <div id="throttleStatus">
+                <span class="diag-status status-ok">Checking...</span>
+            </div>
+            <div class="diag-flags" id="throttleFlags"></div>
+        </div>
+
+        <!-- WiFi -->
+        <div class="diag-card">
+            <h3>WiFi Signal</h3>
+            <div>
+                <span class="diag-value" id="wifiValue">--</span>
+                <span class="diag-unit">dBm</span>
+            </div>
+            <div class="diag-detail" id="wifiQuality">Quality: --</div>
+            <div class="diag-bar-bg">
+                <div class="diag-bar-fill bar-green" id="wifiBar" style="width: 0%"></div>
+            </div>
+            <div class="diag-chart" id="wifiChart"></div>
+        </div>
+
+        <!-- Network I/O -->
+        <div class="diag-card">
+            <h3>Network</h3>
+            <div>
+                <span class="diag-value" id="netDownRate" style="font-size: 28px;">--</span>
+                <span class="diag-unit">&darr;</span>
+            </div>
+            <div style="margin-top: 4px;">
+                <span class="diag-value" id="netUpRate" style="font-size: 28px;">--</span>
+                <span class="diag-unit">&uarr;</span>
+            </div>
+            <div class="diag-detail" id="netTotals" style="margin-top: 8px">&darr; -- received &nbsp; &uarr; -- sent</div>
+            <div class="diag-chart" id="netChart"></div>
+            <div style="display: flex; gap: 12px; margin-top: 4px; font-size: 11px; color: var(--text-secondary, #888);">
+                <span><span style="display:inline-block; width:8px; height:8px; background:#2196f3; border-radius:2px; margin-right:3px;"></span>Down</span>
+                <span><span style="display:inline-block; width:8px; height:8px; background:#ff9800; border-radius:2px; margin-right:3px;"></span>Up</span>
+            </div>
+        </div>
+
+        <!-- DashPi Process -->
+        <div class="diag-card">
+            <h3>DashPi Process</h3>
+            <div class="diag-detail" style="margin-top: 0">
+                <span style="font-size: 18px; font-weight: 600; color: var(--text-primary);" id="dashpiMem">--</span>
+                <span class="diag-unit">MB memory</span>
+            </div>
+            <div class="diag-detail" style="margin-top: 8px">
+                <span style="font-size: 18px; font-weight: 600; color: var(--text-primary);" id="dashpiCpu">--</span>
+                <span class="diag-unit">% CPU</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const cpuHistory = [];
+        const tempHistory = [];
+        const wifiHistory = [];
+        const netDownHistory = [];
+        const netUpHistory = [];
+        let lastNetRecv = null;
+        let lastNetSent = null;
+        let lastNetTime = null;
+        const MAX_HISTORY = 60;
+
+        function barColor(pct, thresholds) {
+            if (pct >= (thresholds ? thresholds[1] : 90)) return 'bar-red';
+            if (pct >= (thresholds ? thresholds[0] : 70)) return 'bar-yellow';
+            return 'bar-green';
+        }
+
+        function chartColor(val, thresholds) {
+            if (val >= (thresholds ? thresholds[1] : 90)) return '#f44336';
+            if (val >= (thresholds ? thresholds[0] : 70)) return '#ff9800';
+            return '#4caf50';
+        }
+
+        function formatBytes(bytes) {
+            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+            if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+            if (bytes >= 1024) return (bytes / 1024).toFixed(0) + ' KB';
+            return bytes + ' B';
+        }
+
+        function formatBits(bits) {
+            if (bits >= 1000000000) return (bits / 1000000000).toFixed(1) + ' Gbps';
+            if (bits >= 1000000) return (bits / 1000000).toFixed(1) + ' Mbps';
+            if (bits >= 1000) return (bits / 1000).toFixed(0) + ' Kbps';
+            return Math.round(bits) + ' bps';
+        }
+
+        function formatBitsTotal(bits) {
+            if (bits >= 1000000000000) return (bits / 1000000000000).toFixed(1) + ' Tb';
+            if (bits >= 1000000000) return (bits / 1000000000).toFixed(1) + ' Gb';
+            if (bits >= 1000000) return (bits / 1000000).toFixed(1) + ' Mb';
+            if (bits >= 1000) return (bits / 1000).toFixed(0) + ' Kb';
+            return Math.round(bits) + ' b';
+        }
+
+        function formatUptime(seconds) {
+            const d = Math.floor(seconds / 86400);
+            const h = Math.floor((seconds % 86400) / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+            if (h > 0) return h + 'h ' + m + 'm';
+            return m + 'm';
+        }
+
+        function renderChart(containerId, history, thresholds) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            history.forEach(val => {
+                const bar = document.createElement('div');
+                bar.className = 'diag-chart-bar';
+                bar.style.height = Math.max(2, val) + '%';
+                bar.style.background = chartColor(val, thresholds);
+                container.appendChild(bar);
+            });
+        }
+
+        function renderDualChart(containerId, downHistory, upHistory) {
+            const container = document.getElementById(containerId);
+            const chartH = 56; // px, leaving room for gap
+            container.innerHTML = '';
+            const max = Math.max(...downHistory, ...upHistory, 1);
+            const len = Math.max(downHistory.length, upHistory.length);
+            for (let i = 0; i < len; i++) {
+                const col = document.createElement('div');
+                col.style.cssText = 'flex:1; display:flex; flex-direction:column; justify-content:flex-end; gap:1px; min-width:3px;';
+                const dv = downHistory[i] || 0;
+                const uv = upHistory[i] || 0;
+                const downBar = document.createElement('div');
+                downBar.style.cssText = 'height:' + Math.max(1, (dv / max) * chartH * 0.5) + 'px; background:#2196f3; border-radius:2px 2px 0 0;';
+                const upBar = document.createElement('div');
+                upBar.style.cssText = 'height:' + Math.max(1, (uv / max) * chartH * 0.5) + 'px; background:#ff9800; border-radius:2px 2px 0 0;';
+                col.appendChild(downBar);
+                col.appendChild(upBar);
+                container.appendChild(col);
+            }
+        }
+
+        async function fetchDiagnostics() {
+            try {
+                const resp = await fetch('/api/diagnostics');
+                if (!resp.ok) throw new Error('API error');
+                const d = await resp.json();
+                if (d.error) throw new Error(d.error);
+
+                // CPU
+                document.getElementById('cpuValue').textContent = Math.round(d.cpu_percent);
+                document.getElementById('cpuLoad').textContent =
+                    'Load: ' + d.load_avg.map(v => v.toFixed(2)).join(', ');
+                const cpuBar = document.getElementById('cpuBar');
+                cpuBar.style.width = d.cpu_percent + '%';
+                cpuBar.className = 'diag-bar-fill ' + barColor(d.cpu_percent);
+
+                cpuHistory.push(d.cpu_percent);
+                if (cpuHistory.length > MAX_HISTORY) cpuHistory.shift();
+                renderChart('cpuChart', cpuHistory);
+
+                // Memory
+                document.getElementById('memValue').textContent = Math.round(d.mem_percent);
+                document.getElementById('memDetail').textContent =
+                    d.mem_used_mb + ' / ' + d.mem_total_mb + ' MB';
+                const memBar = document.getElementById('memBar');
+                memBar.style.width = d.mem_percent + '%';
+                memBar.className = 'diag-bar-fill ' + barColor(d.mem_percent, [60, 85]);
+
+                const swapText = d.swap_used_mb > 0
+                    ? 'Swap: ' + d.swap_used_mb + ' / ' + d.swap_total_mb + ' MB'
+                    : 'Swap: not in use';
+                document.getElementById('swapDetail').textContent = swapText;
+
+                // Temperature
+                if (d.temp_c !== null) {
+                    document.getElementById('tempValue').textContent = d.temp_c.toFixed(1);
+                    const tempPct = Math.min(100, (d.temp_c / 85) * 100);
+                    const tempBar = document.getElementById('tempBar');
+                    tempBar.style.width = tempPct + '%';
+                    tempBar.className = 'diag-bar-fill ' + barColor(d.temp_c, [65, 75]);
+
+                    tempHistory.push(tempPct);
+                    if (tempHistory.length > MAX_HISTORY) tempHistory.shift();
+                    renderChart('tempChart', tempHistory, [76, 88]);
+                }
+
+                // Disk
+                document.getElementById('diskValue').textContent = Math.round(d.disk_percent);
+                document.getElementById('diskDetail').textContent =
+                    d.disk_used_gb + ' / ' + d.disk_total_gb + ' GB';
+                const diskBar = document.getElementById('diskBar');
+                diskBar.style.width = d.disk_percent + '%';
+                diskBar.className = 'diag-bar-fill ' + barColor(d.disk_percent, [70, 90]);
+
+                // Uptime
+                document.getElementById('uptimeValue').textContent = formatUptime(d.uptime_seconds);
+
+                // Throttle
+                const throttleEl = document.getElementById('throttleStatus');
+                const flagsEl = document.getElementById('throttleFlags');
+                flagsEl.innerHTML = '';
+
+                if (d.throttled !== null) {
+                    const issues = [];
+                    if (d.undervoltage_now) issues.push('Low Voltage');
+                    if (d.throttled_now) issues.push('Throttled');
+                    if (d.temp_limit_now) issues.push('Temp Limited');
+
+                    if (issues.length === 0) {
+                        throttleEl.innerHTML = '<span class="diag-status status-ok">All Clear</span>';
+                    } else {
+                        throttleEl.innerHTML = '<span class="diag-status status-bad">Issues Detected</span>';
+                        issues.forEach(issue => {
+                            const flag = document.createElement('span');
+                            flag.className = 'diag-status status-warn';
+                            flag.textContent = issue;
+                            flagsEl.appendChild(flag);
+                        });
+                    }
+
+                    // Check historical flags (bits 16-19)
+                    const val = parseInt(d.throttled, 16);
+                    const histIssues = [];
+                    if (val & 0x10000) histIssues.push('Undervoltage occurred');
+                    if (val & 0x40000) histIssues.push('Throttling occurred');
+                    if (val & 0x80000) histIssues.push('Temp limit occurred');
+                    if (histIssues.length > 0) {
+                        const histDiv = document.createElement('div');
+                        histDiv.className = 'diag-detail';
+                        histDiv.style.marginTop = '8px';
+                        histDiv.textContent = 'Since boot: ' + histIssues.join(', ');
+                        flagsEl.appendChild(histDiv);
+                    }
+                }
+
+                // WiFi
+                if (d.wifi_signal_dbm !== null) {
+                    document.getElementById('wifiValue').textContent = d.wifi_signal_dbm;
+                    // Signal: -30 = excellent, -67 = good, -70 = fair, -80 = weak
+                    const quality = Math.min(100, Math.max(0, (d.wifi_signal_dbm + 90) * 2.5));
+                    document.getElementById('wifiQuality').textContent = 'Quality: ' + Math.round(quality) + '%';
+                    const wifiBar = document.getElementById('wifiBar');
+                    wifiBar.style.width = quality + '%';
+                    wifiBar.className = 'diag-bar-fill ' + (quality >= 50 ? 'bar-green' : quality >= 30 ? 'bar-yellow' : 'bar-red');
+
+                    wifiHistory.push(quality);
+                    if (wifiHistory.length > MAX_HISTORY) wifiHistory.shift();
+                    renderChart('wifiChart', wifiHistory);
+                }
+
+                // Network I/O
+                if (d.net_bytes_recv !== undefined) {
+                    document.getElementById('netTotals').innerHTML =
+                        '&darr; ' + formatBitsTotal(d.net_bytes_recv * 8) + ' received &nbsp; &uarr; ' + formatBitsTotal(d.net_bytes_sent * 8) + ' sent';
+
+                    const now = Date.now();
+                    if (lastNetRecv !== null) {
+                        const elapsed = (now - lastNetTime) / 1000;
+                        const downRate = (d.net_bytes_recv - lastNetRecv) / elapsed;
+                        const upRate = (d.net_bytes_sent - lastNetSent) / elapsed;
+                        document.getElementById('netDownRate').textContent = formatBits(Math.round(downRate * 8));
+                        document.getElementById('netUpRate').textContent = formatBits(Math.round(upRate * 8));
+
+                        netDownHistory.push(downRate);
+                        netUpHistory.push(upRate);
+                        if (netDownHistory.length > MAX_HISTORY) netDownHistory.shift();
+                        if (netUpHistory.length > MAX_HISTORY) netUpHistory.shift();
+                        renderDualChart('netChart', netDownHistory, netUpHistory);
+                    }
+                    lastNetRecv = d.net_bytes_recv;
+                    lastNetSent = d.net_bytes_sent;
+                    lastNetTime = now;
+                }
+
+                // DashPi process
+                if (d.dashpi_mem_mb !== undefined) {
+                    document.getElementById('dashpiMem').textContent = d.dashpi_mem_mb;
+                    document.getElementById('dashpiCpu').textContent = d.dashpi_cpu.toFixed(1);
+                }
+
+            } catch (e) {
+                console.error('Diagnostics fetch error:', e);
+            }
+        }
+
+        // Initial fetch and poll every 3 seconds
+        fetchDiagnostics();
+        setInterval(fetchDiagnostics, 3000);
+    </script>
+    </div><!-- .frame -->
+</body>
+</html>
