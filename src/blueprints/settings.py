@@ -5,6 +5,7 @@ import subprocess
 import pytz
 import logging
 import io
+import json
 
 # Try to import cysystemd for journal reading (Linux only)
 try:
@@ -25,11 +26,20 @@ except ImportError:
 logger = logging.getLogger(__name__)
 settings_bp = Blueprint("settings", __name__)
 
+def _get_version():
+    """Read version from VERSION file."""
+    version_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'VERSION')
+    try:
+        with open(version_file, 'r') as f:
+            return f.read().strip()
+    except Exception:
+        return "?"
+
 @settings_bp.route('/settings')
 def settings_page():
     device_config = current_app.config['DEVICE_CONFIG']
     timezones = sorted(pytz.all_timezones_set)
-    return render_template('settings.html', device_settings=device_config.get_config(), timezones = timezones)
+    return render_template('settings.html', device_settings=device_config.get_config(), timezones=timezones, version=_get_version())
 
 @settings_bp.route('/save_settings', methods=['POST'])
 def save_settings():
@@ -89,6 +99,128 @@ def shutdown():
         logger.error(f"Shutdown/reboot failed: {e}")
         return jsonify({"error": "Failed to execute shutdown command"}), 500
     return jsonify({"success": True})
+
+@settings_bp.route('/api/update/check', methods=['GET'])
+def check_for_updates():
+    """Check if there are updates available on the remote repository."""
+    try:
+        repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+        # Read current local version
+        version_file = os.path.join(repo_dir, 'VERSION')
+        local_version = '?'
+        if os.path.isfile(version_file):
+            with open(version_file, 'r') as f:
+                local_version = f.read().strip()
+
+        # Fetch latest from remote (non-destructive)
+        result = subprocess.run(
+            ['git', 'fetch', 'origin', 'main'],
+            cwd=repo_dir, capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            return jsonify({
+                "error": f"Git fetch failed: {result.stderr.strip()}",
+                "local_version": local_version
+            }), 500
+
+        # Compare local HEAD with remote
+        local_hash = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=repo_dir, capture_output=True, text=True, timeout=10
+        ).stdout.strip()
+
+        remote_hash = subprocess.run(
+            ['git', 'rev-parse', 'origin/main'],
+            cwd=repo_dir, capture_output=True, text=True, timeout=10
+        ).stdout.strip()
+
+        # Read remote version
+        remote_version_result = subprocess.run(
+            ['git', 'show', 'origin/main:VERSION'],
+            cwd=repo_dir, capture_output=True, text=True, timeout=10
+        )
+        remote_version = remote_version_result.stdout.strip() if remote_version_result.returncode == 0 else '?'
+
+        # Count commits behind
+        behind_result = subprocess.run(
+            ['git', 'rev-list', '--count', f'HEAD..origin/main'],
+            cwd=repo_dir, capture_output=True, text=True, timeout=10
+        )
+        commits_behind = int(behind_result.stdout.strip()) if behind_result.returncode == 0 else 0
+
+        # Get commit log of what's new
+        changelog = []
+        if commits_behind > 0:
+            log_result = subprocess.run(
+                ['git', 'log', '--oneline', f'HEAD..origin/main', '--max-count=20'],
+                cwd=repo_dir, capture_output=True, text=True, timeout=10
+            )
+            if log_result.returncode == 0:
+                changelog = [line.strip() for line in log_result.stdout.strip().split('\n') if line.strip()]
+
+        return jsonify({
+            "update_available": local_hash != remote_hash,
+            "local_version": local_version,
+            "remote_version": remote_version,
+            "commits_behind": commits_behind,
+            "changelog": changelog,
+            "local_hash": local_hash[:8],
+            "remote_hash": remote_hash[:8]
+        })
+
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Git operation timed out"}), 500
+    except Exception as e:
+        logger.error(f"Update check failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@settings_bp.route('/api/update/apply', methods=['POST'])
+def apply_update():
+    """Pull latest code from remote and restart the service."""
+    try:
+        repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+        # Stash any local changes (e.g., __pycache__, config edits)
+        subprocess.run(
+            ['git', 'stash', '--include-untracked'],
+            cwd=repo_dir, capture_output=True, text=True, timeout=15
+        )
+
+        # Pull latest from origin/main
+        result = subprocess.run(
+            ['git', 'reset', '--hard', 'origin/main'],
+            cwd=repo_dir, capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            return jsonify({"error": f"Git reset failed: {result.stderr.strip()}"}), 500
+
+        # Read the new version
+        version_file = os.path.join(repo_dir, 'VERSION')
+        new_version = '?'
+        if os.path.isfile(version_file):
+            with open(version_file, 'r') as f:
+                new_version = f.read().strip()
+
+        # Schedule a service restart (delayed so this response can be sent first)
+        subprocess.Popen(
+            ['bash', '-c', 'sleep 2 && sudo systemctl restart dashpi'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+
+        return jsonify({
+            "success": True,
+            "new_version": new_version,
+            "message": "Update applied. Service restarting..."
+        })
+
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Git operation timed out"}), 500
+    except Exception as e:
+        logger.error(f"Update apply failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 @settings_bp.route('/download-logs')
 def download_logs():

@@ -6,7 +6,7 @@
     <title>Settings</title>
     <script>
         (function() {
-            const theme = localStorage.getItem('dashpi-theme') || 
+            const theme = localStorage.getItem('dashpi-theme') ||
                          (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             if (theme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -17,6 +17,96 @@
     <script src="{{ url_for('static', filename='scripts/dark_mode.js') }}"></script>
     <script src="{{ url_for('static', filename='scripts/response_modal.js') }}"></script>
     <script>
+        async function checkForUpdates() {
+            const btn = document.getElementById('updateBtn');
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+
+            try {
+                const resp = await fetch("{{ url_for('settings.check_for_updates') }}");
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    showResponseModal('failure', `Update check failed: ${data.error || 'Unknown error'}`);
+                    btn.disabled = false;
+                    btn.textContent = 'Update';
+                    return;
+                }
+
+                const versionEl = document.getElementById('versionInfo');
+
+                if (data.update_available) {
+                    versionEl.innerHTML = `v${data.local_version} <span style="color: #28a745; font-weight: 600;">→ v${data.remote_version} available</span>`;
+                    let msg = `Update available: v${data.local_version} → v${data.remote_version} (${data.commits_behind} commit${data.commits_behind !== 1 ? 's' : ''})`;
+                    if (data.changelog && data.changelog.length > 0) {
+                        msg += '\n\n' + data.changelog.join('\n');
+                    }
+                    if (confirm(msg + '\n\nApply update and restart DashPi?')) {
+                        applyUpdate(btn);
+                    } else {
+                        btn.disabled = false;
+                        btn.textContent = 'Update';
+                    }
+                } else {
+                    versionEl.innerHTML = `v${data.local_version} <span style="color: var(--text-secondary, #888);">· up to date</span>`;
+                    showResponseModal('success', `DashPi is up to date (v${data.local_version})`);
+                    btn.disabled = false;
+                    btn.textContent = 'Update';
+                }
+            } catch (err) {
+                showResponseModal('failure', 'Update check failed: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Update';
+            }
+        }
+
+        async function applyUpdate(btn) {
+            btn.textContent = 'Updating...';
+
+            try {
+                const resp = await fetch("{{ url_for('settings.apply_update') }}", { method: 'POST' });
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    showResponseModal('failure', `Update failed: ${data.error || 'Unknown error'}`);
+                    btn.disabled = false;
+                    btn.textContent = 'Update';
+                    return;
+                }
+
+                showResponseModal('success', `Updated to v${data.new_version}. Restarting service...`);
+                btn.textContent = 'Restarting...';
+
+                // Poll until the service comes back up
+                setTimeout(() => {
+                    let attempts = 0;
+                    const poll = setInterval(async () => {
+                        attempts++;
+                        try {
+                            const r = await fetch('/settings', { method: 'HEAD' });
+                            if (r.ok) {
+                                clearInterval(poll);
+                                window.location.reload();
+                            }
+                        } catch (e) {
+                            // Service still restarting
+                        }
+                        if (attempts > 30) {
+                            clearInterval(poll);
+                            btn.textContent = 'Reload';
+                            btn.disabled = false;
+                            btn.onclick = () => window.location.reload();
+                        }
+                    }, 2000);
+                }, 5000);
+
+            } catch (err) {
+                showResponseModal('failure', 'Update failed: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Update';
+            }
+        }
+
         async function handleAction() {
             const form = document.querySelector('.settings-form');
             // Sync scheduled day brightness to the dayBrightness field before submit
@@ -101,11 +191,15 @@
                     <h1 class="app-title">Settings</h1>
                 </div>
                 <div>
+                    <button class="header-button" id="updateBtn" style="background-color: #28a745; color: #fff;" onclick="checkForUpdates()">Update</button>
                     <a class="header-button" style="text-decoration: none; background-color: #2c66b1; color: #fff;" href="{{ url_for('settings.download_logs', hours=24) }}" download>Download Logs</a>
                     <button class="header-button" style="background-color: #FFD600; color: #333;" onclick="handleShutdown(true)">Reboot</button>
                     <button class="header-button" style="background-color: #E53935; color: #fff;" onclick="handleShutdown(false)">Shutdown</button>
                 </div>
             </div>
+        </div>
+        <div id="versionInfo" style="padding: 4px 0; font-size: 13px; color: var(--text-secondary, #888);">
+            v{{ version }}
         </div>
         <div class="separator"></div>
         <!-- Settings Content -->
@@ -114,12 +208,12 @@
                 <!-- Device Name -->
                 <div class="form-group">
                     <label for="deviceName" class="form-label">Device Name:</label>
-                    <input type="text" 
-                           id="deviceName" 
-                           name="deviceName" 
-                           placeholder="Type something..." 
-                           value="{{ device_settings.name }}" 
-                           required 
+                    <input type="text"
+                           id="deviceName"
+                           name="deviceName"
+                           placeholder="Type something..."
+                           value="{{ device_settings.name }}"
+                           required
                            class="form-input">
                 </div>
                 <div class="form-group nowrap">
@@ -276,7 +370,7 @@
                 </div>
             </div>
         </form>
- 
+
         <!-- Buttons -->
         <div class="buttons-container">
             <button type="button" onclick="handleAction()" class="action-button">Save</button>
