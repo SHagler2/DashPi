@@ -66,6 +66,7 @@ class FlightTracker(BasePlugin):
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['style_settings'] = False
+        template_params['hide_refresh_interval'] = True
         return template_params
 
     def generate_image(self, settings, device_config):
@@ -168,7 +169,7 @@ class FlightTracker(BasePlugin):
 
         # Plot aircraft markers
         for ac in aircraft:
-            _draw_aircraft_marker(draw, ac, lat, lon, zoom, w, map_h)
+            _draw_aircraft_marker(draw, ac, lat, lon, zoom, w, map_h, units)
 
         # Draw info strip
         self._draw_info_strip(draw, w, h, info_h, map_h, aircraft, units, radius_nm, lat, lon)
@@ -280,14 +281,19 @@ class FlightTracker(BasePlugin):
         return result
 
     def _inject_trails(self, aircraft):
-        """Replace each aircraft's trail with accumulated trail data. Called under self._lock."""
+        """Replace each aircraft's trail with accumulated trail data plus current position."""
         result = []
         for ac in aircraft:
             ac = dict(ac)
             aid = _aircraft_id(ac)
+            trail_points = []
             if aid and aid in self._trails:
-                points = self._trails[aid]["points"]
-                ac["trail"] = [{"lat": p[0], "lon": p[1]} for p in points]
+                trail_points = [{"lat": p[0], "lon": p[1]} for p in self._trails[aid]["points"]]
+            # Append current (possibly extrapolated) position so trail extends to marker
+            if ac.get("lat") and ac.get("lon"):
+                trail_points.append({"lat": ac["lat"], "lon": ac["lon"]})
+            if trail_points:
+                ac["trail"] = trail_points
             result.append(ac)
         return result
 
@@ -692,7 +698,7 @@ def _draw_aircraft_trail(draw, ac, center_lat, center_lon, zoom, vw, vh):
                 draw.line([(sx, sy), (ex, ey)], fill=pass_color, width=pass_width)
 
 
-def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh):
+def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units="imperial"):
     """Draw a rotated airplane silhouette marker for an aircraft."""
     px, py = _latlon_to_pixel(ac["lat"], ac["lon"], center_lat, center_lon, zoom, vw, vh)
 
@@ -738,20 +744,37 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh):
     # Dark outline for contrast against map, then colored fill
     draw.polygon(rotated, fill=color, outline=(0, 0, 0), width=2)
 
-    # Callsign label
+    # Callsign + altitude label
     callsign = ac.get("callsign", "").strip()
     if callsign:
-        label_font = get_font("Jost", 14)
+        label_font = get_font("Jost", 16)
+        alt_font = get_font("Jost", 14)
         label_x = int(px + size + 5)
         label_y = int(py - 8)
 
         tw, th = get_text_dimensions(draw, callsign, label_font)
+
+        # Build altitude line
+        alt = ac.get("altitude")
+        alt_text = None
+        alt_tw, alt_th = 0, 0
+        if alt == "ground":
+            alt_text = "GND"
+        elif isinstance(alt, (int, float)):
+            alt_text = _format_altitude(int(alt), units)
+        if alt_text:
+            alt_tw, alt_th = get_text_dimensions(draw, alt_text, alt_font)
+
+        box_w = max(tw, alt_tw)
+        box_h = th + (alt_th + 2 if alt_text else 0)
         pad = 3
         draw.rectangle(
-            [(label_x - pad, label_y - pad), (label_x + tw + pad, label_y + th + pad)],
+            [(label_x - pad, label_y - pad), (label_x + box_w + pad, label_y + box_h + pad)],
             fill=(0, 0, 0, 160) if hasattr(draw, '_image') else (20, 25, 35)
         )
         draw.text((label_x, label_y), callsign, fill=(255, 255, 255), font=label_font)
+        if alt_text:
+            draw.text((label_x, label_y + th + 2), alt_text, fill=(180, 200, 255), font=alt_font)
 
 
 def _draw_center_marker(draw, w, h):
@@ -826,8 +849,6 @@ def _format_altitude(alt_ft, units):
             return f"{meters / 1000:.1f}km"
         return f"{meters:,}m"
     else:
-        if alt_ft >= 10000:
-            return f"FL{alt_ft // 100}"
         return f"{alt_ft:,}ft"
 
 

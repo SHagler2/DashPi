@@ -4,6 +4,7 @@ from io import BytesIO
 import base64
 import random
 import html
+from utils.app_utils import get_font
 from utils.http_client import get_http_session
 import logging
 
@@ -107,11 +108,10 @@ class AIImage(BasePlugin):
         max_text_width = width - (padding * 2)
 
         # Start with a reasonable font size and scale down if needed
-        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         target_font_size = max(14, int(height * 0.03))
 
         try:
-            font = ImageFont.truetype(font_path, target_font_size)
+            font = get_font("Jost", target_font_size, "bold")
         except Exception:
             font = ImageFont.load_default()
             target_font_size = 12
@@ -123,7 +123,7 @@ class AIImage(BasePlugin):
         while text_width > max_text_width and target_font_size > 10:
             target_font_size -= 1
             try:
-                font = ImageFont.truetype(font_path, target_font_size)
+                font = get_font("Jost", target_font_size, "bold")
             except Exception:
                 break
             bbox = draw.textbbox((0, 0), title, font=font)

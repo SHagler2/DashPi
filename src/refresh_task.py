@@ -88,7 +88,7 @@ class RefreshTask:
             for f in os.listdir(GLOBAL_STATUS_DIR):
                 if f.endswith('.tmp'):
                     try: os.remove(os.path.join(GLOBAL_STATUS_DIR, f))
-                    except OSError: pass
+                    except OSError as e: logger.debug("Could not remove orphaned temp file %s: %s", f, e)
             self._set_global_status("idle", "Starting up...")
             self.thread = threading.Thread(target=self._run, daemon=True)
             self.running = True
@@ -167,6 +167,14 @@ class RefreshTask:
                             use_auto_refresh = True  # Still want auto-refresh, but loop interval is shorter
                             logger.info(f"Auto-refresh configured: {auto_refresh_seconds}s, but loop interval {sleep_time}s is shorter")
 
+                    # When display is blanked (brightness 0), reduce refresh frequency
+                    # to save resources — nobody is looking at the screen
+                    BLANKED_INTERVAL = 300  # 5 minutes
+                    is_blanked = getattr(self.display_manager, '_display_blanked', False)
+                    if is_blanked and sleep_time < BLANKED_INTERVAL:
+                        logger.info(f"Display blanked, extending sleep from {sleep_time}s to {BLANKED_INTERVAL}s")
+                        sleep_time = BLANKED_INTERVAL
+
                     # On first run after boot, use a short delay so the display updates quickly
                     if self.first_run:
                         sleep_time = 3
@@ -178,14 +186,36 @@ class RefreshTask:
                     else:
                         # Update status with next change countdown (skip for very short intervals like continuous Shazam)
                         if sleep_time >= 15:
-                            if sleep_time >= 3600:
-                                remaining = f"{sleep_time / 3600:.1f}h"
-                            elif sleep_time >= 60:
-                                remaining = f"{int(sleep_time / 60)}m"
+                            loop_enabled = self.device_config.get_config("loop_enabled", default=True)
+                            loop_interval = loop_manager.rotation_interval_seconds
+                            is_refresh = use_auto_refresh and auto_refresh_seconds and auto_refresh_seconds < loop_interval
+
+                            # Compute remaining time until next loop rotation
+                            loop_remaining = None
+                            if loop_enabled:
+                                if self.last_loop_rotation_time:
+                                    current_dt = self._get_current_datetime()
+                                    elapsed = (current_dt - self.last_loop_rotation_time).total_seconds()
+                                    loop_remaining = max(0, int(loop_interval - elapsed))
+                                else:
+                                    loop_remaining = int(loop_interval)
+
+                            # Build contextual detail text (used by plugin.html and loops.html which show detail directly)
+                            blanked_prefix = "Display off · " if is_blanked else ""
+                            time_str = self._format_duration(sleep_time)
+                            if loop_enabled and is_refresh and loop_remaining is not None:
+                                loop_str = self._format_duration(loop_remaining)
+                                detail = f"{blanked_prefix}Refresh in {time_str} · Next plugin in {loop_str}"
+                            elif loop_enabled:
+                                detail = f"{blanked_prefix}Next plugin in {time_str}"
                             else:
-                                remaining = f"{int(sleep_time)}s"
-                            self._set_global_status("idle", f"Next change in {remaining}",
-                                                    countdown_seconds=int(sleep_time))
+                                detail = f"{blanked_prefix}Next refresh in {time_str}"
+
+                            self._set_global_status("idle", detail,
+                                                    countdown_seconds=int(sleep_time),
+                                                    loop_rotation_seconds=loop_remaining,
+                                                    is_auto_refresh=is_refresh,
+                                                    loop_enabled=loop_enabled)
 
                         # Wait for sleep_time or until notified
                         self.condition.wait(timeout=sleep_time)
@@ -336,6 +366,13 @@ class RefreshTask:
                             self._set_global_status("displayed", f"No update needed: {plugin_name}", plugin_name, plugin_id)
                             continue
 
+                        # Apply style settings (frames + margins) if configured
+                        ps = getattr(refresh_action, 'plugin_settings', None)
+                        if ps is None and hasattr(refresh_action, 'plugin_reference'):
+                            ps = getattr(refresh_action.plugin_reference, 'plugin_settings', None)
+                        if ps:
+                            image = self._apply_style_settings(image, ps)
+
                         # Add plugin icon overlay if enabled
                         if self.device_config.get_config("show_plugin_icon", default=False):
                             image = self._add_plugin_icon_overlay(image, plugin_id)
@@ -472,7 +509,18 @@ class RefreshTask:
         cfg = self.device_config.get_plugin(plugin_id)
         return cfg.get("display_name", plugin_id) if cfg else plugin_id
 
-    def _set_global_status(self, stage, detail="", plugin_name="", plugin_id="", countdown_seconds=None):
+    @staticmethod
+    def _format_duration(seconds):
+        """Format seconds into a human-readable duration string."""
+        if seconds >= 3600:
+            return f"{seconds / 3600:.1f}h"
+        elif seconds >= 60:
+            return f"{int(seconds / 60)}m"
+        else:
+            return f"{int(seconds)}s"
+
+    def _set_global_status(self, stage, detail="", plugin_name="", plugin_id="", countdown_seconds=None,
+                           loop_rotation_seconds=None, is_auto_refresh=False, loop_enabled=None):
         """Write current refresh status to a JSON file for the loops page to poll.
 
         Uses atomic write (write to temp file + rename) to prevent torn reads.
@@ -496,13 +544,63 @@ class RefreshTask:
             # Include countdown target for frontend live countdown
             if countdown_seconds is not None:
                 status["countdown_target"] = now + countdown_seconds
+            # Include loop rotation target for dual-countdown display
+            if loop_rotation_seconds is not None:
+                status["loop_rotation_target"] = now + loop_rotation_seconds
+            status["is_auto_refresh"] = is_auto_refresh
+            if loop_enabled is not None:
+                status["loop_enabled"] = loop_enabled
             fd, tmp_path = tempfile.mkstemp(dir=GLOBAL_STATUS_DIR, suffix='.tmp')
             os.fchmod(fd, 0o644)
             with os.fdopen(fd, 'w') as f:
                 json.dump(status, f)
             os.rename(tmp_path, GLOBAL_STATUS_FILE)
-        except Exception:
-            pass  # Non-critical
+        except Exception as e:
+            logger.debug("Could not write global status file: %s", e)
+
+    def _apply_style_settings(self, image, plugin_settings):
+        """Apply frame overlay and margins from style settings to a plugin image."""
+        try:
+            from PIL import ImageDraw
+            from utils.layout_utils import draw_frame
+
+            frame_style = plugin_settings.get("selectedFrame", "None")
+            top = int(plugin_settings.get("topMargin", 0) or 0)
+            bottom = int(plugin_settings.get("bottomMargin", 0) or 0)
+            left = int(plugin_settings.get("leftMargin", 0) or 0)
+            right = int(plugin_settings.get("rightMargin", 0) or 0)
+
+            has_margins = top > 0 or bottom > 0 or left > 0 or right > 0
+            has_frame = frame_style and frame_style != "None"
+
+            if not has_margins and not has_frame:
+                return image
+
+            # Apply margins by creating a new image with bg color and pasting content inset
+            if has_margins:
+                bg_color = plugin_settings.get("backgroundColor", "#ffffff")
+                w, h = image.size
+                margined = Image.new("RGBA", (w, h), bg_color)
+                # Shrink the plugin image to fit within margins
+                inner_w = max(1, w - left - right)
+                inner_h = max(1, h - top - bottom)
+                resized = image.resize((inner_w, inner_h), Image.LANCZOS)
+                margined.paste(resized, (left, top))
+                image = margined
+
+            # Draw frame on top
+            if has_frame:
+                if image.mode != "RGBA":
+                    image = image.convert("RGBA")
+                draw = ImageDraw.Draw(image)
+                text_color = plugin_settings.get("textColor", "#000000")
+                margin = {"top": top, "bottom": bottom, "left": left, "right": right}
+                draw_frame(draw, image.size, frame_style, text_color, margin)
+
+            return image
+        except Exception as e:
+            logger.debug(f"Could not apply style settings: {e}")
+            return image
 
     def _add_plugin_icon_overlay(self, image, plugin_id):
         """Add a full-color plugin icon with adaptive backing circle in the bottom-right corner."""
@@ -524,10 +622,10 @@ class RefreshTask:
             circle_padding = max(4, int(icon_size * 0.2))
             circle_size = icon_size + circle_padding * 2
 
-            # Sample background brightness to choose adaptive circle color
+            # Position in top-left corner (least content overlap across all plugins)
             padding = max(6, int(img_h * 0.01))
-            x = img_w - circle_size - padding
-            y = img_h - circle_size - padding
+            x = padding
+            y = padding
             region = image.crop((x, y, x + circle_size, y + circle_size))
             mean_brightness = region.convert("L").resize((1, 1), Image.BICUBIC).getpixel((0, 0))
 
@@ -567,8 +665,8 @@ class RefreshTask:
                     plugin_id = loop.plugin_order[0].plugin_id
                     if self.device_config.get_plugin(plugin_id):
                         return plugin_id
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Could not search loops for fallback plugin: %s", e)
 
         # Fall back to first plugin in the plugin list
         plugins = self.device_config.get_plugins()
@@ -603,8 +701,8 @@ class RefreshTask:
                 minutes = float(auto_refresh)
                 if minutes > 0:
                     return round(minutes * 60)
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                logger.debug("Could not parse autoRefresh value: %s", e)
         return None
 
     def _should_auto_refresh(self, current_dt):

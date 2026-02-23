@@ -29,6 +29,7 @@
         const loadPluginSettings = Object.keys(pluginSettings).length > 0;
         const styleSettings = {{ style_settings | default(false) | tojson }};
         const loopEditMode = {{ loop_edit_mode | default(false) | tojson }};
+        const loopAddMode = {{ loop_add_mode | default(false) | tojson }};
         const loopName = {{ loop_name | default('') | tojson }};
         const loopRefreshInterval = {{ loop_refresh_interval | default(0) | tojson }};
 
@@ -63,8 +64,8 @@
             if (action == "add_to_loop"){
                 // Convert form data to JSON for add_plugin_to_loop endpoint
                 const loopFormData = new FormData(scheduleForm);
-                const interval = parseInt(loopFormData.get("refresh_interval"));
-                const unit = loopFormData.get("interval_unit");
+                const interval = parseInt(loopFormData.get("refresh_interval")) || 30;
+                const unit = loopFormData.get("interval_unit") || "minutes";
                 let intervalSeconds = interval;
                 if (unit === "minutes") intervalSeconds = interval * 60;
                 else if (unit === "hours") intervalSeconds = interval * 3600;
@@ -111,6 +112,47 @@
                     loadingIndicator.style.display = 'none';
                 }
                 return; // Exit early for add_to_loop
+            } else if (action == "add_to_loop_full") {
+                // Add plugin to loop with full settings (from loops page add flow)
+                const settings = {};
+                formData.forEach((value, key) => {
+                    if (key !== 'plugin_id') {
+                        settings[key] = value;
+                    }
+                });
+
+                // Calculate refresh interval from edit fields (if visible)
+                const addIntervalEl = document.getElementById('editRefreshInterval');
+                const addUnitEl = document.getElementById('editIntervalUnit');
+                const addInterval = addIntervalEl ? (parseInt(addIntervalEl.value) || 30) : 30;
+                const addUnit = addUnitEl ? (parseInt(addUnitEl.value) || 60) : 60;
+                const addRefreshSeconds = addInterval * addUnit;
+
+                try {
+                    const response = await fetch('{{ url_for("loops.add_plugin_to_loop") }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            loop_name: loopName,
+                            plugin_id: '{{ plugin.id }}',
+                            refresh_interval_seconds: addRefreshSeconds,
+                            plugin_settings: settings
+                        })
+                    });
+                    const result = await response.json();
+                    if (response.ok) {
+                        sessionStorage.setItem('storedMessage', JSON.stringify({ type: 'success', text: `Added to loop "${loopName}"` }));
+                        window.location.href = '/loops';
+                    } else {
+                        showResponseModal('failure', `Error! ${result.error}`);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showResponseModal('failure', 'An error occurred while adding to loop.');
+                } finally {
+                    loadingIndicator.style.display = 'none';
+                }
+                return; // Exit early for add_to_loop_full
             } else if (action == "save_to_loop") {
                 // Convert form data to JSON for update_plugin_settings endpoint
                 const settings = {};
@@ -120,9 +162,11 @@
                     }
                 });
 
-                // Calculate refresh interval from edit fields
-                const editInterval = parseInt(document.getElementById('editRefreshInterval').value) || 30;
-                const editUnit = parseInt(document.getElementById('editIntervalUnit').value) || 60;
+                // Calculate refresh interval from edit fields (if visible)
+                const editIntervalEl = document.getElementById('editRefreshInterval');
+                const editUnitEl = document.getElementById('editIntervalUnit');
+                const editInterval = editIntervalEl ? (parseInt(editIntervalEl.value) || 30) : 30;
+                const editUnit = editUnitEl ? (parseInt(editUnitEl.value) || 60) : 60;
                 const refreshIntervalSeconds = editInterval * editUnit;
 
                 try {
@@ -228,39 +272,6 @@
             document.getElementById('selected-frame').value = selectedFaceName;
         }
 
-        function showFileName() {
-            const fileInput = document.getElementById('imageUpload');
-            const fileNameDisplay = document.getElementById('fileName');
-            const fileNameText = document.getElementById('fileNameText');
-            const uploadButtonLabel = document.getElementById('uploadButtonLabel');
-            const removeFileButton = document.getElementById('removeFileButton');
-            const file = fileInput.files[0];
-
-            if (file) {
-                fileNameText.textContent = `${file.name}`;
-                fileNameDisplay.style.display = 'flex';  // Show the file name and remove button
-                uploadButtonLabel.style.display = 'none';  // Hide the upload button label
-            } else {
-                fileNameDisplay.style.display = 'none';  // Hide if no file is selected
-                uploadButtonLabel.style.display = 'block';  // Show the upload button label
-            }
-        }
-
-        function removeFile() {
-            const fileInput = document.getElementById('imageUpload');
-            const fileNameDisplay = document.getElementById('fileName');
-            const uploadButtonLabel = document.getElementById('uploadButtonLabel');
-
-            fileInput.value = '';  // Clear the file input
-            fileNameDisplay.style.display = 'none';  // Hide the file name and remove button
-            uploadButtonLabel.style.display = 'block';  // Show the upload button label
-
-            const hiddenElement = document.getElementById(`hidden-file-name`);
-            if (hiddenElement) {
-                hiddenElement.remove();
-            }
-        }
-
         // populate form values from plugin settings
         document.addEventListener('DOMContentLoaded', () => {
             if (!styleSettings){
@@ -279,11 +290,6 @@
                 if (pluginSettings.rightMargin) {
                     document.getElementById('rightMargin').value = pluginSettings.rightMargin;
                 }
-                // Populate background options (color or image)
-                if (pluginSettings.backgroundOption) {
-                    document.querySelector(`input[name="backgroundOption"][value="${pluginSettings.backgroundOption}"]`).checked = true;
-                }
-
                 // Set background color
                 if (pluginSettings.backgroundColor) {
                     document.getElementById('backgroundColor').value = pluginSettings.backgroundColor;
@@ -292,33 +298,6 @@
                 // Populate text color
                 if (pluginSettings.textColor) {
                     document.getElementById('textColor').value = pluginSettings.textColor;
-                }
-
-                // Handle background image selection
-                const fileNameDisplay = document.getElementById('fileName');
-                const fileNameText = document.getElementById('fileNameText');
-                const uploadButtonLabel = document.getElementById('uploadButtonLabel');
-
-                if (pluginSettings.backgroundImageFile) {
-                    const filePath = pluginSettings.backgroundImageFile
-                    const fileName = filePath.split('/').pop();
-
-                    // display the file name
-                    fileNameText.textContent = fileName;
-                    fileNameDisplay.style.display = 'flex';
-                    uploadButtonLabel.style.display = 'none';
-
-                    // create a hidden input for the existing file
-                    const hiddenInput = document.createElement("input");
-                    hiddenInput.type = "hidden";
-                    hiddenInput.name = "backgroundImageFile";
-                    hiddenInput.value = filePath;
-                    hiddenInput.id = `hidden-file-name`;
-                    hiddenInput.setAttribute('delete-on-submit', '');
-                    document.getElementById("hiddenFileInput").appendChild(hiddenInput);
-                } else {
-                    fileNameDisplay.style.display = 'none';
-                    uploadButtonLabel.style.display = 'block';
                 }
 
                 let selectedFrameOption = document.querySelector(`.image-option[data-face-name="${pluginSettings.selectedFrame}"]`);
@@ -359,7 +338,7 @@
 
         <!-- Live Refresh Status -->
         <div id="pluginStatus" class="live-status-card">
-            <span id="pluginStatusIcon" class="live-status-icon">&#9881;</span>
+            <span id="pluginStatusIcon" class="live-status-icon">&#9889;</span>
             <span id="pluginStatusText" class="live-status-text">Ready</span>
         </div>
 
@@ -417,32 +396,11 @@
                             </div>
                         </div>
 
-                        <!-- Background Color Option -->
+                        <!-- Background Color -->
                         <div class="form-group">
-                            <label class="form-label">Background:</label>
-                            <div class="form-group nowrap">
-                                <label>
-                                    <input type="radio" name="backgroundOption" value="color" checked>
-                                    Color
-                                </label>
-                                <input type="color" id="backgroundColor" name="backgroundColor" class="color-picker" value="#ffffff">
-                            </div>
-                            <div class="form-group nowrap">
-                                <label>
-                                    <input type="radio" name="backgroundOption" value="image">
-                                    Image
-                                </label>
-                                <label for="imageUpload" class="form-input file-upload-label" id="uploadButtonLabel">Upload Image</label>
-                                <input type="file" clear-on-submit id="imageUpload" name="backgroundImageFile" accept="image/*" class="file-upload-input" onchange="showFileName()">
-                                <div id="fileName" class="file-name" style="display: none;">
-                                    <span id="fileNameText"></span>
-                                    <button type="button" id="removeFileButton" class="remove-btn" onclick="removeFile()">X</button>
-                                </div>
-                            </div>
+                            <label for="backgroundColor" class="form-label">Background Color:</label>
+                            <input type="color" id="backgroundColor" name="backgroundColor" class="color-picker" value="#ffffff">
                         </div>
-
-                        <!-- Hidden input fields to store existing file data -->
-                        <div id="hiddenFileInput"></div>
 
                         <!-- Text Color Picker -->
                         <div class="form-group">
@@ -457,7 +415,7 @@
             <!-- Hidden input to pass plugin id -->
             <input type="hidden" name="plugin_id" value="{{ plugin.id }}">
 
-            {% if loop_edit_mode %}
+            {% if loop_edit_mode and not hide_refresh_interval %}
             <div class="form-group">
                 <label class="form-label">Refresh Interval:</label>
                 <div style="display: flex; gap: 10px;">
@@ -494,7 +452,9 @@
             {% endif %}
 
             <div class="buttons-container">
-                {% if loop_edit_mode %}
+                {% if loop_edit_mode and loop_add_mode %}
+                <button type="button" onclick="handleAction('add_to_loop_full')" class="action-button" style="width: 100%;">Add to "{{ loop_name }}"</button>
+                {% elif loop_edit_mode %}
                 <button type="button" onclick="handleAction('save_to_loop')" class="action-button" style="width: 100%;">Save Settings to "{{ loop_name }}"</button>
                 {% else %}
                 <button type="button" onclick="handleAction()" class="action-button left">Update Now</button>
@@ -550,21 +510,14 @@
         }
 
         function setBarStyle(stage) {
-            bar.classList.remove('status-success', 'status-error', 'status-active');
-            if (stage === 'displayed' || stage === 'rendering') {
-                bar.classList.add('status-success');
-            } else if (stage === 'error' || stage === 'unidentified') {
-                bar.classList.add('status-error');
-            } else {
-                bar.classList.add('status-active');
-            }
+            // Status bar uses consistent styling; icons convey state
         }
 
         const stageIcons = {
-            refreshing:  '&#9881;',    generating:  '&#9881;',
-            processing:  '&#9881;',    displaying:  '&#128228;',
+            refreshing:  '&#9889;',  generating:  '&#9889;',
+            processing:  '&#9889;',  displaying:  '&#10024;',
             displayed:   '&#9989;',    idle:        '&#128164;',
-            error:       '&#9888;',    starting:    '&#9881;',
+            error:       '&#128308;',  starting:    '&#9889;',
             recording:   '&#127908;',  detecting:   '&#129504;',
             detected:    '&#127925;',  identifying: '&#128269;',
             rendering:   '&#127912;',  unidentified:'&#10067;',
@@ -679,6 +632,7 @@
                         {% endfor %}
                     </select>
                 </div>
+                {% if not hide_refresh_interval %}
                 <div class="form-group">
                     <label for="refresh_interval" class="form-label">Refresh Interval:</label>
                     <div style="display: flex; gap: 10px;">
@@ -692,6 +646,7 @@
                     </div>
                     <small style="color: var(--text-secondary);">How often to refresh this plugin's data</small>
                 </div>
+                {% endif %}
             </form>
             <div class="buttons-container">
                 <button type="button" onclick="handleAction('add_to_loop')" class="action-button">Save</button>

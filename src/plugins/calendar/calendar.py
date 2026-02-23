@@ -32,11 +32,14 @@ class Calendar(BasePlugin):
         elif view not in ["timeGridDay", "timeGridWeek", "dayGrid", "dayGridMonth", "listMonth"]:
             raise RuntimeError("Invalid view")
 
+        # Filter out empty URLs (form may include blank entries from placeholder inputs)
+        if calendar_urls:
+            calendar_urls = [url for url in calendar_urls if url.strip()]
+            if calendar_colors and len(calendar_colors) > len(calendar_urls):
+                # Keep colors aligned with non-empty URLs
+                calendar_colors = [c for url, c in zip(settings.get('calendarURLs[]', []), calendar_colors) if url.strip()]
         if not calendar_urls:
             raise RuntimeError("At least one calendar URL is required")
-        for url in calendar_urls:
-            if not url.strip():
-                raise RuntimeError("Invalid calendar URL")
 
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":

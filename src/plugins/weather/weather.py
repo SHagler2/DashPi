@@ -177,6 +177,12 @@ class Weather(BasePlugin):
         width, height = dimensions
         bg_color = settings.get("backgroundColor", "#ffffff")
         text_color = settings.get("textColor", "#000000")
+
+        dark_mode = settings.get("darkMode") in ("on", True)
+        if dark_mode:
+            bg_color = "#1a1e2e"
+            text_color = "#e8e8e8"
+
         is_vertical = height > width
 
         image = Image.new("RGBA", dimensions, bg_color)
@@ -800,7 +806,6 @@ class Weather(BasePlugin):
             else:
                 if weather_icon.endswith('n'):
                     weather_icon = weather_icon.replace("n", "d")
-            weather_icon = f"{icon_code}d"        
             weather_icon_path = self.get_plugin_dir(f"icons/{weather_icon}.png")
 
             # --- moon phase & icon ---

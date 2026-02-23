@@ -110,6 +110,16 @@
 
 </div>
 
+<div class="form-group">
+    <label for="darkMode" class="form-label">Dark Mode:</label>
+    <div class="toggle-container">
+        <input type="hidden" name="darkMode" value="off">
+        <input type="checkbox" id="darkMode" name="darkMode" class="toggle-checkbox" value="on">
+        <label for="darkMode" class="toggle-label"></label>
+    </div>
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">Overrides background and text colors with a dark theme</small>
+</div>
+
 <div id="mapModal" class="modal">
     <div class="modal-content">
         <span class="close-button" onclick="closeModal('mapModal')">×</span>
@@ -175,7 +185,7 @@
             return;
         }
 
-        resultsDiv.innerHTML = '<div style="font-size: 14px; color: #666;">Searching...</div>';
+        resultsDiv.innerHTML = '<div style="font-size: 14px; color: var(--text-secondary, #888);">Searching...</div>';
 
         try {
             const response = await fetch('/search_city', {
@@ -261,8 +271,16 @@
 
         $closeMap.addEventListener('click', () => {
             const position = marker.getLatLng().wrap();
-            $latitude.value = position.lat;
-            $longitude.value = position.lng;
+            const lat = Math.round(position.lat * 10000) / 10000;
+            const lon = Math.round(position.lng * 10000) / 10000;
+            $latitude.value = lat;
+            $longitude.value = lon;
+            document.getElementById('citySearch').value = '';
+            document.getElementById('cityResults').innerHTML =
+                `<div style="padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; font-size: 14px; color: #155724;">
+                    Selected: Map location<br>
+                    <span style="font-size: 12px;">Lat: ${lat}, Lon: ${lon}</span>
+                </div>`;
             closeModal('mapModal');
         });
 
@@ -302,6 +320,10 @@
             weatherProvider = pluginSettings.weatherProvider || 'OpenMeteo';
 
             document.getElementById('customTitle').value = pluginSettings.customTitle || '';
+
+            const darkOn = pluginSettings.darkMode === 'on' || pluginSettings.darkMode === true;
+            document.getElementById('darkMode').checked = darkOn;
+            document.getElementById('darkMode').value = darkOn ? 'on' : 'off';
         } else {
             // set default values - Dallas, Texas with all options enabled
             document.getElementById('latitude').value = "32.7767";

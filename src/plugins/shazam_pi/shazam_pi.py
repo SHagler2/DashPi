@@ -17,6 +17,7 @@ import time
 from PIL import Image, ImageDraw, ImageFont
 
 from plugins.base_plugin.base_plugin import BasePlugin
+from utils.app_utils import get_font
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class ShazamPi(BasePlugin):
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['style_settings'] = False
+        template_params['hide_refresh_interval'] = True
         return template_params
 
     def generate_image(self, settings, device_config):
@@ -71,7 +73,7 @@ class ShazamPi(BasePlugin):
         if device_config.get_config("orientation") == "vertical":
             dimensions = dimensions[::-1]
 
-        recording_duration = int(settings.get("recordingDuration", 8))
+        recording_duration = int(settings.get("recordingDuration", 5))
 
         # 1. Record audio from USB mic
         self._set_status("recording", f"Recording {recording_duration}s of audio...")
@@ -158,11 +160,11 @@ class ShazamPi(BasePlugin):
         if card is not None:
             device = f"plughw:{card},0"
             logger.debug(f"Using ALSA device {device}")
-            # Disable AGC and set capture volume to max for consistent levels
+            # Disable AGC and set capture volume (12/16 optimal per mic testing)
             try:
                 subprocess.run(["amixer", "-c", str(card), "cset", "numid=4", "off"],
                                capture_output=True, timeout=5)
-                subprocess.run(["amixer", "-c", str(card), "cset", "numid=3", "16"],
+                subprocess.run(["amixer", "-c", str(card), "cset", "numid=3", "12"],
                                capture_output=True, timeout=5)
             except Exception as e:
                 logger.warning(f"Could not configure mic settings: {e}")
@@ -322,10 +324,12 @@ class ShazamPi(BasePlugin):
             if pixelated:
                 image = self._apply_pixelated(image, dimensions, pixel_size, led_style)
 
-            # Add title/artist overlay at bottom
-            image = self._add_title_overlay(
-                image, song['title'], song.get('artist', '')
-            )
+            # Add title/artist overlay at bottom (unless user disabled it)
+            show_info = settings.get("showSongInfo", "on")
+            if show_info in ("on", True, "true"):
+                image = self._add_title_overlay(
+                    image, song['title'], song.get('artist', '')
+                )
             # In fit mode (non-pixelated), add rotated label in the left letterbox bar
             show_label = settings.get("showLetterboxLabel") in ("on", True)
             if show_label and fit_mode == 'fit' and not pixelated:
@@ -412,9 +416,7 @@ class ShazamPi(BasePlugin):
         # Find font size that fits text within the display height
         try:
             font_size = max(10, int(bar_width * 0.4))
-            font = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size
-            )
+            font = get_font("Jost", font_size)
             # Shrink until text fits within height
             tmp_img = Image.new('RGBA', (1, 1))
             tmp_draw = ImageDraw.Draw(tmp_img)
@@ -423,9 +425,7 @@ class ShazamPi(BasePlugin):
                 if bbox[2] - bbox[0] <= int(height * 0.75):
                     break
                 font_size -= 1
-                font = ImageFont.truetype(
-                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size
-                )
+                font = get_font("Jost", font_size)
         except Exception:
             font = ImageFont.load_default()
 
@@ -487,8 +487,6 @@ class ShazamPi(BasePlugin):
         return None
 
     def _render_idle(self, dimensions, settings, device_config, status_note="No Music Detected"):
-        from utils.app_utils import get_font
-
         width, height = dimensions
         weather = self._get_weather(settings, device_config)
 
@@ -730,12 +728,8 @@ class ShazamPi(BasePlugin):
         try:
             title_font_size = max(16, int(height * 0.03))
             subtitle_font_size = max(14, int(height * 0.022))
-            title_font = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", title_font_size
-            )
-            subtitle_font = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", subtitle_font_size
-            )
+            title_font = get_font("Jost", title_font_size, "bold")
+            subtitle_font = get_font("Jost", subtitle_font_size)
         except Exception:
             title_font = ImageFont.load_default()
             subtitle_font = title_font

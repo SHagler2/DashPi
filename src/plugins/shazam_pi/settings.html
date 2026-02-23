@@ -5,7 +5,7 @@
     <label for="recordingDuration" class="form-label">Recording Duration (seconds)</label>
     <input type="number" id="recordingDuration" name="recordingDuration" class="form-input"
            min="5" max="30" step="1" />
-    <small style="display: block; margin-top: 5px; color: #666;">
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
         How long to listen for music each cycle (5-30 seconds)
     </small>
 </div>
@@ -14,7 +14,7 @@
     <label for="musicConfidence" class="form-label">Music Detection Confidence</label>
     <input type="number" id="musicConfidence" name="musicConfidence" class="form-input"
            min="0.1" max="0.9" step="0.05" />
-    <small style="display: block; margin-top: 5px; color: #666;">
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
         YAMNet confidence threshold (lower = more sensitive, default 0.15)
     </small>
 </div>
@@ -25,9 +25,19 @@
         <option value="fit">Fit (Letterbox - Full image visible)</option>
         <option value="fill">Fill (Crop - No black bars)</option>
     </select>
-    <small style="display: block; margin-top: 5px; color: #666;">
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
         Fit: Shows entire album art with black bars if needed<br>
         Fill: Crops edges to fill screen completely
+    </small>
+</div>
+
+<div class="form-group">
+    <label class="form-label" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+        <input type="checkbox" id="showSongInfo" name="showSongInfo" style="width: 18px; height: 18px; cursor: pointer;" />
+        Show Song Info
+    </label>
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
+        Display song title and artist overlay at the bottom of album art
     </small>
 </div>
 
@@ -36,7 +46,7 @@
         <input type="checkbox" id="showLetterboxLabel" name="showLetterboxLabel" style="width: 18px; height: 18px; cursor: pointer;" />
         Show Letterbox Label
     </label>
-    <small style="display: block; margin-top: 5px; color: #666;">
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
         Display a rotated text label in the left letterbox bar (Fit mode only)
     </small>
 </div>
@@ -45,7 +55,7 @@
     <label for="letterboxLabel" class="form-label">Label Text</label>
     <input type="text" id="letterboxLabel" name="letterboxLabel" class="form-input"
            placeholder="Now Playing..." />
-    <small style="display: block; margin-top: 5px; color: #666;">
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
         Custom label text. Leave blank for default "Now Playing..."
     </small>
 </div>
@@ -55,7 +65,7 @@
         <input type="checkbox" id="pixelated" name="pixelated" style="width: 18px; height: 18px; cursor: pointer;" />
         Pixelated Mode (Tuneshine-style)
     </label>
-    <small style="display: block; margin-top: 5px; color: #666;">
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
         Downscales album art to a chunky pixel grid for a retro LED display look
     </small>
 </div>
@@ -69,7 +79,7 @@
         <option value="80">80x80</option>
         <option value="96">96x96 (Fine)</option>
     </select>
-    <small style="display: block; margin-top: 5px; color: #666;">
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
         Lower values = bigger pixels, more retro look
     </small>
 </div>
@@ -80,7 +90,7 @@
         <option value="round">Round LEDs (Tuneshine-style)</option>
         <option value="square">Square blocks</option>
     </select>
-    <small style="display: block; margin-top: 5px; color: #666;">
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
         Round draws individual dots with gaps, like a real LED panel
     </small>
 </div>
@@ -89,7 +99,7 @@
     <label for="weatherApiKey" class="form-label">OpenWeatherMap API Key (optional)</label>
     <input type="text" id="weatherApiKey" name="weatherApiKey" class="form-input"
            placeholder="Auto-detected from Weather plugin if blank" />
-    <small style="display: block; margin-top: 5px; color: #666;">
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
         Leave blank to use the Weather plugin's API key and location
     </small>
 </div>
@@ -118,6 +128,7 @@
         const $pixelSizeGroup = document.getElementById('pixelSizeGroup');
         const $pixelStyle = document.getElementById('pixelStyle');
         const $pixelStyleGroup = document.getElementById('pixelStyleGroup');
+        const $showSongInfo = document.getElementById('showSongInfo');
         const $showLetterboxLabel = document.getElementById('showLetterboxLabel');
         const $letterboxLabel = document.getElementById('letterboxLabel');
         const $letterboxLabelGroup = document.getElementById('letterboxLabelGroup');
@@ -138,24 +149,26 @@
         $showLetterboxLabel.addEventListener('change', toggleLetterboxLabelVisibility);
 
         if (loadPluginSettings) {
-            $recordingDuration.value = pluginSettings.recordingDuration || 8;
+            $recordingDuration.value = pluginSettings.recordingDuration || 5;
             $musicConfidence.value = pluginSettings.musicConfidence || 0.15;
             $fitMode.value = pluginSettings.fitMode || 'fit';
             $pixelated.checked = pluginSettings.pixelated === 'on' || pluginSettings.pixelated === true;
             $pixelSize.value = pluginSettings.pixelSize || '64';
             $pixelStyle.value = pluginSettings.pixelStyle || 'round';
+            $showSongInfo.checked = pluginSettings.showSongInfo === 'on' || pluginSettings.showSongInfo === true || !('showSongInfo' in pluginSettings);
             $showLetterboxLabel.checked = pluginSettings.showLetterboxLabel === 'on' || pluginSettings.showLetterboxLabel === true;
             $letterboxLabel.value = pluginSettings.letterboxLabel || '';
             $weatherApiKey.value = pluginSettings.weatherApiKey || '';
             $geoCoordinates.value = pluginSettings.geoCoordinates || '';
             $units.value = pluginSettings.units || 'imperial';
         } else {
-            $recordingDuration.value = 8;
+            $recordingDuration.value = 5;
             $musicConfidence.value = 0.15;
             $fitMode.value = 'fit';
             $pixelated.checked = false;
             $pixelSize.value = '64';
             $pixelStyle.value = 'round';
+            $showSongInfo.checked = true;
             $showLetterboxLabel.checked = false;
             $letterboxLabel.value = '';
             $weatherApiKey.value = '';

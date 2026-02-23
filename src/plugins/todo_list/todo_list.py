@@ -1,19 +1,11 @@
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw
-from utils.app_utils import get_font
+from utils.app_utils import get_font, FONT_SIZES
 from utils.text_utils import get_text_dimensions, truncate_text
 from utils.layout_utils import draw_rounded_rect
 import logging
 
 logger = logging.getLogger(__name__)
-
-FONT_SIZES = {
-    "x-small": 0.7,
-    "small": 0.9,
-    "normal": 1,
-    "large": 1.1,
-    "x-large": 1.3
-}
 
 BULLET_CHARS = {
     "disc": "\u2022",

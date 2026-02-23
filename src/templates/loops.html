@@ -37,7 +37,7 @@
 
         <!-- Live Refresh Status -->
         <div id="loopsStatus" class="live-status-card">
-            <span id="loopsStatusIcon" class="live-status-icon">&#9881;</span>
+            <span id="loopsStatusIcon" class="live-status-icon">&#9889;</span>
             <span id="loopsStatusText" class="live-status-text">Ready</span>
         </div>
 
@@ -212,20 +212,8 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div style="margin: 15px 0;">
-                    <label>Refresh Interval:</label>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="number" id="refreshInterval" value="30" min="1" required style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                        <select id="refreshUnit" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                            <option value="1">Seconds</option>
-                            <option value="60" selected>Minutes</option>
-                            <option value="3600">Hours</option>
-                            <option value="86400">Days</option>
-                        </select>
-                    </div>
-                </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="submit" style="flex: 1; padding: 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Add</button>
+                    <button type="submit" style="flex: 1; padding: 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Next</button>
                     <button type="button" onclick="closePluginModal()" style="flex: 1; padding: 10px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
                 </div>
             </form>
@@ -364,7 +352,7 @@
                             <option value="fit">Fit (Letterbox - Full image visible)</option>
                             <option value="fill">Fill (Crop - No black bars)</option>
                         </select>
-                        <small style="display: block; margin-top: 5px; color: #666;">
+                        <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
                             Fit: Shows entire image with black bars if needed<br>
                             Fill: Crops edges to fill screen completely
                         </small>
@@ -394,7 +382,7 @@
                             <option value="fit">Fit (Letterbox - Full image visible)</option>
                             <option value="fill">Fill (Crop - No black bars)</option>
                         </select>
-                        <small style="display: block; margin-top: 5px; color: #666;">
+                        <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
                             Fit: Shows entire image with black bars if needed<br>
                             Fill: Crops edges to fill screen completely
                         </small>
@@ -457,9 +445,9 @@
                         <label>Auto-Refresh Prices:</label>
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <input type="number" id="stocksAutoRefresh" min="0" max="1440" value="0" style="width: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                            <span style="color: #666;">minutes (0 = disabled)</span>
+                            <span style="color: var(--text-secondary, #888);">minutes (0 = disabled)</span>
                         </div>
-                        <small style="display: block; margin-top: 5px; color: #666;">
+                        <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
                             While stocks is displayed, refresh prices at this interval.
                         </small>
                     </div>
@@ -522,21 +510,14 @@
         }
 
         function setBarStyle(stage) {
-            bar.classList.remove('status-success', 'status-error', 'status-active');
-            if (stage === 'displayed' || stage === 'rendering') {
-                bar.classList.add('status-success');
-            } else if (stage === 'error' || stage === 'unidentified') {
-                bar.classList.add('status-error');
-            } else {
-                bar.classList.add('status-active');
-            }
+            // Status bar uses consistent styling; icons convey state
         }
 
         const stageIcons = {
-            refreshing:  '&#9881;',    generating:  '&#9881;',
-            processing:  '&#9881;',    displaying:  '&#128228;',
+            refreshing:  '&#9889;',  generating:  '&#9889;',
+            processing:  '&#9889;',  displaying:  '&#10024;',
             displayed:   '&#9989;',    idle:        '&#128164;',
-            error:       '&#9888;',    starting:    '&#9881;',
+            error:       '&#128308;',  starting:    '&#9889;',
             recording:   '&#127908;',  detecting:   '&#129504;',
             detected:    '&#127925;',  identifying: '&#128269;',
             rendering:   '&#127912;',  unidentified:'&#10067;',

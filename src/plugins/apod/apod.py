@@ -8,6 +8,7 @@ For the API key, set `NASA_SECRET={API_KEY}` in your .env file.
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
+from utils.app_utils import get_font
 from utils.http_client import get_http_session
 import logging
 from random import randint
@@ -133,7 +134,7 @@ class Apod(BasePlugin):
         # Try to use a nice font, fall back to default if not available
         try:
             font_size = max(16, int(height * 0.018))  # 1.8% of image height
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+            font = get_font("Jost", font_size, "bold")
         except Exception:
             font = ImageFont.load_default()
             logger.warning("Could not load custom font, using default")

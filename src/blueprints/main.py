@@ -1,7 +1,10 @@
 from flask import Blueprint, request, jsonify, current_app, render_template, send_file
+import logging
 import os
 import time
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 main_bp = Blueprint("main", __name__)
 
@@ -54,8 +57,8 @@ def get_current_image():
             # Compare (both now in seconds, no sub-second precision)
             if file_mtime <= client_mtime_seconds:
                 return '', 304
-        except (ValueError, AttributeError):
-            pass
+        except (ValueError, AttributeError) as e:
+            logger.debug("Could not parse If-Modified-Since header: %s", e)
     
     # Send the file with Last-Modified header
     response = send_file(image_path, mimetype='image/png')
@@ -304,8 +307,8 @@ def get_weather_location():
                     lon = ref.plugin_settings.get("longitude")
                     if lat is not None and lon is not None:
                         return jsonify({"latitude": lat, "longitude": lon})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Could not retrieve weather location from loops: %s", e)
     return jsonify({"latitude": None, "longitude": None})
 
 def format_time(seconds):

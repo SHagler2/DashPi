@@ -40,6 +40,8 @@ def wrap_text(draw, text, font, max_width):
 def truncate_text(draw, text, font, max_width, suffix="..."):
     """Truncate text to fit within max_width, adding suffix if truncated.
 
+    Uses binary search for O(log n) performance instead of linear scan.
+
     Args:
         draw: PIL ImageDraw instance.
         text: The string to truncate.
@@ -58,13 +60,23 @@ def truncate_text(draw, text, font, max_width, suffix="..."):
     if bbox[2] - bbox[0] <= max_width:
         return text
 
-    for i in range(len(text), 0, -1):
-        truncated = text[:i].rstrip() + suffix
-        bbox = draw.textbbox((0, 0), truncated, font=font)
+    # Binary search for the longest prefix that fits with suffix
+    lo, hi = 0, len(text)
+    best = 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        candidate = text[:mid].rstrip() + suffix
+        bbox = draw.textbbox((0, 0), candidate, font=font)
         if bbox[2] - bbox[0] <= max_width:
-            return truncated
+            best = mid
+            lo = mid + 1
+        else:
+            hi = mid - 1
 
-    return suffix
+    if best == 0:
+        return suffix
+
+    return text[:best].rstrip() + suffix
 
 
 def draw_multiline_text(draw, text, position, font, fill, max_width,

@@ -13,6 +13,7 @@ import logging
 import gc
 import psutil
 import tempfile
+import time
 import os
 import requests
 
@@ -208,10 +209,15 @@ class AdaptiveImageLoader:
                 response.raise_for_status()
 
                 downloaded_bytes = 0
+                deadline = time.monotonic() + timeout_ms / 1000
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         tmp.write(chunk)
                         downloaded_bytes += len(chunk)
+                    if time.monotonic() > deadline:
+                        response.close()
+                        raise requests.exceptions.Timeout(
+                            f"Download exceeded {timeout_ms/1000:.0f}s time limit ({downloaded_bytes/1024:.0f}KB downloaded)")
 
                 logger.debug(f"Downloaded {downloaded_bytes / 1024:.1f}KB to temp file")
 
@@ -286,10 +292,21 @@ class AdaptiveImageLoader:
             request_headers = {**self.DEFAULT_HEADERS, **(headers or {})}
 
             session = get_http_session()
-            response = session.get(url, timeout=timeout_ms / 1000, stream=True, headers=request_headers)
+            timeout_secs = timeout_ms / 1000
+            response = session.get(url, timeout=timeout_secs, stream=True, headers=request_headers)
             response.raise_for_status()
 
-            img = Image.open(BytesIO(response.content))
+            # Read with deadline to prevent slow-trickle hangs
+            chunks = []
+            deadline = time.monotonic() + timeout_secs
+            for chunk in response.iter_content(chunk_size=65536):
+                if chunk:
+                    chunks.append(chunk)
+                if time.monotonic() > deadline:
+                    response.close()
+                    raise requests.exceptions.Timeout(
+                        f"Download exceeded {timeout_secs:.0f}s time limit")
+            img = Image.open(BytesIO(b''.join(chunks)))
             original_size = img.size
             original_pixels = original_size[0] * original_size[1]
             megapixels = original_pixels / 1_000_000

@@ -92,6 +92,73 @@ def calculate_grid(area, rows, cols, spacing=0):
     return cells
 
 
+def draw_frame(draw, dimensions, frame_style, color, margin=None):
+    """Draw a decorative frame overlay on a PIL image.
+
+    Args:
+        draw: PIL ImageDraw instance.
+        dimensions: (width, height) of the image.
+        frame_style: One of "None", "Corner", "Top and Bottom", "Rectangle".
+        color: Frame color (e.g. "#000000" or RGB tuple).
+        margin: Optional dict with top/bottom/left/right pixel insets.
+    """
+    if not frame_style or frame_style == "None":
+        return
+
+    w, h = dimensions
+    m_top = (margin or {}).get("top", 0)
+    m_bottom = (margin or {}).get("bottom", 0)
+    m_left = (margin or {}).get("left", 0)
+    m_right = (margin or {}).get("right", 0)
+
+    # Scale line width to display size (roughly 3px at 1024w)
+    line_w = max(2, int(w * 0.003))
+
+    if frame_style == "Corner":
+        # L-shaped corner brackets at top-left and bottom-right
+        arm_x = int(w * 0.08)
+        arm_y = int(h * 0.08)
+        inset = line_w  # small inset so lines don't clip the edge
+
+        # Top-left corner
+        x0 = m_left + inset
+        y0 = m_top + inset
+        draw.line([(x0, y0 + arm_y), (x0, y0), (x0 + arm_x, y0)],
+                  fill=color, width=line_w)
+
+        # Bottom-right corner
+        x1 = w - m_right - inset - 1
+        y1 = h - m_bottom - inset - 1
+        draw.line([(x1 - arm_x, y1), (x1, y1), (x1, y1 - arm_y)],
+                  fill=color, width=line_w)
+
+    elif frame_style == "Top and Bottom":
+        # Thick horizontal bars at top and bottom
+        bar_h = max(3, int(h * 0.02))
+
+        # Top bar
+        draw.rectangle(
+            [m_left, m_top, w - m_right - 1, m_top + bar_h - 1],
+            fill=color)
+
+        # Bottom bar
+        draw.rectangle(
+            [m_left, h - m_bottom - bar_h, w - m_right - 1, h - m_bottom - 1],
+            fill=color)
+
+    elif frame_style == "Rectangle":
+        # Full rounded-rectangle border
+        inset = line_w
+        radius = max(4, int(min(w, h) * 0.015))
+        draw_rounded_rect(
+            draw,
+            (m_left + inset, m_top + inset,
+             w - m_right - inset - 1, h - m_bottom - inset - 1),
+            radius=radius,
+            outline=color,
+            width=line_w)
+
+
 def draw_dotted_rect(draw, rect, dot_color, dot_spacing=5, dot_radius=1):
     """Fill a rectangle area with an evenly-spaced dot pattern.
 

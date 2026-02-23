@@ -26,7 +26,6 @@ function closeLoopModal() {
 function openAddPluginModal(loopName) {
     document.getElementById('targetLoopName').value = loopName;
     document.getElementById('pluginSelect').value = '';
-    document.getElementById('refreshInterval').value = '30';
     document.getElementById('pluginModal').style.display = 'block';
 }
 
@@ -250,36 +249,16 @@ document.getElementById('loopForm')?.addEventListener('submit', async (e) => {
     }
 });
 
-document.getElementById('pluginForm')?.addEventListener('submit', async (e) => {
+document.getElementById('pluginForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
 
     const loopName = document.getElementById('targetLoopName').value;
     const pluginId = document.getElementById('pluginSelect').value;
-    const interval = parseInt(document.getElementById('refreshInterval').value);
-    const unit = parseInt(document.getElementById('refreshUnit').value);
 
-    const refreshIntervalSeconds = interval * unit;
+    if (!pluginId) return;
 
-    try {
-        const response = await fetch('/add_plugin_to_loop', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                loop_name: loopName,
-                plugin_id: pluginId,
-                refresh_interval_seconds: refreshIntervalSeconds
-            })
-        });
-
-        const result = await response.json();
-        if (response.ok) {
-            location.reload();
-        } else {
-            showResponseModal('failure', result.error);
-        }
-    } catch (error) {
-        showResponseModal('failure', 'Error: ' + error.message);
-    }
+    // Navigate to full plugin settings page in add mode
+    window.location.href = `/plugin/${pluginId}?loop_name=${encodeURIComponent(loopName)}&add_mode=true`;
 });
 
 document.getElementById('editPluginForm')?.addEventListener('submit', async (e) => {

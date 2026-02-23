@@ -4,6 +4,7 @@ import logging
 import random
 import os
 
+from utils.app_utils import get_font
 from utils.image_utils import pad_image_blur
 
 logger = logging.getLogger(__name__)
@@ -134,7 +135,7 @@ class ImageUpload(BasePlugin):
 
         font_size = max(14, int(h * 0.03))
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+            font = get_font("Jost", font_size)
         except (OSError, IOError):
             font = ImageFont.load_default()
 

@@ -14,9 +14,10 @@ def plugin_page(plugin_id):
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
-    # Check for loop edit mode (coming from loops page)
+    # Check for loop edit/add mode (coming from loops page)
     loop_name = request.args.get('loop_name', '')
     edit_mode = request.args.get('edit_mode', 'false') == 'true'
+    add_mode = request.args.get('add_mode', 'false') == 'true'
 
     # If editing a loop plugin, get existing settings
     existing_settings = {}
@@ -36,11 +37,9 @@ def plugin_page(plugin_id):
             plugin = get_plugin_instance(plugin_config)
             template_params = plugin.generate_settings_template()
 
-            # Note: We no longer support editing plugin instances directly from the plugin page
-            # Plugin settings are now managed through loops
-
             template_params["loops"] = loop_manager.get_loop_names()
-            template_params["loop_edit_mode"] = edit_mode
+            template_params["loop_edit_mode"] = edit_mode or add_mode
+            template_params["loop_add_mode"] = add_mode
             template_params["loop_name"] = loop_name
             template_params["loop_refresh_interval"] = existing_refresh_interval
 

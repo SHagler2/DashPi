@@ -3,20 +3,14 @@ from PIL import Image, ImageDraw
 from io import BytesIO
 import logging
 import re
-from utils.app_utils import get_font
+import time
+import threading
+from utils.app_utils import get_font, FONT_SIZES
 from utils.text_utils import get_text_dimensions, truncate_text
 from utils.http_client import get_http_session
 import html
 
 logger = logging.getLogger(__name__)
-
-FONT_SIZES = {
-    "x-small": 0.7,
-    "small": 0.9,
-    "normal": 1,
-    "large": 1.1,
-    "x-large": 1.3
-}
 
 class Rss(BasePlugin):
     def generate_settings_template(self):
@@ -24,13 +18,20 @@ class Rss(BasePlugin):
         template_params['style_settings'] = True
         return template_params
 
+    # Max seconds total for all thumbnail downloads before skipping the rest
+    THUMBNAIL_BUDGET_SECS = 15
+    # Hard per-image timeout in seconds (thread-enforced, kills hung downloads)
+    THUMBNAIL_HARD_TIMEOUT_SECS = 5
+
     def generate_image(self, settings, device_config):
         title = settings.get("title")
         feed_url = settings.get("feedUrl")
         if not feed_url:
             raise RuntimeError("RSS Feed Url is required.")
 
+        logger.info("Fetching RSS feed: %s", feed_url)
         items = self.parse_rss_feed(feed_url)
+        logger.info("Parsed %d items from feed", len(items))
 
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":
@@ -38,6 +39,7 @@ class Rss(BasePlugin):
 
         include_images = settings.get("includeImages") == "true"
         font_scale = FONT_SIZES.get(settings.get('fontSize', 'normal'), 1)
+        logger.info("Rendering RSS: %d items, images=%s", min(len(items), 10), include_images)
 
         return self._render_pil(dimensions, title, items[:10], include_images,
                                 font_scale, settings)
@@ -74,6 +76,8 @@ class Rss(BasePlugin):
         item_padding = int(height * 0.02)
         img_size = int(content_width * 0.12) if include_images else 0
         max_y = height - margin
+        img_budget_start = time.monotonic()
+        img_budget_exhausted = False
 
         for i, item in enumerate(items):
             if y + item_padding * 2 > max_y:
@@ -87,11 +91,15 @@ class Rss(BasePlugin):
             text_x = margin
             text_width = content_width
 
-            # Load and draw thumbnail
-            if include_images and item.get("image"):
-                try:
-                    thumb = self.image_loader.from_url(item["image"],
-                                                       (img_size, img_size))
+            # Load and draw thumbnail (with per-image and total time budgets)
+            if include_images and item.get("image") and not img_budget_exhausted:
+                elapsed = time.monotonic() - img_budget_start
+                if elapsed >= self.THUMBNAIL_BUDGET_SECS:
+                    logger.info("Thumbnail time budget exhausted (%.1fs), skipping remaining images", elapsed)
+                    img_budget_exhausted = True
+                else:
+                    thumb = self._load_thumbnail_with_timeout(
+                        item["image"], (img_size, img_size))
                     if thumb:
                         # Alternate sides
                         if i % 2 == 0:
@@ -102,18 +110,17 @@ class Rss(BasePlugin):
                             text_x = margin + img_size + int(width * 0.01)
                             text_width = content_width - img_size - int(width * 0.01)
                         image.paste(thumb.convert("RGBA"), (img_x, y))
-                except Exception:
-                    pass
 
             # Item title (bold, truncated)
-            item_title = self._strip_html(item.get("title", ""))
+            item_title = self._strip_html(item.get("title", ""))[:200]
             item_title = truncate_text(draw, item_title, item_title_font, text_width)
             draw.text((text_x, y), item_title, font=item_title_font, fill=text_color)
             th = get_text_dimensions(draw, item_title, item_title_font)[1]
             y += th + 2
 
             # Description (truncated to 2 lines)
-            desc = self._strip_html(item.get("description", ""))
+            # Pre-truncate to avoid expensive textbbox calls on huge HTML descriptions
+            desc = self._strip_html(item.get("description", ""))[:300]
             if desc:
                 line1 = truncate_text(draw, desc, desc_font, text_width)
                 draw.text((text_x, y), line1, font=desc_font, fill=text_color)
@@ -131,6 +138,29 @@ class Rss(BasePlugin):
             y += item_padding
 
         return image
+
+    def _load_thumbnail_with_timeout(self, url, size):
+        """Load a thumbnail with a hard thread-based timeout.
+        Returns a PIL Image or None if loading fails or times out."""
+        result = [None]
+
+        def _load():
+            try:
+                result[0] = self.image_loader.from_url(
+                    url, size, timeout_ms=self.THUMBNAIL_HARD_TIMEOUT_SECS * 1000)
+            except Exception as e:
+                logger.debug("Thumbnail load error: %s", e)
+
+        logger.debug("Loading thumbnail: %s", url[:80])
+        t = threading.Thread(target=_load, daemon=True)
+        t.start()
+        t.join(timeout=self.THUMBNAIL_HARD_TIMEOUT_SECS)
+        if t.is_alive():
+            logger.warning("Thumbnail timed out after %ds: %s", self.THUMBNAIL_HARD_TIMEOUT_SECS, url[:80])
+            return None
+        if result[0]:
+            logger.debug("Thumbnail loaded OK: %s", url[:60])
+        return result[0]
 
     def _strip_html(self, text):
         """Remove HTML tags from text."""

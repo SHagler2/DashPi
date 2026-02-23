@@ -45,7 +45,7 @@
         <option value="11">Very Close (zoom 11)</option>
         <option value="12">Street Level (zoom 12)</option>
     </select>
-    <small style="display: block; margin-top: 4px; color: var(--text-secondary, #666);">Map tiles are cached on first render. Change zoom to re-fetch.</small>
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">Map tiles are cached on first render. Change zoom to re-fetch.</small>
 </div>
 
 <!-- Units -->
@@ -76,7 +76,7 @@
         <input type="checkbox" id="showTracks" name="showTracks" class="toggle-checkbox" value="true" checked>
         <label for="showTracks" class="toggle-label"></label>
     </div>
-    <small style="display: block; margin-top: 4px; color: var(--text-secondary, #666);">Show dotted trail lines behind each aircraft</small>
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">Show dotted trail lines behind each aircraft</small>
 </div>
 
 <!-- Data Source -->
@@ -99,7 +99,7 @@
         <option value="0.5" selected>Every 30 seconds</option>
         <option value="1">Every 1 minute</option>
     </select>
-    <small style="display: block; margin-top: 4px; color: var(--text-secondary, #666);">How often the display updates. Shorter intervals show smoother aircraft movement.</small>
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">How often the display updates. Shorter intervals show smoother aircraft movement.</small>
 </div>
 
 <!-- Data Refresh (API fetch interval) -->
@@ -110,7 +110,7 @@
         <option value="30" selected>Every 30 seconds</option>
         <option value="60">Every 1 minute</option>
     </select>
-    <small style="display: block; margin-top: 4px; color: var(--text-secondary, #666);">How often to fetch fresh data from the ADS-B API. Positions are extrapolated between fetches.</small>
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">How often to fetch fresh data from the ADS-B API. Positions are extrapolated between fetches.</small>
 </div>
 
 <!-- Map Modal -->
@@ -134,7 +134,7 @@
             return;
         }
 
-        resultsDiv.innerHTML = '<div style="font-size: 14px; color: #666;">Searching...</div>';
+        resultsDiv.innerHTML = '<div style="font-size: 14px; color: var(--text-secondary, #888);">Searching...</div>';
 
         try {
             const response = await fetch('/search_city', {

@@ -1,4 +1,5 @@
 from plugins.base_plugin.base_plugin import BasePlugin
+from utils.app_utils import get_font
 from utils.image_loader import _is_low_resource_device
 from utils.http_client import get_http_session
 from PIL import ImageDraw, ImageFont
@@ -143,7 +144,7 @@ class Unsplash(BasePlugin):
 
         try:
             font_size = max(16, int(height * 0.018))
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+            font = get_font("Jost", font_size, "bold")
         except Exception:
             font = ImageFont.load_default()
             logger.warning("Could not load custom font, using default")

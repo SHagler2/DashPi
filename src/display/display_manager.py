@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import datetime
 
 import pytz
@@ -58,9 +59,12 @@ class DisplayManager:
         if not hasattr(self, "display"):
             raise ValueError("No valid display instance initialized.")
 
-        # Save the image (always, so web UI preview stays current)
+        # Save the image atomically (temp file + rename) so the web UI
+        # never fetches a half-written file
         logger.info(f"Saving image to {self.device_config.current_image_file}")
-        image.save(self.device_config.current_image_file)
+        tmp_path = self.device_config.current_image_file.replace(".png", "_tmp.png")
+        image.save(tmp_path)
+        os.replace(tmp_path, self.device_config.current_image_file)
 
         # Check scheduled brightness — 0 means blank the display
         brightness = self._get_scheduled_brightness()

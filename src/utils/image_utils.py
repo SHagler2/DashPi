@@ -3,9 +3,6 @@ from io import BytesIO
 import os
 import logging
 import zlib
-import tempfile
-import subprocess
-import shutil
 from utils.http_client import get_http_session
 
 logger = logging.getLogger(__name__)
@@ -102,74 +99,6 @@ def compute_image_hash(image):
     if thumb.mode != "RGB":
         thumb = thumb.convert("RGB")
     return format(zlib.adler32(thumb.tobytes()) & 0xffffffff, '08x')
-
-def _find_chromium_binary():
-    """Find the first available Chromium-based binary in system PATH."""
-    candidates = ["chromium-headless-shell", "chromium", "chrome"]
-    for candidate in candidates:
-        path = shutil.which(candidate)
-        if path:
-            logger.debug(f"Found browser binary: {candidate} at {path}")
-            return candidate
-    return None
-
-
-def take_screenshot(target, dimensions, timeout_ms=None):
-    image = None
-    try:
-        # Find available browser binary
-        browser = _find_chromium_binary()
-        if not browser:
-            logger.error("No Chromium-based browser found. Install chromium, chromium-headless-shell, or chrome.")
-            return None
-
-        # Create a temporary output file for the screenshot
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as img_file:
-            img_file_path = img_file.name
-
-        command = [
-            browser,
-            target,
-            "--headless",
-            f"--screenshot={img_file_path}",
-            f"--window-size={dimensions[0]},{dimensions[1]}",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-            "--use-gl=swiftshader",
-            "--hide-scrollbars",
-            "--in-process-gpu",
-            "--js-flags=--jitless",
-            "--disable-zero-copy",
-            "--disable-gpu-memory-buffer-compositor-resources",
-            "--disable-extensions",
-            "--disable-plugins",
-            "--mute-audio",
-            "--renderer-process-limit=1",
-            "--no-zygote",
-            "--no-sandbox"
-        ]
-        if timeout_ms:
-            command.append(f"--timeout={timeout_ms}")
-        # Add process-level timeout (default 60s) to prevent hanging
-        process_timeout = (timeout_ms / 1000 + 10) if timeout_ms else 60
-        result = subprocess.run(command, capture_output=True, check=False, timeout=process_timeout)
-
-        # Check if the process failed or the output file is missing
-        if result.returncode != 0 or not os.path.exists(img_file_path):
-            logger.error(f"Failed to take screenshot (return code: {result.returncode})")
-            return None
-
-        # Load the image using PIL
-        with Image.open(img_file_path) as img:
-            image = img.copy()
-
-        # Remove image files
-        os.remove(img_file_path)
-
-    except Exception as e:
-        logger.error(f"Failed to take screenshot: {str(e)}")
-
-    return image
 
 def pad_image_blur(img: Image, dimensions: tuple[int, int]) -> Image:
     bkg = ImageOps.fit(img, dimensions)
