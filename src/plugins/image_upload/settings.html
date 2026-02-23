@@ -131,7 +131,7 @@
         }, 3000);
     }
 
-    function addFileToList(fileName, filePath) {
+    function addFileToList(fileName, filePath, missing) {
         const fileNamesDisplay = document.getElementById("fileNames");
         const hiddenFileInputs = document.getElementById("hiddenFileInputs");
 
@@ -139,12 +139,16 @@
         if (document.getElementById(`hidden-${fileName}`)) return;
 
         const fileElement = document.createElement("div");
+        const missingBadge = missing
+            ? '<span style="color: #f44336; font-size: 12px; font-weight: 600; margin-left: 6px;" title="File not found on disk">⚠ missing</span>'
+            : '';
         fileElement.innerHTML = `
-            <span id="fileNameText">${fileName}</span>
+            <span id="fileNameText">${fileName}</span>${missingBadge}
             <button type="button" class="remove-btn" onclick="removeExistingFile('${fileName}')">X</button>
         `;
         fileElement.id = `existing-${fileName}`;
         fileElement.classList.add("file-name");
+        if (missing) fileElement.style.opacity = '0.6';
         fileElement.setAttribute('delete-on-submit', '');
         fileNamesDisplay.appendChild(fileElement);
 
@@ -204,11 +208,29 @@
 
             const existingFiles = pluginSettings['imageFiles[]'] || []
 
-            // Loop through the existing files and add them to the display and hidden inputs
-            existingFiles.forEach(filePath => {
-                const fileName = filePath.split('/').pop()
-                addFileToList(fileName, filePath);
-            });
+            // Check which files exist on disk, then add with missing indicator
+            if (existingFiles.length > 0) {
+                fetch('/check_files', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_paths: existingFiles })
+                })
+                .then(resp => resp.json())
+                .then(existsMap => {
+                    existingFiles.forEach(filePath => {
+                        const fileName = filePath.split('/').pop();
+                        const missing = existsMap[filePath] === false;
+                        addFileToList(fileName, filePath, missing);
+                    });
+                })
+                .catch(() => {
+                    // Fallback: add without checking
+                    existingFiles.forEach(filePath => {
+                        const fileName = filePath.split('/').pop();
+                        addFileToList(fileName, filePath, false);
+                    });
+                });
+            }
         }
 
         // Toggle color picker visibility based on display mode

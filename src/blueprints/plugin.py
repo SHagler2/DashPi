@@ -143,6 +143,18 @@ def upload_image():
         return jsonify({"error": f"Upload failed: {str(e)}"}), 500
 
 
+@plugin_bp.route('/check_files', methods=['POST'])
+def check_files():
+    """Check which files from a list exist on disk. Returns a map of path -> exists."""
+    try:
+        data = request.get_json()
+        file_paths = data.get('file_paths', [])
+        result = {fp: os.path.isfile(fp) for fp in file_paths}
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @plugin_bp.route('/delete_image', methods=['POST'])
 def delete_image():
     """Delete a single uploaded image file from disk and update saved settings."""
