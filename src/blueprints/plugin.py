@@ -201,9 +201,11 @@ def update_now_async():
         plugin_id = plugin_settings.pop("plugin_id")
 
         # Remember settings for next time the plugin page is opened
-        device_config.update_value(
-            f"plugin_last_settings_{plugin_id}", dict(plugin_settings)
-        )
+        # Don't overwrite with empty dict (e.g., from curl with just plugin_id)
+        if plugin_settings:
+            device_config.update_value(
+                f"plugin_last_settings_{plugin_id}", dict(plugin_settings)
+            )
 
         if refresh_task.running:
             queued = refresh_task.queue_manual_update(ManualRefresh(plugin_id, plugin_settings))
@@ -230,9 +232,11 @@ def update_now():
         plugin_id = plugin_settings.pop("plugin_id")
 
         # Remember settings for next time the plugin page is opened
-        device_config.update_value(
-            f"plugin_last_settings_{plugin_id}", dict(plugin_settings)
-        )
+        # Don't overwrite with empty dict (e.g., from curl with just plugin_id)
+        if plugin_settings:
+            device_config.update_value(
+                f"plugin_last_settings_{plugin_id}", dict(plugin_settings)
+            )
 
         # For stocks plugin, merge in saved settings (autoRefresh, etc.) if not in form
         if plugin_id == "stocks":

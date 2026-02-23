@@ -359,6 +359,13 @@ class RefreshTask:
                             self.device_config.update_value(
                                 f"plugin_last_settings_{plugin_id}", dict(plugin_settings_after), write=False
                             )
+                        elif hasattr(refresh_action, 'plugin_reference'):
+                            # LoopRefresh: sync plugin_last_settings from loop's authoritative settings
+                            ref_settings = refresh_action.plugin_reference.plugin_settings
+                            if ref_settings:
+                                self.device_config.update_value(
+                                    f"plugin_last_settings_{plugin_id}", dict(ref_settings), write=False
+                                )
 
                         # Plugin returned None — skip display update (e.g., Shazam grace period)
                         if image is None:

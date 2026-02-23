@@ -203,7 +203,13 @@ def update_plugin_settings():
     if not plugin_ref:
         return jsonify({"error": "Plugin not found in loop"}), 404
 
-    plugin_ref.plugin_settings = plugin_settings
+    # Merge new settings with existing to avoid losing fields the client didn't send
+    if plugin_ref.plugin_settings and plugin_settings:
+        merged = dict(plugin_ref.plugin_settings)
+        merged.update(plugin_settings)
+        plugin_ref.plugin_settings = merged
+    elif plugin_settings:
+        plugin_ref.plugin_settings = plugin_settings
     if refresh_interval:
         plugin_ref.refresh_interval_seconds = refresh_interval
 

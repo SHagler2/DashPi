@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import tempfile
+import threading
 from dotenv import load_dotenv
 from model import RefreshInfo, LoopManager
 
@@ -21,6 +22,7 @@ class Config:
     plugin_image_dir = os.path.join(BASE_DIR, "static", "images", "plugins")
 
     def __init__(self):
+        self._config_lock = threading.Lock()
         self.config = self.read_config()
         self.plugins_list = self.read_plugins_list()
         self.loop_manager = self.load_loop_manager()
@@ -59,26 +61,27 @@ class Config:
         """Updates the cached config from the model objects and writes to the config file atomically.
 
         Uses atomic write pattern (write to temp file, then rename) to prevent
-        config corruption if power is lost during write.
+        config corruption if power is lost during write. Thread-safe via _config_lock.
         """
-        logger.debug(f"Writing device config to {self.config_file}")
-        self.update_value("loop_config", self.loop_manager.to_dict())
-        self.update_value("refresh_info", self.refresh_info.to_dict())
+        with self._config_lock:
+            logger.debug(f"Writing device config to {self.config_file}")
+            self.update_value("loop_config", self.loop_manager.to_dict())
+            self.update_value("refresh_info", self.refresh_info.to_dict())
 
-        # Atomic write: write to temp file first, then rename
-        config_dir = os.path.dirname(self.config_file)
-        try:
-            with tempfile.NamedTemporaryFile(mode='w', dir=config_dir,
-                                              suffix='.tmp', delete=False) as tmp_file:
-                json.dump(self.config, tmp_file, indent=4)
-                tmp_path = tmp_file.name
-            # Atomic rename (on POSIX systems)
-            os.replace(tmp_path, self.config_file)
-        except Exception as e:
-            logger.error(f"Failed to write config atomically: {e}")
-            # Fallback to direct write if atomic fails
-            with open(self.config_file, 'w') as outfile:
-                json.dump(self.config, outfile, indent=4)
+            # Atomic write: write to temp file first, then rename
+            config_dir = os.path.dirname(self.config_file)
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', dir=config_dir,
+                                                  suffix='.tmp', delete=False) as tmp_file:
+                    json.dump(self.config, tmp_file, indent=4)
+                    tmp_path = tmp_file.name
+                # Atomic rename (on POSIX systems)
+                os.replace(tmp_path, self.config_file)
+            except Exception as e:
+                logger.error(f"Failed to write config atomically: {e}")
+                # Fallback to direct write if atomic fails
+                with open(self.config_file, 'w') as outfile:
+                    json.dump(self.config, outfile, indent=4)
 
     def get_config(self, key=None, default=None):
         """Gets the value of a specific configuration key or returns the entire config if none provided."""
