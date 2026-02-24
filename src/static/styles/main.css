@@ -165,10 +165,15 @@ body {
 }
 
 .project-label {
-    font-size: 0.6em;
+    font-size: 0.55em;
     font-weight: 500;
-    margin-right: 6px;
+    opacity: 0.6;
     letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.project-label::after {
+    content: " · ";
 }
 
 .app-icon {
@@ -203,7 +208,7 @@ body {
     font-size: 14px;
     font-weight: 500;
     color: var(--text-primary);
-    margin-bottom: 16px;
+    white-space: nowrap;
     transition: all 0.3s ease;
     display: inline-flex;
     align-items: center;

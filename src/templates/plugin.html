@@ -317,17 +317,13 @@
 </head>
 <body>
     <div class="frame">
-        <!-- Back Button -->
-        <button onclick="window.location.href='{% if loop_edit_mode %}/loops{% else %}{{ url_for('main.main_page') }}{% endif %}'" class="back-button">← Back to Main</button>
-
-        <!-- Plugin Title and Icon -->
-        <div class="app-header">
-            <div class="header-content">
-                <div class="title-container">
-                    <img src="{{ url_for('plugin.image', plugin_id=plugin.id, filename='icon.png') }}" alt="{{ plugin.display_name }} icon" class="app-icon">
-                    <h1 class="app-title"><span class="project-label">{{ project_name }} v{{ version }}</span> {{ plugin.display_name }}</h1>
-                    {% if api_key and api_key.required %}<span class="api-key-label" title="{{api_key.service}} (Set {{api_key.expected_key}} in .env)">Requires API Key</span>{% endif %}
-                </div>
+        <header class="header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button onclick="window.location.href='{% if loop_edit_mode %}/loops{% else %}{{ url_for('main.main_page') }}{% endif %}'" class="back-button">← Back to Main</button>
+                <h1><span class="project-label">{{ project_name }} v{{ version }}</span>{{ plugin.display_name }}</h1>
+                {% if api_key and api_key.required %}<span class="api-key-label" title="{{api_key.service}} (Set {{api_key.expected_key}} in .env)">Requires API Key</span>{% endif %}
+            </div>
+            <div class="header-actions">
                 {% if not loop_edit_mode %}
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--text-secondary); white-space: nowrap;">
                     <input type="checkbox" id="showPluginStatus" style="width: 16px; height: 16px; cursor: pointer;" />
@@ -335,8 +331,8 @@
                 </label>
                 {% endif %}
             </div>
-            <div id="loadingIndicator" class="loading-indicator"></div>
-        </div>
+        </header>
+        <div id="loadingIndicator" class="loading-indicator"></div>
         <div class="separator"></div>
 
         <!-- Live Refresh Status -->

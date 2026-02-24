@@ -177,23 +177,18 @@
 </head>
 <body>
     <div class="frame">
-        <!-- Back Button -->
-        <button onclick="window.location.href='{{ url_for('main.main_page') }}'" class="back-button">← Back to Main</button>
-        <!-- Settings Header -->
-        <div class="app-header">
-            <div class="header-content">
-                <div class="title-container">
-                    <img src="{{ url_for('static', filename='icons/settings.png') }}" alt="settings icon" class="app-icon">
-                    <h1 class="app-title"><span class="project-label">{{ project_name }} v{{ version }}</span> Settings</h1>
-                </div>
-                <div>
-                    <button class="header-button" id="updateBtn" style="background-color: #28a745; color: #fff;" onclick="checkForUpdates()">Update</button>
-                    <a class="header-button" style="text-decoration: none; background-color: #2c66b1; color: #fff;" href="{{ url_for('settings.download_logs', hours=24) }}" download>Download Logs</a>
-                    <button class="header-button" style="background-color: #FFD600; color: #333;" onclick="handleShutdown(true)">Reboot</button>
-                    <button class="header-button" style="background-color: #E53935; color: #fff;" onclick="handleShutdown(false)">Shutdown</button>
-                </div>
+        <header class="header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button onclick="window.location.href='{{ url_for('main.main_page') }}'" class="back-button">← Back to Main</button>
+                <h1><span class="project-label">{{ project_name }} v{{ version }}</span>Settings</h1>
             </div>
-        </div>
+            <div class="header-actions">
+                <button class="header-button" id="updateBtn" style="background-color: #28a745; color: #fff;" onclick="checkForUpdates()">Update</button>
+                <a class="header-button" style="text-decoration: none; background-color: #2c66b1; color: #fff;" href="{{ url_for('settings.download_logs', hours=24) }}" download>Download Logs</a>
+                <button class="header-button" style="background-color: #FFD600; color: #333;" onclick="handleShutdown(true)">Reboot</button>
+                <button class="header-button" style="background-color: #E53935; color: #fff;" onclick="handleShutdown(false)">Shutdown</button>
+            </div>
+        </header>
         <div class="separator"></div>
         <!-- Settings Content -->
         <form class="settings-form">
