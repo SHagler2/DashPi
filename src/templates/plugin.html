@@ -35,6 +35,24 @@
 
         let uploadedFiles = {};
 
+        // Convert FormData to a plain object, collecting multi-value keys (e.g. imageFiles[]) into arrays
+        function formDataToSettings(formData) {
+            const settings = {};
+            formData.forEach((value, key) => {
+                if (key === 'plugin_id') return;
+                if (key in settings) {
+                    if (!Array.isArray(settings[key])) {
+                        settings[key] = [settings[key]];
+                    }
+                    settings[key].push(value);
+                } else {
+                    // Keys ending with [] are always arrays (even with one value)
+                    settings[key] = key.endsWith('[]') ? [value] : value;
+                }
+            });
+            return settings;
+        }
+
         async function handleAction(action) {
             const loadingIndicator = document.getElementById('loadingIndicator');
             const statusEnabled = window.pluginStatus && document.getElementById('showPluginStatus') && document.getElementById('showPluginStatus').checked;
@@ -71,12 +89,7 @@
                 else if (unit === "hours") intervalSeconds = interval * 3600;
                 else if (unit === "days") intervalSeconds = interval * 86400;
 
-                const settings = {};
-                formData.forEach((value, key) => {
-                    if (key !== 'plugin_id') {
-                        settings[key] = value;
-                    }
-                });
+                const settings = formDataToSettings(formData);
 
                 try {
                     const response = await fetch('{{ url_for("loops.add_plugin_to_loop") }}', {
@@ -114,12 +127,7 @@
                 return; // Exit early for add_to_loop
             } else if (action == "add_to_loop_full") {
                 // Add plugin to loop with full settings (from loops page add flow)
-                const settings = {};
-                formData.forEach((value, key) => {
-                    if (key !== 'plugin_id') {
-                        settings[key] = value;
-                    }
-                });
+                const settings = formDataToSettings(formData);
 
                 // Calculate refresh interval from edit fields (if visible)
                 const addIntervalEl = document.getElementById('editRefreshInterval');
@@ -155,12 +163,7 @@
                 return; // Exit early for add_to_loop_full
             } else if (action == "save_to_loop") {
                 // Convert form data to JSON for update_plugin_settings endpoint
-                const settings = {};
-                formData.forEach((value, key) => {
-                    if (key !== 'plugin_id') {
-                        settings[key] = value;
-                    }
-                });
+                const settings = formDataToSettings(formData);
 
                 // Calculate refresh interval from edit fields (if visible)
                 const editIntervalEl = document.getElementById('editRefreshInterval');

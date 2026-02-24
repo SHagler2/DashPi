@@ -275,7 +275,13 @@
             return 'bar-green';
         }
 
-        function chartColor(val, thresholds) {
+        function chartColor(val, thresholds, inverted) {
+            if (inverted) {
+                // High = good (e.g. WiFi quality)
+                if (val >= (thresholds ? thresholds[1] : 50)) return '#4caf50';
+                if (val >= (thresholds ? thresholds[0] : 30)) return '#ff9800';
+                return '#f44336';
+            }
             if (val >= (thresholds ? thresholds[1] : 90)) return '#f44336';
             if (val >= (thresholds ? thresholds[0] : 70)) return '#ff9800';
             return '#4caf50';
@@ -312,14 +318,14 @@
             return m + 'm';
         }
 
-        function renderChart(containerId, history, thresholds) {
+        function renderChart(containerId, history, thresholds, inverted) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';
             history.forEach(val => {
                 const bar = document.createElement('div');
                 bar.className = 'diag-chart-bar';
                 bar.style.height = Math.max(2, val) + '%';
-                bar.style.background = chartColor(val, thresholds);
+                bar.style.background = chartColor(val, thresholds, inverted);
                 container.appendChild(bar);
             });
         }
@@ -451,7 +457,7 @@
 
                     wifiHistory.push(quality);
                     if (wifiHistory.length > MAX_HISTORY) wifiHistory.shift();
-                    renderChart('wifiChart', wifiHistory);
+                    renderChart('wifiChart', wifiHistory, null, true);
                 }
 
                 // Network I/O
