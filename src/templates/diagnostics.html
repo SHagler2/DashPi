@@ -167,7 +167,12 @@
             <div class="diag-bar-bg">
                 <div class="diag-bar-fill bar-green" id="memBar" style="width: 0%"></div>
             </div>
+            <div class="diag-chart" id="memChart"></div>
             <div class="diag-detail" id="swapDetail">Swap: --</div>
+            <div class="diag-bar-bg">
+                <div class="diag-bar-fill bar-green" id="swapBar" style="width: 0%"></div>
+            </div>
+            <div class="diag-chart" id="swapChart"></div>
         </div>
 
         <!-- Temperature -->
@@ -260,6 +265,8 @@
 
     <script>
         const cpuHistory = [];
+        const memHistory = [];
+        const swapHistory = [];
         const tempHistory = [];
         const wifiHistory = [];
         const netDownHistory = [];
@@ -378,10 +385,22 @@
                 memBar.style.width = d.mem_percent + '%';
                 memBar.className = 'diag-bar-fill ' + barColor(d.mem_percent, [60, 85]);
 
+                memHistory.push(d.mem_percent);
+                if (memHistory.length > MAX_HISTORY) memHistory.shift();
+                renderChart('memChart', memHistory, [60, 85]);
+
+                const swapPct = d.swap_total_mb > 0 ? (d.swap_used_mb / d.swap_total_mb) * 100 : 0;
                 const swapText = d.swap_used_mb > 0
                     ? 'Swap: ' + d.swap_used_mb + ' / ' + d.swap_total_mb + ' MB'
                     : 'Swap: not in use';
                 document.getElementById('swapDetail').textContent = swapText;
+                const swapBar = document.getElementById('swapBar');
+                swapBar.style.width = swapPct + '%';
+                swapBar.className = 'diag-bar-fill ' + barColor(swapPct, [30, 60]);
+
+                swapHistory.push(swapPct);
+                if (swapHistory.length > MAX_HISTORY) swapHistory.shift();
+                renderChart('swapChart', swapHistory, [30, 60]);
 
                 // Temperature
                 if (d.temp_c !== null) {
