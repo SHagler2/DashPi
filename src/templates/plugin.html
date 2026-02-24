@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ plugin.display_name }} Settings</title>
+    <title>{{ project_name }} v{{ version }} - {{ plugin.display_name }}</title>
     <script>
         (function() {
             const theme = localStorage.getItem('dashpi-theme') ||
@@ -325,7 +325,7 @@
             <div class="header-content">
                 <div class="title-container">
                     <img src="{{ url_for('plugin.image', plugin_id=plugin.id, filename='icon.png') }}" alt="{{ plugin.display_name }} icon" class="app-icon">
-                    <h1 class="app-title">{{ plugin.display_name }}</h1>
+                    <h1 class="app-title"><span class="project-label">{{ project_name }} v{{ version }}</span> {{ plugin.display_name }}</h1>
                     {% if api_key and api_key.required %}<span class="api-key-label" title="{{api_key.service}} (Set {{api_key.expected_key}} in .env)">Requires API Key</span>{% endif %}
                 </div>
                 {% if not loop_edit_mode %}

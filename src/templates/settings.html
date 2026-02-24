@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings</title>
+    <title>{{ project_name }} v{{ version }} - Settings</title>
     <script>
         (function() {
             const theme = localStorage.getItem('dashpi-theme') ||
@@ -188,7 +188,7 @@
             <div class="header-content">
                 <div class="title-container">
                     <img src="{{ url_for('static', filename='icons/settings.png') }}" alt="settings icon" class="app-icon">
-                    <h1 class="app-title">Settings</h1>
+                    <h1 class="app-title"><span class="project-label">{{ project_name }} v{{ version }}</span> Settings</h1>
                 </div>
                 <div>
                     <button class="header-button" id="updateBtn" style="background-color: #28a745; color: #fff;" onclick="checkForUpdates()">Update</button>
@@ -197,9 +197,6 @@
                     <button class="header-button" style="background-color: #E53935; color: #fff;" onclick="handleShutdown(false)">Shutdown</button>
                 </div>
             </div>
-        </div>
-        <div id="versionInfo" style="padding: 4px 0; font-size: 13px; color: var(--text-secondary, #888);">
-            v{{ version }}
         </div>
         <div class="separator"></div>
         <!-- Settings Content -->

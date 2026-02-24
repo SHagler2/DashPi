@@ -39,7 +39,7 @@ def _get_version():
 def settings_page():
     device_config = current_app.config['DEVICE_CONFIG']
     timezones = sorted(pytz.all_timezones_set)
-    return render_template('settings.html', device_settings=device_config.get_config(), timezones=timezones, version=_get_version())
+    return render_template('settings.html', device_settings=device_config.get_config(), timezones=timezones)
 
 @settings_bp.route('/save_settings', methods=['POST'])
 def save_settings():

@@ -26,8 +26,7 @@ def main_page():
                          config=device_config.get_config(),
                          plugins=device_config.get_plugins(),
                          loop_enabled=loop_enabled,
-                         loop_override=loop_override,
-                         version=get_version())
+                         loop_override=loop_override)
 
 @main_bp.route('/display')
 def display_page():

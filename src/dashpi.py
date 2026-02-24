@@ -68,6 +68,12 @@ app.register_blueprint(plugin_bp)
 app.register_blueprint(apikeys_bp)
 app.register_blueprint(loops_bp)
 
+# Inject project_name and version into all templates
+@app.context_processor
+def inject_globals():
+    from blueprints.main import get_version
+    return dict(project_name="DashPi", version=get_version())
+
 # Register opener for HEIF/HEIC images
 try:
     from pi_heif import register_heif_opener

@@ -164,6 +164,14 @@ body {
     transition: color 0.3s ease;
 }
 
+.project-label {
+    font-size: 0.6em;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-right: 6px;
+    letter-spacing: 0.5px;
+}
+
 .app-icon {
     width: 36px;
     height: 36px;
