@@ -320,7 +320,10 @@
         <header class="header">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button onclick="window.location.href='{% if loop_edit_mode %}/loops{% else %}{{ url_for('main.main_page') }}{% endif %}'" class="back-button">← Back to Main</button>
-                <h1><span class="project-label">{{ project_name }} v{{ version }}</span>{{ plugin.display_name }}</h1>
+                <div class="title-block">
+                    <span class="project-label">{{ project_name }} v{{ version }}</span>
+                    <h1>{{ plugin.display_name }}</h1>
+                </div>
                 {% if api_key and api_key.required %}<span class="api-key-label" title="{{api_key.service}} (Set {{api_key.expected_key}} in .env)">Requires API Key</span>{% endif %}
             </div>
             <div class="header-actions">

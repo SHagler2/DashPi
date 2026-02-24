@@ -195,7 +195,10 @@
         <header class="header">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button onclick="window.location.href='{{ url_for('main.main_page') }}'" class="back-button">← Back to Main</button>
-                <h1><span class="project-label">{{ project_name }} v{{ version }}</span>API Keys</h1>
+                <div class="title-block">
+                    <span class="project-label">{{ project_name }} v{{ version }}</span>
+                    <h1>API Keys</h1>
+                </div>
             </div>
         </header>
         <div class="separator"></div>

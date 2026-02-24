@@ -23,7 +23,10 @@
         <header class="header">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button onclick="window.location.href='{{ url_for('main.main_page') }}'" class="back-button">← Back to Main</button>
-                <h1><span class="project-label">{{ project_name }} v{{ version }}</span>Loops</h1>
+                <div class="title-block">
+                    <span class="project-label">{{ project_name }} v{{ version }}</span>
+                    <h1>Loops</h1>
+                </div>
             </div>
             <div class="header-actions">
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--text-secondary); white-space: nowrap;">
