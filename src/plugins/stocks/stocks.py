@@ -48,7 +48,7 @@ class Stocks(BasePlugin):
 
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
-        template_params['style_settings'] = True
+        template_params['style_settings'] = False
         template_params['hide_refresh_interval'] = True
         return template_params
 
