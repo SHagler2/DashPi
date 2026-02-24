@@ -75,21 +75,21 @@ class ShazamPi(BasePlugin):
 
         recording_duration = int(settings.get("recordingDuration", 5))
 
-        # 1. Record audio from USB mic
+        # 1. Record audio from USB mic (44.1kHz WAV for Shazam, 16kHz gained for YAMNet)
         self._set_status("recording", f"Recording {recording_duration}s of audio...")
-        raw_audio, gained_audio = self._record_audio(recording_duration)
+        raw_wav_bytes, gained_audio = self._record_audio(recording_duration)
 
-        # 2. Detect music via YAMNet (uses gain-boosted audio for sensitivity)
+        # 2. Detect music via YAMNet (uses gain-boosted 16kHz audio for sensitivity)
         self._set_status("detecting", "Analyzing audio for music...")
         confidence = float(settings.get("musicConfidence", 0.15))
         is_music, top_class, top_score = self._detect_music(gained_audio, recording_duration, confidence)
         self._set_status("detected", f"{top_class} ({top_score:.0%})")
 
-        # 3. If music detected, identify via Shazam (uses raw audio for clean fingerprint)
+        # 3. If music detected, identify via Shazam (uses raw 44.1kHz WAV for clean fingerprint)
         if is_music:
             logger.info("Music detected, identifying via Shazam...")
             self._set_status("identifying", "Music detected! Asking Shazam...")
-            song = self._identify_song(raw_audio)
+            song = self._identify_song(raw_wav_bytes)
             if song:
                 self._last_song = song
                 self._shazam_fail_count = 0
@@ -99,11 +99,13 @@ class ShazamPi(BasePlugin):
                 return self._render_song(song, dimensions, settings)
 
             # Retry: re-record and try Shazam once more
+            self._set_status("no_match", "Shazam: no match. Retrying...")
             logger.info("Shazam failed, retrying with fresh recording...")
+            time.sleep(2)  # Hold status so it's visible in the UI
             self._set_status("recording", f"Retrying — recording {recording_duration}s...")
-            raw_audio2, _ = self._record_audio(recording_duration)
+            raw_wav_bytes2, _ = self._record_audio(recording_duration)
             self._set_status("identifying", "Retry: asking Shazam again...")
-            song = self._identify_song(raw_audio2)
+            song = self._identify_song(raw_wav_bytes2)
             if song:
                 self._last_song = song
                 self._shazam_fail_count = 0
@@ -115,6 +117,7 @@ class ShazamPi(BasePlugin):
             self._shazam_fail_count = getattr(self, '_shazam_fail_count', 0) + 1
             logger.warning(f"Shazam failed to identify after retry (attempt #{self._shazam_fail_count})")
             self._set_status("unidentified", f"Could not identify song (attempt #{self._shazam_fail_count})")
+            time.sleep(2)  # Hold "unidentified" status so user can read it
             return self._render_unidentified(
                 dimensions, settings, device_config, top_class, top_score
             )
@@ -175,9 +178,10 @@ class ShazamPi(BasePlugin):
         tmp_wav = "/tmp/shazam_recording.wav"
 
         try:
+            # Record at 44100 Hz 16-bit PCM — full quality for Shazam fingerprinting
             subprocess.run(
                 ["arecord", "-D", device, "-f", "S16_LE",
-                 "-r", str(DOWN_SAMPLE_RATE), "-c", "1",
+                 "-r", str(RAW_SAMPLE_RATE), "-c", "1",
                  "-d", str(recording_duration), tmp_wav],
                 check=True, capture_output=True, timeout=recording_duration + 5
             )
@@ -186,20 +190,28 @@ class ShazamPi(BasePlugin):
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"arecord failed: {e.stderr.decode().strip()}")
 
-        # Read wav file into numpy array
+        # Read the raw WAV bytes for Shazam (44.1kHz 16-bit PCM)
+        with open(tmp_wav, 'rb') as f:
+            raw_wav_bytes = f.read()
+
+        # Read into numpy and downsample to 16kHz for YAMNet
         with wave.open(tmp_wav, 'rb') as wf:
             raw_bytes = wf.readframes(wf.getnframes())
-            audio = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            audio_44k = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32) / 32768.0
 
-        # Return raw audio for Shazam, and gain-boosted version for YAMNet
-        max_val = np.max(np.abs(audio))
+        target_len = int(len(audio_44k) * DOWN_SAMPLE_RATE / RAW_SAMPLE_RATE)
+        from scipy.signal import resample
+        audio_16k = resample(audio_44k, target_len).astype(np.float32)
+
+        # Gain-boost for YAMNet sensitivity
+        max_val = np.max(np.abs(audio_16k))
         if max_val > 0:
-            gained = audio / max_val
+            gained = audio_16k / max_val
         else:
-            gained = audio.copy()
+            gained = audio_16k.copy()
         gained = np.clip(gained * AUDIO_GAIN, -1.0, 1.0)
 
-        return audio, gained
+        return raw_wav_bytes, gained
 
     # ========== Music Detection (YAMNet) ==========
 
@@ -255,16 +267,10 @@ class ShazamPi(BasePlugin):
 
     # ========== Song Identification (Shazam) ==========
 
-    def _identify_song(self, raw_audio):
-        import scipy.io.wavfile as wav
+    def _identify_song(self, raw_wav_bytes):
         from shazamio import Shazam
 
-        # Convert to WAV buffer
-        audio_buffer = io.BytesIO()
-        wav.write(audio_buffer, DOWN_SAMPLE_RATE, raw_audio)
-        audio_buffer.seek(0)
-
-        # Run Shazam async recognition
+        # Run Shazam async recognition with raw 44.1kHz 16-bit PCM WAV bytes
         if self._shazam is None:
             self._shazam = Shazam()
 
@@ -272,7 +278,7 @@ class ShazamPi(BasePlugin):
         try:
             asyncio.set_event_loop(loop)
             result = loop.run_until_complete(
-                self._shazam.recognize(audio_buffer.read())
+                self._shazam.recognize(raw_wav_bytes)
             )
 
             if result and 'track' in result:
