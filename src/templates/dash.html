@@ -814,29 +814,30 @@
                         const now = Date.now() / 1000;
                         const remaining = Math.max(0, Math.round(data.countdown_target - now));
                         const isAutoRefresh = data.is_auto_refresh;
+                        const isPinned = data.override && data.override.type === 'plugin';
 
                         const refreshStr = formatDuration(remaining);
 
-                        if (data.loop_enabled && isAutoRefresh && data.loop_rotation_target) {
+                        if (data.loop_enabled && !isPinned && isAutoRefresh && data.loop_rotation_target) {
                             // In loop with auto-refresh: show both countdowns
                             const loopRemaining = Math.max(0, Math.round(data.loop_rotation_target - now));
                             const loopStr = formatDuration(loopRemaining);
                             detail = `Refresh in ${refreshStr} · Next plugin in ${loopStr}`;
                             // Sync the "Changes in" countdown to same absolute target
                             countdownTarget = data.loop_rotation_target;
-                        } else if (data.loop_enabled) {
+                        } else if (data.loop_enabled && !isPinned) {
                             // In loop, no auto-refresh: countdown is to next plugin
                             detail = `Next plugin in ${refreshStr}`;
                             // Sync the "Changes in" countdown to same absolute target
                             countdownTarget = data.countdown_target;
                         } else {
-                            // Single plugin mode
+                            // Single plugin mode or pinned plugin
                             detail = `Next refresh in ${refreshStr}`;
                         }
                     }
                     // Use loop icon 🔁 when counting down to next plugin, 💤 otherwise
                     let icon = stageIcons[data.stage] || stageIcons.idle;
-                    if (data.stage === 'idle' && data.loop_enabled) {
+                    if (data.stage === 'idle' && data.loop_enabled && !(data.override && data.override.type === 'plugin')) {
                         icon = '&#128257;'; // 🔁
                     }
                     updateBar(icon, detail, data.stage);
