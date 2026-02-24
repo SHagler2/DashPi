@@ -167,7 +167,6 @@ body {
 .project-label {
     font-size: 0.6em;
     font-weight: 500;
-    color: var(--text-secondary);
     margin-right: 6px;
     letter-spacing: 0.5px;
 }

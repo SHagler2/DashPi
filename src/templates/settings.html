@@ -33,10 +33,7 @@
                     return;
                 }
 
-                const versionEl = document.getElementById('versionInfo');
-
                 if (data.update_available) {
-                    versionEl.innerHTML = `v${data.local_version} <span style="color: #28a745; font-weight: 600;">→ v${data.remote_version} available</span>`;
                     let msg = `Update available: v${data.local_version} → v${data.remote_version} (${data.commits_behind} commit${data.commits_behind !== 1 ? 's' : ''})`;
                     if (data.changelog && data.changelog.length > 0) {
                         msg += '\n\n' + data.changelog.join('\n');
@@ -48,7 +45,6 @@
                         btn.textContent = 'Update';
                     }
                 } else {
-                    versionEl.innerHTML = `v${data.local_version} <span style="color: var(--text-secondary, #888);">· up to date</span>`;
                     showResponseModal('success', `DashPi is up to date (v${data.local_version})`);
                     btn.disabled = false;
                     btn.textContent = 'Update';
@@ -182,7 +178,7 @@
 <body>
     <div class="frame">
         <!-- Back Button -->
-        <button onclick="window.location.href='{{ url_for('main.main_page') }}'" class="back-button">← Back</button>
+        <button onclick="window.location.href='{{ url_for('main.main_page') }}'" class="back-button">← Main</button>
         <!-- Settings Header -->
         <div class="app-header">
             <div class="header-content">
