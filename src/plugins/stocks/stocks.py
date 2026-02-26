@@ -5,6 +5,7 @@ from utils.text_utils import get_text_dimensions, truncate_text
 from utils.layout_utils import calculate_grid
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,21 @@ def format_large_number(num):
 def format_price(value):
     """Format a price value or return N/A."""
     return f"${value:,.2f}" if value is not None else "N/A"
+
+
+def is_market_open():
+    """Check if US stock market (NYSE/NASDAQ) is currently open.
+
+    Open Monday-Friday, 9:30 AM - 4:00 PM Eastern Time.
+    Does not account for market holidays.
+    """
+    now_et = datetime.now(ZoneInfo("America/New_York"))
+    # Weekday: 0=Monday, 6=Sunday
+    if now_et.weekday() >= 5:
+        return False
+    market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+    return market_open <= now_et < market_close
 
 
 class Stocks(BasePlugin):
@@ -92,13 +108,15 @@ class Stocks(BasePlugin):
         font_scale = FONT_SIZES.get(settings.get('fontSize', 'normal'), 1)
         count_scale = COUNT_SCALES.get(stock_count, 0.65)
         last_updated = datetime.now().strftime("%I:%M %p")
+        market_open = is_market_open()
 
         return self._render_pil(dimensions, title, stocks_data, columns, rows,
                                 last_updated, auto_refresh_mins,
-                                font_scale * count_scale, settings)
+                                font_scale * count_scale, settings, market_open)
 
     def _render_pil(self, dimensions, title, stocks, columns, rows,
-                    last_updated, auto_refresh_mins, scale, settings):
+                    last_updated, auto_refresh_mins, scale, settings,
+                    market_open=True):
         """Render stock cards in a grid layout as a PIL Image.
 
         Each card contains: symbol, price (stacked or side-by-side depending on
@@ -275,6 +293,11 @@ class Stocks(BasePlugin):
         fy += int(height * 0.005)
         refresh_text = f"Refreshes every {auto_refresh_mins} min" if auto_refresh_mins > 0 else "Manual refresh"
         draw.text((margin, fy), refresh_text, font=footer_font, fill=text_color)
+        # Market status (centered)
+        market_text = "Market Open" if market_open else "Market Closed"
+        market_color = positive_color if market_open else negative_color
+        mw = get_text_dimensions(draw, market_text, footer_font)[0]
+        draw.text(((width - mw) // 2, fy), market_text, font=footer_font, fill=market_color)
         updated_text = f"Last Updated: {last_updated}"
         uw = get_text_dimensions(draw, updated_text, footer_font)[0]
         draw.text((width - margin - uw, fy), updated_text, font=footer_font, fill=text_color)

@@ -178,3 +178,7 @@ mock_display_output/
 
 # Generated files
 *.pdf
+
+# Claude Code local settings
+.claude/
+CLAUDE.md
