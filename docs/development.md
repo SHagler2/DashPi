@@ -19,7 +19,7 @@ Traditional setup method
 
 ```bash
 # 1. Clone and setup
-git clone https://github.com/fatihak/DashPi.git
+git clone https://github.com/SHagler2/DashPi.git
 cd DashPi
 
 # 2. Create virtual environment
@@ -46,7 +46,7 @@ command -v direnv >/dev/null || nix profile install "nixpkgs#direnv" \
   && source ~/.${SHELL##*/}rc # If not already present: install direnv, add hooks to shell rc and activate
 
 # 2. Clone and setup
-git clone https://github.com/fatihak/DashPi.git
+git clone https://github.com/SHagler2/DashPi.git
 cd DashPi # direnv reads .envrc -> runs devbox shell -> installs deps & activates venv
 
 # 3. Run DashPi in developer mode via devbox
@@ -123,7 +123,7 @@ DashPi relies on system packages for some features, which are normally installed
 
 The required packages can be found in this file: 
 
-https://github.com/fatihak/DashPi/blob/main/install/debian-requirements.txt
+https://github.com/SHagler2/DashPi/blob/main/install/debian-requirements.txt
 
 Use your favourite package manager (such as `apt`) to install them.
 

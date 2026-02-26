@@ -182,7 +182,7 @@ Your repository must include:
 
 ---
 
-See [DashPi-Plugin-Template](https://github.com/fatihak/DashPi-Plugin-Template) for a sample template of a third party plugin.
+See [DashPi-Plugin-Template](https://github.com/SHagler2/DashPi-Plugin-Template) for a sample template of a third party plugin.
 
-Once you're done, feel free to add your plugin to the [3rd Party Plugin List](https://github.com/fatihak/DashPi/wiki/3rd-Party-Plugins) and share it in the [🙌 Show and Tell Discussion Board](https://github.com/fatihak/DashPi/discussions/categories/show-and-tell).
+Once you're done, feel free to add your plugin to the [3rd Party Plugin List](https://github.com/SHagler2/DashPi/wiki/3rd-Party-Plugins) and share it in the [🙌 Show and Tell Discussion Board](https://github.com/SHagler2/DashPi/discussions/categories/show-and-tell).
 
