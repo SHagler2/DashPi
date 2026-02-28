@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ project_name }} v{{ version }} - {{ plugin.display_name }}</title>
+    <title>{{ device_name }} - DashPi v{{ version }} - {{ plugin.display_name }}</title>
     <script>
         (function() {
             const theme = localStorage.getItem('dashpi-v2-theme') ||
@@ -306,7 +306,7 @@
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button onclick="window.location.href='{% if loop_edit_mode %}/loops{% else %}{{ url_for('main.main_page') }}{% endif %}'" class="back-button">← Back to Main</button>
                 <div class="title-block">
-                    <span class="project-label">{{ project_name }} v{{ version }}</span>
+                    <span class="project-label">{{ device_name }} - DashPi v{{ version }}</span>
                     <h1>{{ plugin.display_name }}</h1>
                 </div>
                 {% if api_key and api_key.required %}<span class="api-key-label" title="{{api_key.service}} (Set {{api_key.expected_key}} in .env)">Requires API Key</span>{% endif %}

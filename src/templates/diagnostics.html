@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>{{ project_name }} v{{ version }} - Diagnostics</title>
+    <title>{{ device_name }} - DashPi v{{ version }} - Diagnostics</title>
     <script>
         (function() {
             const theme = localStorage.getItem('dashpi-v2-theme') ||
@@ -131,7 +131,7 @@
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button onclick="window.location.href='{{ url_for('main.main_page') }}'" class="back-button">← Back to Main</button>
                 <div class="title-block">
-                    <span class="project-label">{{ project_name }} v{{ version }}</span>
+                    <span class="project-label">{{ device_name }} - DashPi v{{ version }}</span>
                     <h1>Diagnostics</h1>
                 </div>
             </div>
