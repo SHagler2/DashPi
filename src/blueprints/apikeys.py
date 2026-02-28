@@ -11,7 +11,7 @@ apikeys_bp = Blueprint("apikeys", __name__)
 # Path to .env file
 def get_env_path():
     """Get path to .env file in the project root."""
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
     return os.path.join(base_dir, '.env')
 
 
