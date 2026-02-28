@@ -153,8 +153,9 @@ class ISSTracker(BasePlugin):
         lon = _parse_float(settings.get("longitude"), None)
 
         # Fall back to weather plugin location if not configured
+        weather_city = ""
         if lat is None or lon is None:
-            w_lat, w_lon = _find_weather_location(device_config)
+            w_lat, w_lon, weather_city = _find_weather_location(device_config)
             if lat is None:
                 lat = w_lat
             if lon is None:
@@ -221,6 +222,8 @@ class ISSTracker(BasePlugin):
         time_format = device_config.get_config("time_format", default="12h")
 
         obs_city = settings.get("cityName", "").split(",")[0].strip()
+        if not obs_city and weather_city:
+            obs_city = weather_city.split(",")[0].strip()
         if not obs_city:
             obs_city = _nearest_city_from_data(lat, lon, landmarks)
 
@@ -939,7 +942,10 @@ class ISSTracker(BasePlugin):
 
 
 def _find_weather_location(device_config):
-    """Search loop manager for a weather plugin instance with lat/lon configured."""
+    """Search loop manager for a weather plugin instance with lat/lon configured.
+
+    Returns (lat, lon, city_name) where city_name may be empty.
+    """
     try:
         loop_manager = device_config.get_loop_manager()
         for loop in loop_manager.loops:
@@ -948,11 +954,12 @@ def _find_weather_location(device_config):
                     lat = ref.plugin_settings.get("latitude")
                     lon = ref.plugin_settings.get("longitude")
                     if lat is not None and lon is not None:
-                        logger.info(f"ISS Tracker using weather plugin location: {lat}, {lon}")
-                        return float(lat), float(lon)
+                        city = ref.plugin_settings.get("customTitle", "")
+                        logger.info(f"ISS Tracker using weather plugin location: {lat}, {lon} ({city})")
+                        return float(lat), float(lon), city
     except Exception as e:
         logger.debug(f"Could not find weather location: {e}")
-    return 0.0, 0.0
+    return 0.0, 0.0, ""
 
 
 def _parse_float(val, default):
