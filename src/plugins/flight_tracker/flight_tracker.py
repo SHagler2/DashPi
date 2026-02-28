@@ -681,6 +681,11 @@ def _draw_aircraft_trail(draw, ac, center_lat, center_lon, zoom, vw, vh):
     if not trail or len(trail) < 2:
         return
 
+    # Skip trail if the aircraft itself has left the viewport
+    ac_px, ac_py = _latlon_to_pixel(ac["lat"], ac["lon"], center_lat, center_lon, zoom, vw, vh)
+    if ac_px < -50 or ac_px > vw + 50 or ac_py < -50 or ac_py > vh + 50:
+        return
+
     color = _get_aircraft_color(ac)
     shadow_color = (0, 0, 0)
 

@@ -62,6 +62,7 @@ class ISSTracker(BasePlugin):
         # Loaded-once resources
         self._world_map = None
         self._landmarks = None
+        self._iss_marker = None
 
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
@@ -97,6 +98,38 @@ class ISSTracker(BasePlugin):
             except Exception:
                 self._landmarks = []
         return self._landmarks
+
+    def _get_iss_marker(self, map_dimension):
+        """Load and scale the ISS marker image, cached after first load."""
+        if self._iss_marker is None:
+            marker_path = os.path.join(self.get_plugin_dir(), "resources", "iss_marker.png")
+            try:
+                self._iss_marker = Image.open(marker_path).convert("RGBA")
+                logger.info("ISS marker image loaded")
+            except Exception:
+                logger.warning("ISS marker image not found")
+                self._iss_marker = False
+        marker = self._iss_marker if self._iss_marker is not False else None
+        if marker:
+            # Scale to ~15% of map dimension
+            target = max(40, int(map_dimension * 0.15))
+            ratio = target / max(marker.width, marker.height)
+            scaled = marker.resize(
+                (int(marker.width * ratio), int(marker.height * ratio)),
+                Image.LANCZOS,
+            )
+            # Tint to red for contrast against ocean blue and land green
+            import numpy as np
+            arr = np.array(scaled, dtype=np.float32)
+            lum = 0.299 * arr[:,:,0] + 0.587 * arr[:,:,1] + 0.114 * arr[:,:,2]
+            lum = lum / 255.0
+            arr[:,:,0] = lum * 255  # R channel
+            arr[:,:,1] = lum * 50   # G channel
+            arr[:,:,2] = lum * 30   # B channel
+            # Keep original alpha
+            tinted = Image.fromarray(arr.astype(np.uint8), "RGBA")
+            return tinted
+        return None
 
     def _get_pass_arc(self, tle_lines, pass_data, obs_lat, obs_lon):
         """Get pass arc, using cache if available for this pass."""
@@ -143,8 +176,10 @@ class ISSTracker(BasePlugin):
         speed_kmh = _orbital_speed(iss_alt_km)
 
         with self._lock:
-            # TIER 2: Pass predictions — refresh every 5 minutes
-            if self._cached_passes is None or (now_mono - self._last_pass_fetch_time) >= PASS_REFRESH_INTERVAL:
+            # TIER 2: Pass predictions — refresh every 5 minutes or when all cached passes are stale
+            all_stale = (self._cached_passes is not None and
+                         all(p.get("set_utc", now_utc) <= now_utc for p in self._cached_passes))
+            if self._cached_passes is None or all_stale or (now_mono - self._last_pass_fetch_time) >= PASS_REFRESH_INTERVAL:
                 n2yo_api_key = device_config.load_env_key("N2YO_SECRET")
                 try:
                     new_passes = _predict_passes(tle_lines, lat, lon, now_utc, n2yo_api_key)
@@ -154,7 +189,9 @@ class ISSTracker(BasePlugin):
                         logger.info(f"Refreshed pass predictions: {len(new_passes)} passes")
                 except Exception as e:
                     logger.warning(f"Pass prediction failed: {e}")
-            passes = self._cached_passes or []
+            # Filter out passes that have already ended
+            all_passes = self._cached_passes or []
+            passes = [p for p in all_passes if p.get("set_utc", now_utc) > now_utc]
 
             # TIER 3: Crew count — refresh every 30 minutes
             if self._cached_crew_count == 0 or (now_mono - self._last_crew_fetch_time) >= CREW_REFRESH_INTERVAL:
@@ -252,29 +289,12 @@ class ISSTracker(BasePlugin):
         # Draw ground track from cache
         self._draw_ground_track(draw, self._cached_ground_track or [], iss_lat, iss_lon, w, map_h)
 
-        # Draw ISS crosshair marker at center
+        # Draw ISS marker image at center
         cx, cy = w // 2, map_h // 2
-        marker_size = min(w, map_h) // 30
-        draw.line(
-            [(cx - marker_size, cy), (cx + marker_size, cy)],
-            fill=(255, 0, 0),
-            width=2,
-        )
-        draw.line(
-            [(cx, cy - marker_size), (cx, cy + marker_size)],
-            fill=(255, 0, 0),
-            width=2,
-        )
-        draw.ellipse(
-            [
-                cx - marker_size // 2,
-                cy - marker_size // 2,
-                cx + marker_size // 2,
-                cy + marker_size // 2,
-            ],
-            outline=(255, 0, 0),
-            width=2,
-        )
+        marker = self._get_iss_marker(min(w, map_h))
+        if marker:
+            mx, my = cx - marker.width // 2, cy - marker.height // 2
+            img.paste(marker, (mx, my), marker)
 
         # Info strip
         self._draw_info_strip(
@@ -1350,6 +1370,9 @@ def _compute_pass_arc(tle_lines, pass_data, obs_lat, obs_lon):
         duration = (sett - rise).total_seconds()
         steps = max(int(duration / 5), 10)  # point every ~5 seconds
 
+        # Load ephemeris ONCE outside the loop (de421.bsp is ~30MB)
+        eph = load("de421.bsp")
+
         arc = []
         for i in range(steps + 1):
             frac = i / steps
@@ -1360,8 +1383,7 @@ def _compute_pass_arc(tle_lines, pass_data, obs_lat, obs_lon):
             topocentric = difference.at(t_sky)
             alt_deg, az_deg, _ = topocentric.altaz()
 
-            # Simple sunlit check: satellite is sunlit if it's above Earth's shadow
-            sunlit = topocentric.is_sunlit(load("de421.bsp"))
+            sunlit = topocentric.is_sunlit(eph)
 
             arc.append((t, az_deg.degrees, alt_deg.degrees, bool(sunlit)))
 

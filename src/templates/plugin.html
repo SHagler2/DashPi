@@ -80,15 +80,9 @@
             });
 
             if (action == "add_to_loop"){
-                // Convert form data to JSON for add_plugin_to_loop endpoint
+                // Add plugin to loop with current form settings and default 1800s refresh
                 const loopFormData = new FormData(scheduleForm);
-                const interval = parseInt(loopFormData.get("refresh_interval")) || 30;
-                const unit = loopFormData.get("interval_unit") || "minutes";
-                let intervalSeconds = interval;
-                if (unit === "minutes") intervalSeconds = interval * 60;
-                else if (unit === "hours") intervalSeconds = interval * 3600;
-                else if (unit === "days") intervalSeconds = interval * 86400;
-
+                const selectedLoop = loopFormData.get("loop_name");
                 const settings = formDataToSettings(formData);
 
                 try {
@@ -96,25 +90,16 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            loop_name: loopFormData.get("loop_name"),
+                            loop_name: selectedLoop,
                             plugin_id: '{{ plugin.id }}',
-                            refresh_interval_seconds: intervalSeconds,
+                            refresh_interval_seconds: 1800,
                             plugin_settings: settings
                         })
                     });
                     const result = await response.json();
                     if (response.ok) {
                         closeModal('scheduleModal');
-                        form.reset();
-                        scheduleForm.reset();
-                        uploadedFiles = {};
-                        document.querySelectorAll('input[clear-on-submit]').forEach(input => {
-                            input.value = '';
-                            input.dispatchEvent(new Event('change'));
-                        });
-                        document.querySelectorAll('[delete-on-submit]').forEach(div => {
-                            div.remove();
-                        });
+                        showResponseModal('success', `Added to loop "${selectedLoop}"`);
                     } else {
                         showResponseModal('failure', `Error! ${result.error}`);
                     }
@@ -460,7 +445,11 @@
                 <button type="button" onclick="handleAction('save_to_loop')" class="action-button" style="width: 100%;">Save Settings to "{{ loop_name }}"</button>
                 {% else %}
                 <button type="button" onclick="handleAction()" class="action-button left">Update Now</button>
+                {% if loops|length == 1 %}
+                <button type="button" onclick="handleAction('add_to_loop')" class="action-button right">Add to Loop</button>
+                {% elif loops|length > 1 %}
                 <button type="button" onclick="openModal('scheduleModal')" class="action-button right">Add to Loop</button>
+                {% endif %}
                 {% endif %}
             </div>
         </form>
@@ -619,7 +608,7 @@
     <!-- Success/Error Modal -->
     {% include 'response_modal.html' %}
 
-    <!-- Loop Configuration Modal -->
+    <!-- Loop Picker Modal (shown only when multiple loops exist) -->
     <div id="scheduleModal" class="modal">
         <div class="modal-content">
             <span class="close-button" onclick="closeModal('scheduleModal')">×</span>
@@ -634,24 +623,9 @@
                         {% endfor %}
                     </select>
                 </div>
-                {% if not hide_refresh_interval %}
-                <div class="form-group">
-                    <label for="refresh_interval" class="form-label">Refresh Interval:</label>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="number" id="refresh_interval" name="refresh_interval" min="1" value="30" required class="form-input" style="flex: 1;">
-                        <select id="interval_unit" name="interval_unit" class="form-input" style="flex: 0 0 120px;">
-                            <option value="seconds">Seconds</option>
-                            <option value="minutes" selected>Minutes</option>
-                            <option value="hours">Hours</option>
-                            <option value="days">Days</option>
-                        </select>
-                    </div>
-                    <small style="color: var(--text-secondary);">How often to refresh this plugin's data</small>
-                </div>
-                {% endif %}
             </form>
             <div class="buttons-container">
-                <button type="button" onclick="handleAction('add_to_loop')" class="action-button">Save</button>
+                <button type="button" onclick="handleAction('add_to_loop')" class="action-button">Add</button>
             </div>
         </div>
     </div>
