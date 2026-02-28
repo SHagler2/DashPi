@@ -170,6 +170,7 @@ body {
     color: var(--text-primary);
     display: block;
     margin-bottom: 2px;
+    padding-left: 3px;
     white-space: nowrap;
 }
 
