@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>{{ project_name }} v{{ version }}</title>
+    <title>{{ device_name }} — DashPi v{{ version }}</title>
 
     <!-- PWA Meta Tags -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
@@ -432,7 +432,10 @@
     <div class="frame">
         <!-- Header -->
         <header class="header">
-            <h1>{{ device_name }} v{{ version }}</h1>
+            <div>
+                <h1 style="margin: 0; line-height: 1.1;">{{ device_name }}</h1>
+                <div style="font-size: 12px; color: var(--text-secondary); font-weight: normal;">DashPi v{{ version }}</div>
+            </div>
 
             <div class="header-actions">
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--text-secondary); white-space: nowrap;">
