@@ -121,9 +121,16 @@ def check_for_updates():
             with open(version_file, 'r') as f:
                 local_version = f.read().strip()
 
+        # Detect current branch
+        branch_result = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            cwd=repo_dir, capture_output=True, text=True, timeout=10
+        )
+        branch = branch_result.stdout.strip() if branch_result.returncode == 0 else 'main'
+
         # Fetch latest from remote (non-destructive)
         result = subprocess.run(
-            ['git', 'fetch', 'origin', 'main'],
+            ['git', 'fetch', 'origin', branch],
             cwd=repo_dir, capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:
@@ -132,6 +139,8 @@ def check_for_updates():
                 "local_version": local_version
             }), 500
 
+        remote_ref = f'origin/{branch}'
+
         # Compare local HEAD with remote
         local_hash = subprocess.run(
             ['git', 'rev-parse', 'HEAD'],
@@ -139,20 +148,20 @@ def check_for_updates():
         ).stdout.strip()
 
         remote_hash = subprocess.run(
-            ['git', 'rev-parse', 'origin/main'],
+            ['git', 'rev-parse', remote_ref],
             cwd=repo_dir, capture_output=True, text=True, timeout=10
         ).stdout.strip()
 
         # Read remote version
         remote_version_result = subprocess.run(
-            ['git', 'show', 'origin/main:VERSION'],
+            ['git', 'show', f'{remote_ref}:VERSION'],
             cwd=repo_dir, capture_output=True, text=True, timeout=10
         )
         remote_version = remote_version_result.stdout.strip() if remote_version_result.returncode == 0 else '?'
 
         # Count commits behind
         behind_result = subprocess.run(
-            ['git', 'rev-list', '--count', f'HEAD..origin/main'],
+            ['git', 'rev-list', '--count', f'HEAD..{remote_ref}'],
             cwd=repo_dir, capture_output=True, text=True, timeout=10
         )
         commits_behind = int(behind_result.stdout.strip()) if behind_result.returncode == 0 else 0
@@ -161,7 +170,7 @@ def check_for_updates():
         changelog = []
         if commits_behind > 0:
             log_result = subprocess.run(
-                ['git', 'log', '--oneline', f'HEAD..origin/main', '--max-count=20'],
+                ['git', 'log', '--oneline', f'HEAD..{remote_ref}', '--max-count=20'],
                 cwd=repo_dir, capture_output=True, text=True, timeout=10
             )
             if log_result.returncode == 0:
@@ -174,7 +183,8 @@ def check_for_updates():
             "commits_behind": commits_behind,
             "changelog": changelog,
             "local_hash": local_hash[:8],
-            "remote_hash": remote_hash[:8]
+            "remote_hash": remote_hash[:8],
+            "branch": branch
         })
 
     except subprocess.TimeoutExpired:
@@ -190,15 +200,22 @@ def apply_update():
     try:
         repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+        # Detect current branch
+        branch_result = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            cwd=repo_dir, capture_output=True, text=True, timeout=10
+        )
+        branch = branch_result.stdout.strip() if branch_result.returncode == 0 else 'main'
+
         # Stash any local changes (e.g., __pycache__, config edits)
         subprocess.run(
             ['git', 'stash', '--include-untracked'],
             cwd=repo_dir, capture_output=True, text=True, timeout=15
         )
 
-        # Pull latest from origin/main
+        # Pull latest from current branch
         result = subprocess.run(
-            ['git', 'reset', '--hard', 'origin/main'],
+            ['git', 'reset', '--hard', f'origin/{branch}'],
             cwd=repo_dir, capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:
