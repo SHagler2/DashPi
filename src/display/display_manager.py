@@ -1,3 +1,4 @@
+import fnmatch
 import logging
 import os
 from datetime import datetime
@@ -12,7 +13,51 @@ logger = logging.getLogger(__name__)
 try:
     from display.lcd_display import LcdDisplay
 except ImportError:
-    logger.info("LCD display not available")
+    LcdDisplay = None
+    logger.info("LCD display not available (missing numpy or /dev/fb0)")
+
+try:
+    from display.inky_display import InkyDisplay
+except ImportError:
+    InkyDisplay = None
+    logger.info("Inky display not available (missing inky library)")
+
+try:
+    from display.waveshare_display import WaveshareDisplay
+except ImportError:
+    WaveshareDisplay = None
+    logger.info("Waveshare display not available (missing waveshare drivers)")
+
+
+def _detect_display_type():
+    """Auto-detect the connected display hardware.
+
+    Detection order:
+    1. Linux framebuffer (/dev/fb0) -> LCD
+    2. Inky e-paper via I2C auto-detection -> inky
+    3. Fall back to mock for development
+
+    Returns:
+        str: The detected display type ("lcd", "inky", or "mock").
+    """
+    # Check for LCD framebuffer
+    if os.path.exists("/dev/fb0"):
+        logger.info("Auto-detected LCD display (/dev/fb0 present)")
+        return "lcd"
+
+    # Try Inky auto-detection (uses I2C)
+    if InkyDisplay is not None:
+        try:
+            from inky.auto import auto
+            auto()
+            logger.info("Auto-detected Inky e-paper display")
+            return "inky"
+        except Exception:
+            logger.debug("Inky auto-detection failed, not an Inky display")
+
+    logger.info("No display hardware detected, falling back to mock")
+    return "mock"
+
 
 class DisplayManager:
 
@@ -21,8 +66,9 @@ class DisplayManager:
     def __init__(self, device_config):
 
         """
-        Initializes the display manager and selects the correct display type 
-        based on the configuration.
+        Initializes the display manager and selects the correct display type
+        based on the configuration. If display_type is "auto" or not set,
+        attempts auto-detection.
 
         Args:
             device_config (object): Configuration object containing display settings.
@@ -30,16 +76,32 @@ class DisplayManager:
         Raises:
             ValueError: If an unsupported display type is specified.
         """
-        
+
         self.device_config = device_config
         self._display_blanked = False
 
-        display_type = device_config.get_config("display_type", default="lcd")
+        display_type = device_config.get_config("display_type", default="auto")
+
+        # Auto-detect if requested or not configured
+        if display_type == "auto":
+            display_type = _detect_display_type()
+            device_config.update_value("display_type", display_type, write=True)
+            logger.info(f"Display type auto-detected and saved: {display_type}")
 
         if display_type == "mock":
             self.display = MockDisplay(device_config)
         elif display_type == "lcd":
+            if LcdDisplay is None:
+                raise ValueError("LCD display requested but lcd_display module not available")
             self.display = LcdDisplay(device_config)
+        elif display_type == "inky":
+            if InkyDisplay is None:
+                raise ValueError("Inky display requested but inky library not installed")
+            self.display = InkyDisplay(device_config)
+        elif fnmatch.fnmatch(display_type, "epd*in*"):
+            if WaveshareDisplay is None:
+                raise ValueError("Waveshare display requested but waveshare drivers not available")
+            self.display = WaveshareDisplay(device_config)
         else:
             raise ValueError(f"Unsupported display type: {display_type}")
 
@@ -66,18 +128,21 @@ class DisplayManager:
         image.save(tmp_path)
         os.replace(tmp_path, self.device_config.current_image_file)
 
-        # Check scheduled brightness — 0 means blank the display
-        brightness = self._get_scheduled_brightness()
-        if brightness == 0:
-            if not self._display_blanked:
-                self.display.blank_display()
-                self._display_blanked = True
-            return
+        # Check scheduled brightness — only applies to displays with backlight
+        if self.display.has_backlight():
+            brightness = self._get_scheduled_brightness()
+            if brightness == 0:
+                if not self._display_blanked:
+                    self.display.blank_display()
+                    self._display_blanked = True
+                return
 
-        # Restore display if it was blanked
-        if self._display_blanked:
-            self.display.unblank_display()
-            self._display_blanked = False
+            # Restore display if it was blanked
+            if self._display_blanked:
+                self.display.unblank_display()
+                self._display_blanked = False
+        else:
+            brightness = 1.0  # E-ink: no backlight, always full brightness for enhancement
 
         # Convert to RGB once at the start of the pipeline
         if image.mode not in ('RGB', 'L'):
@@ -96,7 +161,18 @@ class DisplayManager:
 
     def get_current_brightness(self):
         """Return the current scheduled brightness value for API use."""
-        return self._get_scheduled_brightness()
+        if self.display.has_backlight():
+            return self._get_scheduled_brightness()
+        return 1.0
+
+    def get_display_capabilities(self):
+        """Return display capability info for the web UI and API."""
+        return {
+            "display_type": self.display.display_type_name(),
+            "has_touch": self.display.has_touch(),
+            "has_backlight": self.display.has_backlight(),
+            "supports_fast_refresh": self.display.supports_fast_refresh(),
+        }
 
     def _get_scheduled_brightness(self):
         """Determine the current brightness based on the day/evening/night schedule.

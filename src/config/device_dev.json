@@ -35,7 +35,9 @@
                 "start_time": "00:00",
                 "end_time": "24:00",
                 "plugin_order": [],
-                "current_plugin_index": null
+                "current_plugin_index": null,
+                "randomize": false,
+                "next_plugin_index": null
             }
         ],
         "rotation_interval_seconds": 300,
@@ -46,5 +48,6 @@
         "image_hash": null,
         "refresh_type": null,
         "plugin_id": null
-    }
+    },
+    "device_name": "Mac-Studio"
 }

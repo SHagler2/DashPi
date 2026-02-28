@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#1a1a2e">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="DashPi">
+    <meta name="apple-mobile-web-app-title" content="{{ device_name }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/favicon.svg') }}">
 
@@ -135,7 +135,7 @@
     </style>
     <script>
         (function() {
-            const theme = localStorage.getItem('dashpi-theme') || 
+            const theme = localStorage.getItem('dashpi-v2-theme') || 
                          (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             if (theme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -432,7 +432,7 @@
     <div class="frame">
         <!-- Header -->
         <header class="header">
-            <h1>DashPi v{{ version }}</h1>
+            <h1>{{ device_name }} v{{ version }}</h1>
 
             <div class="header-actions">
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--text-secondary); white-space: nowrap;">
@@ -553,7 +553,7 @@
             // View mode (grid/list)
             const viewToggle = document.getElementById('viewToggle');
             const pluginsContainer = document.getElementById('pluginsContainer');
-            let currentView = localStorage.getItem('dashpi-plugins-view') || 'grid';
+            let currentView = localStorage.getItem('dashpi-v2-plugins-view') || 'grid';
 
             function updateView() {
                 if (currentView === 'list') {
@@ -567,7 +567,7 @@
 
             viewToggle.addEventListener('click', () => {
                 currentView = currentView === 'grid' ? 'list' : 'grid';
-                localStorage.setItem('dashpi-plugins-view', currentView);
+                localStorage.setItem('dashpi-v2-plugins-view', currentView);
                 updateView();
             });
 
@@ -695,7 +695,7 @@
     <!-- Global Refresh Status Polling -->
     <script>
     window.mainStatus = (function() {
-        const STORAGE_KEY = 'dashpi-show-main-status';
+        const STORAGE_KEY = 'dashpi-v2-show-main-status';
         const toggle = document.getElementById('showMainStatus');
         const bar = document.getElementById('mainStatus');
         const icon = document.getElementById('mainStatusIcon');

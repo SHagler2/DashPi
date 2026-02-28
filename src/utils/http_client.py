@@ -41,7 +41,7 @@ def get_http_session() -> requests.Session:
 
         # Set common headers for all DashPi requests
         _HTTP_SESSION.headers.update({
-            'User-Agent': 'DashPi/1.0 (https://github.com/fatihak/DashPi/)'
+            'User-Agent': 'DashPi/2.0 (https://github.com/SHagler2/DashPi/)'
         })
 
         # Configure connection pool

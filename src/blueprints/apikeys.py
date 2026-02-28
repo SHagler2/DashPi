@@ -39,7 +39,7 @@ def write_env_file(filepath, entries):
         # Atomic write: write to temp file first, then rename
         with tempfile.NamedTemporaryFile(mode='w', dir=env_dir,
                                           suffix='.tmp', delete=False) as tmp_file:
-            tmp_file.write("# DashPi API Keys and Secrets\n")
+            tmp_file.write("# DashPi API Keys and Secrets (v2)\n")
             tmp_file.write("# Managed via web interface\n\n")
             for key, value in entries:
                 # Quote values with spaces or special characters
@@ -55,7 +55,7 @@ def write_env_file(filepath, entries):
         # Fallback to direct write if atomic fails
         try:
             with open(filepath, 'w') as f:
-                f.write("# DashPi API Keys and Secrets\n")
+                f.write("# DashPi API Keys and Secrets (v2)\n")
                 f.write("# Managed via web interface\n\n")
                 for key, value in entries:
                     if ' ' in value or '"' in value or "'" in value:

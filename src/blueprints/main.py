@@ -298,6 +298,14 @@ def get_next_change_time():
         "override": loop_override
     })
 
+@main_bp.route('/api/display_capabilities')
+def get_display_capabilities():
+    """Return display capability info for the web UI."""
+    display_manager = current_app.config.get('DISPLAY_MANAGER')
+    if not display_manager:
+        return jsonify({"error": "Display manager not initialized"}), 503
+    return jsonify(display_manager.get_display_capabilities())
+
 @main_bp.route('/api/weather_location')
 def get_weather_location():
     """Return the weather plugin's saved location for use as a default by other plugins."""
@@ -390,11 +398,11 @@ def get_diagnostics():
         except Exception:
             pass
 
-        # DashPi process stats
+        # App process stats
         try:
             proc = psutil.Process()
-            metrics["dashpi_cpu"] = proc.cpu_percent(interval=0)
-            metrics["dashpi_mem_mb"] = round(proc.memory_info().rss / 1024 / 1024)
+            metrics["app_cpu"] = proc.cpu_percent(interval=0)
+            metrics["app_mem_mb"] = round(proc.memory_info().rss / 1024 / 1024)
         except Exception:
             pass
 

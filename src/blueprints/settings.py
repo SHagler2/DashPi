@@ -54,18 +54,24 @@ def save_settings():
         if not time_format or time_format not in ["12h", "24h"]:
             return jsonify({"error": "Time format is required"}), 400
 
+        # Build image settings — include inky_saturation for e-ink displays
+        image_settings = {
+            "saturation": float(form_data.get("saturation", "1.0")),
+            "sharpness": float(form_data.get("sharpness", "1.0")),
+            "contrast": float(form_data.get("contrast", "1.0"))
+        }
+        if "inkySaturation" in form_data:
+            image_settings["inky_saturation"] = float(form_data.get("inkySaturation", "0.5"))
+
         settings = {
+            "device_name": form_data.get("deviceName", "").strip() or None,
             "orientation": form_data.get("orientation"),
             "inverted_image": form_data.get("invertImage"),
             "log_system_stats": form_data.get("logSystemStats"),
             "show_plugin_icon": form_data.get("showPluginIcon"),
             "timezone": form_data.get("timezoneName"),
             "time_format": form_data.get("timeFormat"),
-            "image_settings": {
-                "saturation": float(form_data.get("saturation", "1.0")),
-                "sharpness": float(form_data.get("sharpness", "1.0")),
-                "contrast": float(form_data.get("contrast", "1.0"))
-            },
+            "image_settings": image_settings,
             "brightness_schedule": {
                 "enabled": "brightnessScheduleEnabled" in form_data,
                 "day_brightness": float(form_data.get("dayBrightness", "1.0")),
@@ -76,6 +82,9 @@ def save_settings():
                 "night_start": form_data.get("nightStart", "22:00"),
             }
         }
+        # Remove None device_name to keep existing value
+        if settings["device_name"] is None:
+            del settings["device_name"]
         device_config.update_config(settings)
 
     except RuntimeError as e:
@@ -204,7 +213,7 @@ def apply_update():
 
         # Schedule a service restart (delayed so this response can be sent first)
         subprocess.Popen(
-            ['bash', '-c', 'sleep 2 && sudo systemctl restart dashpi'],
+            ['bash', '-c', 'sleep 2 && sudo systemctl restart dashpi 2>/dev/null || sudo systemctl restart inkypi 2>/dev/null'],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
 
@@ -242,7 +251,9 @@ def download_logs():
         else:
             reader = JournalReader()
             reader.open(JournalOpenMode.SYSTEM)
+            # Match either service name (dashpi or inkypi) for backwards compatibility
             reader.add_filter(Rule("_SYSTEMD_UNIT", "dashpi.service"))
+            reader.add_filter(Rule("_SYSTEMD_UNIT", "inkypi.service"))
             reader.seek_realtime_usec(int(since.timestamp() * 1_000_000))
 
             for record in reader:

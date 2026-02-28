@@ -87,6 +87,21 @@ class LcdDisplay(AbstractDisplay):
             f.write('0')
         logger.info("Display unblanked (backlight on)")
 
+    # ---- capability flags ---------------------------------------------------
+
+    def has_touch(self):
+        """LCD touchscreens (e.g., Waveshare 7") have capacitive touch."""
+        return True
+
+    def has_backlight(self):
+        return True
+
+    def supports_fast_refresh(self):
+        return True
+
+    def display_type_name(self):
+        return "LCD"
+
     # ---- format converters ------------------------------------------------
 
     def _convert_bgra(self, image):

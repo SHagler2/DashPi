@@ -4,5 +4,5 @@
     "inverted_image": false,
     "scheduler_sleep_time": 60,
     "startup": true,
-    "display_type": "lcd"
+    "display_type": "auto"
 }

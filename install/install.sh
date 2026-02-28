@@ -22,7 +22,13 @@ while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symli
 done
 SCRIPT_DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
 
-APPNAME="dashpi"
+# Use hostname as app/service name if it's 'inkypi', otherwise default to 'dashpi'
+HOSTNAME_LOWER=$(hostname | tr '[:upper:]' '[:lower:]')
+if [ "$HOSTNAME_LOWER" = "inkypi" ]; then
+  APPNAME="inkypi"
+else
+  APPNAME="dashpi"
+fi
 INSTALL_PATH="/usr/local/$APPNAME"
 SRC_PATH="$SCRIPT_DIR/../src"
 BINPATH="/usr/local/bin"
@@ -114,18 +120,42 @@ create_venv(){
   $VENV_PATH/bin/python -m pip install --upgrade pip setuptools wheel > /dev/null
   $VENV_PATH/bin/python -m pip install -r $PIP_REQUIREMENTS_FILE -qq > /dev/null &
   show_loader "\tInstalling python dependencies. "
+
+  # Install Waveshare e-paper GPIO dependencies if ws-requirements.txt exists
+  WS_REQUIREMENTS="$SCRIPT_DIR/ws-requirements.txt"
+  if [ -f "$WS_REQUIREMENTS" ]; then
+    $VENV_PATH/bin/python -m pip install -r $WS_REQUIREMENTS -qq > /dev/null 2>&1 &
+    show_loader "\tInstalling e-paper display dependencies. "
+  fi
 }
 
 install_app_service() {
   echo "Installing $APPNAME systemd service."
-  if [ -f "$SERVICE_FILE_SOURCE" ]; then
-    cp "$SERVICE_FILE_SOURCE" "$SERVICE_FILE_TARGET"
-    sudo systemctl daemon-reload
-    sudo systemctl enable $SERVICE_FILE
-  else
-    echo_error "ERROR: Service file $SERVICE_FILE_SOURCE not found!"
-    exit 1
-  fi
+  # Generate service file from template with correct APPNAME
+  cat > "$SERVICE_FILE_TARGET" <<EOF
+[Unit]
+Description=$APPNAME App
+After=${APPNAME}-splash.service
+Wants=network-online.target
+
+[Service]
+User=root
+RuntimeDirectory=$APPNAME
+WorkingDirectory=/run/$APPNAME
+ExecStart=/usr/local/bin/$APPNAME run
+Restart=on-failure
+RestartSec=60
+KillSignal=SIGINT
+StandardOutput=journal
+StandardError=journal
+CPUQuota=40%
+MemoryMax=300M
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo systemctl daemon-reload
+  sudo systemctl enable $SERVICE_FILE
 }
 
 setup_clean_boot() {
@@ -173,18 +203,24 @@ setup_clean_boot() {
   echo_success "\tMasked getty@tty1.service"
 
   # 4. Install tmpfiles config for fbcon cursor
-  cp "$SCRIPT_DIR/dashpi-fbcon.conf" /etc/tmpfiles.d/
-  echo_success "\tInstalled fbcon cursor config"
+  if [ -f "$SCRIPT_DIR/dashpi-fbcon.conf" ]; then
+    cp "$SCRIPT_DIR/dashpi-fbcon.conf" /etc/tmpfiles.d/
+    echo_success "\tInstalled fbcon cursor config"
+  fi
 
-  # 5. Install splash animation script
-  cp "$SCRIPT_DIR/show_splash.py" "$INSTALL_PATH/show_splash.py"
-  echo_success "\tInstalled splash animation script"
+  # 5. Install splash animation script (LCD only)
+  if [ -f "$SCRIPT_DIR/show_splash.py" ]; then
+    cp "$SCRIPT_DIR/show_splash.py" "$INSTALL_PATH/show_splash.py"
+    echo_success "\tInstalled splash animation script"
+  fi
 
   # 6. Install and enable splash service
-  cp "$SCRIPT_DIR/dashpi-splash.service" /etc/systemd/system/
-  systemctl daemon-reload
-  systemctl enable dashpi-splash.service > /dev/null 2>&1
-  echo_success "\tInstalled and enabled dashpi-splash.service"
+  if [ -f "$SCRIPT_DIR/dashpi-splash.service" ]; then
+    sed "s/dashpi/${APPNAME}/g" "$SCRIPT_DIR/dashpi-splash.service" > "/etc/systemd/system/${APPNAME}-splash.service"
+    systemctl daemon-reload
+    systemctl enable "${APPNAME}-splash.service" > /dev/null 2>&1
+    echo_success "\tInstalled and enabled ${APPNAME}-splash.service"
+  fi
 }
 
 install_executable() {

@@ -7,6 +7,12 @@ logging.config.fileConfig(os.path.join(os.path.dirname(__file__), 'config', 'log
 
 import logging
 import argparse
+import socket
+import warnings
+
+# Suppress noisy warning from Inky e-paper library (harmless on non-Inky hardware)
+warnings.filterwarnings("ignore", message=".*Busy Wait: Held high.*")
+
 from utils.app_utils import generate_startup_image
 from flask import Flask
 from config import Config
@@ -34,11 +40,11 @@ if args.dev:
     Config.config_file = os.path.join(Config.BASE_DIR, "config", "device_dev.json")
     DEV_MODE = True
     PORT = 8080
-    logger.info("Starting DashPi in DEVELOPMENT mode on port 8080")
+    logger.info("Starting in DEVELOPMENT mode on port 8080")
 else:
     DEV_MODE = False
     PORT = 80
-    logger.info("Starting DashPi in PRODUCTION mode on port 80")
+    logger.info("Starting in PRODUCTION mode on port 80")
 logging.getLogger('waitress.queue').setLevel(logging.ERROR)
 app = Flask(__name__)
 template_dirs = [
@@ -52,6 +58,15 @@ display_manager = DisplayManager(device_config)
 refresh_task = RefreshTask(device_config, display_manager)
 
 load_plugins(device_config.get_plugins())
+
+# Determine the device name: config > hostname > "DashPi"
+_device_name = device_config.get_config("device_name", default="")
+if not _device_name:
+    _device_name = socket.gethostname() or "DashPi"
+    # Strip .local suffix if present (mDNS adds it automatically)
+    if _device_name.endswith(".local"):
+        _device_name = _device_name[:-6]
+    device_config.update_value("device_name", _device_name, write=True)
 
 # Store dependencies
 app.config['DEVICE_CONFIG'] = device_config
@@ -72,7 +87,8 @@ app.register_blueprint(loops_bp)
 @app.context_processor
 def inject_globals():
     from blueprints.main import get_version
-    return dict(project_name="DashPi", version=get_version())
+    device_name = device_config.get_config("device_name", default="DashPi")
+    return dict(project_name="DashPi", device_name=device_name, version=get_version())
 
 # Register opener for HEIF/HEIC images
 try:
@@ -86,7 +102,7 @@ if __name__ == '__main__':
     # start the background refresh task
     refresh_task.start()
 
-    # display default dashpi image on startup
+    # display startup image on first boot
     if device_config.get_config("startup") is True:
         logger.info("Startup flag is set, displaying startup image")
         img = generate_startup_image(device_config.get_resolution())
@@ -99,7 +115,6 @@ if __name__ == '__main__':
 
         # Get local IP address for display (only in dev mode when running on non-Pi)
         if DEV_MODE:
-            import socket
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 s.connect(("8.8.8.8", 80))

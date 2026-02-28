@@ -6,7 +6,7 @@
     <title>{{ project_name }} v{{ version }} - {{ plugin.display_name }}</title>
     <script>
         (function() {
-            const theme = localStorage.getItem('dashpi-theme') ||
+            const theme = localStorage.getItem('dashpi-v2-theme') ||
                          (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             if (theme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -459,7 +459,7 @@
     {% if not loop_edit_mode %}
     <script>
     (function() {
-        const STORAGE_KEY = 'dashpi-plugin-status-enabled';
+        const STORAGE_KEY = 'dashpi-v2-plugin-status-enabled';
         const toggle = document.getElementById('showPluginStatus');
         const bar = document.getElementById('pluginStatus');
         const icon = document.getElementById('pluginStatusIcon');

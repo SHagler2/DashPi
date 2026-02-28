@@ -22,3 +22,5 @@ shazamio
 ai-edge-litert
 skyfield>=1.45
 sgp4
+# E-ink display support (Inky auto-detect)
+inky==2.2.1

@@ -6,7 +6,7 @@
     <title>{{ project_name }} v{{ version }} - Loops</title>
     <script>
         (function() {
-            const theme = localStorage.getItem('dashpi-theme') ||
+            const theme = localStorage.getItem('dashpi-v2-theme') ||
                          (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             if (theme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -230,7 +230,7 @@
     <script>
     // Exposed as window.loopsStatus so refreshPluginNow can interact with it
     window.loopsStatus = (function() {
-        const STORAGE_KEY = 'dashpi-show-loops-status';
+        const STORAGE_KEY = 'dashpi-v2-show-loops-status';
         const toggle = document.getElementById('showLoopsStatus');
         const bar = document.getElementById('loopsStatus');
         const icon = document.getElementById('loopsStatusIcon');

@@ -35,3 +35,17 @@ class MockDisplay(AbstractDisplay):
 
         # Also save as latest.png for convenience
         image.save(os.path.join(self.output_dir, 'latest.png'), "PNG")
+
+    # ---- capability flags ---------------------------------------------------
+
+    def has_touch(self):
+        return True  # Simulate touch for development
+
+    def has_backlight(self):
+        return True
+
+    def supports_fast_refresh(self):
+        return True
+
+    def display_type_name(self):
+        return "Mock"

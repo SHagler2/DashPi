@@ -6,7 +6,7 @@
     <title>{{ project_name }} v{{ version }} - Settings</title>
     <script>
         (function() {
-            const theme = localStorage.getItem('dashpi-theme') ||
+            const theme = localStorage.getItem('dashpi-v2-theme') ||
                          (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             if (theme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -38,14 +38,14 @@
                     if (data.changelog && data.changelog.length > 0) {
                         msg += '\n\n' + data.changelog.join('\n');
                     }
-                    if (confirm(msg + '\n\nApply update and restart DashPi?')) {
+                    if (confirm(msg + '\n\nApply update and restart?')) {
                         applyUpdate(btn);
                     } else {
                         btn.disabled = false;
                         btn.textContent = 'Update';
                     }
                 } else {
-                    showResponseModal('success', `DashPi is up to date (v${data.local_version})`);
+                    showResponseModal('success', `Up to date (v${data.local_version})`);
                     btn.disabled = false;
                     btn.textContent = 'Update';
                 }
@@ -196,6 +196,16 @@
         <!-- Settings Content -->
         <form class="settings-form">
             <div id="settings-container">
+                <div class="form-group">
+                    <label for="deviceName" class="form-label">Device Name:</label>
+                    <input type="text" id="deviceName" name="deviceName"
+                        value="{{ device_settings.device_name or '' }}"
+                        placeholder="{{ device_settings.device_name or 'DashPi' }}"
+                        class="form-input" style="max-width: 250px;">
+                    <span class="form-hint" style="font-size: 0.8em; opacity: 0.7;">
+                        Access this device at <strong>http://{{ device_settings.device_name or 'hostname' }}.local</strong>
+                    </span>
+                </div>
                 <div class="form-group nowrap">
                     <!-- Orientation Dropdown -->
                     <div class="form-group">
