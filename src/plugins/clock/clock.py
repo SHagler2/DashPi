@@ -1,3 +1,5 @@
+"""Clock plugin — renders analog, digital, divided, or word clock faces."""
+
 import os
 from utils.app_utils import resolve_path, get_font
 from plugins.base_plugin.base_plugin import BasePlugin
@@ -54,6 +56,7 @@ class Clock(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Render the selected clock face with the current time."""
         import pytz
 
         clock_face = settings.get('selectedClockFace')

@@ -33,6 +33,8 @@ from typing import Dict, Any
 logger = logging.getLogger(__name__)
 
 class Wpotd(BasePlugin):
+    """Fetches Wikipedia's Picture of the Day and renders it with an optional title overlay."""
+
     HEADERS = {'User-Agent': 'DashPi/1.0'}
     API_URL = "https://en.wikipedia.org/w/api.php"
 
@@ -42,6 +44,7 @@ class Wpotd(BasePlugin):
         return template_params
 
     def generate_image(self, settings: Dict[str, Any], device_config: Dict[str, Any]) -> Image.Image:
+        """Fetch and render Wikipedia's Picture of the Day for the configured date."""
         logger.info("=== Wikipedia POTD Plugin: Starting image generation ===")
 
         # Get dimensions early for retry logic

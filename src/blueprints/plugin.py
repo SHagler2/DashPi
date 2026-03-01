@@ -1,3 +1,5 @@
+"""Plugin blueprint — plugin settings pages, image upload/delete, and update endpoints."""
+
 from flask import Blueprint, request, jsonify, current_app, render_template, send_from_directory
 from plugins.plugin_registry import get_plugin_instance
 from utils.app_utils import resolve_path, handle_request_files, parse_form
@@ -11,6 +13,7 @@ plugin_bp = Blueprint("plugin", __name__)
 
 @plugin_bp.route('/plugin/<plugin_id>')
 def plugin_page(plugin_id):
+    """Render plugin settings page. Restores last-used or loop settings."""
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
@@ -79,6 +82,7 @@ def plugin_page(plugin_id):
 
 @plugin_bp.route('/images/<plugin_id>/<path:filename>')
 def image(plugin_id, filename):
+    """Serve static files from a plugin's directory (icons, images, etc.)."""
     # Resolve plugins directory dynamically
     plugins_dir = resolve_path("plugins")
 
@@ -242,6 +246,7 @@ def update_now_async():
 
 @plugin_bp.route('/update_now', methods=['POST'])
 def update_now():
+    """Blocking update endpoint — generates image and waits for display."""
     device_config = current_app.config['DEVICE_CONFIG']
     refresh_task = current_app.config['REFRESH_TASK']
     display_manager = current_app.config['DISPLAY_MANAGER']

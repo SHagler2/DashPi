@@ -1,3 +1,5 @@
+"""Unsplash plugin — displays a random photo from Unsplash based on search or collection filters."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from utils.app_utils import get_font
 from utils.image_loader import _is_low_resource_device
@@ -9,7 +11,10 @@ import random
 logger = logging.getLogger(__name__)
 
 class Unsplash(BasePlugin):
+    """Fetches a random photo from the Unsplash API and renders it with an optional credit overlay."""
+
     def generate_image(self, settings, device_config):
+        """Fetch a random Unsplash photo matching the configured filters and render it."""
         logger.info("=== Unsplash Plugin: Starting image generation ===")
 
         access_key = device_config.load_env_key("UNSPLASH_ACCESS_KEY")

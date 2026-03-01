@@ -1,3 +1,5 @@
+"""LCD framebuffer display driver for HDMI-connected screens."""
+
 import logging
 import struct
 import numpy as np

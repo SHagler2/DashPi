@@ -34,6 +34,8 @@ STATUS_FILE = os.path.join(PLUGIN_DIR, "status.json")
 
 
 class ShazamPi(BasePlugin):
+    """Records audio, identifies songs via Shazam, and displays album art with song info."""
+
     def __init__(self, config, **deps):
         super().__init__(config, **deps)
         self._interpreter = None
@@ -66,6 +68,7 @@ class ShazamPi(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Record audio, identify the song, and render album art with title overlay."""
         logger.info("=== ShazamPi Plugin: Starting ===")
         self._set_status("starting", "Initializing...")
 

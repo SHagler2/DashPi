@@ -1,3 +1,5 @@
+"""Flight tracker plugin — displays live aircraft positions on a map with info cards."""
+
 import logging
 import math
 import os
@@ -42,6 +44,8 @@ def _aircraft_id(ac):
 
 
 class FlightTracker(BasePlugin):
+    """Tracks nearby aircraft using ADS-B data and renders them on OpenStreetMap tiles."""
+
     def __init__(self, config, **dependencies):
         super().__init__(config, **dependencies)
 
@@ -70,6 +74,7 @@ class FlightTracker(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Fetch aircraft data and render the map with aircraft markers and info strip."""
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":
             dimensions = dimensions[::-1]

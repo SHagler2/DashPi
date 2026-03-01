@@ -1,3 +1,5 @@
+"""GitHub plugin — displays contribution graphs, sponsor counts, or star history."""
+
 from ..base_plugin.base_plugin import BasePlugin
 from .github_contributions import contributions_generate_image
 from .github_sponsors import sponsors_generate_image
@@ -8,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 class GitHub(BasePlugin):
+    """Renders GitHub contribution, sponsor, or star data using the GitHub GraphQL API."""
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['api_key'] = {
@@ -19,6 +23,7 @@ class GitHub(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Delegate to the appropriate GitHub visualization based on the configured type."""
         try:
             github_type = settings.get('githubType', 'contributions')
 

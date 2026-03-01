@@ -1,3 +1,5 @@
+"""ISS Tracker plugin — displays the International Space Station's real-time position on a map."""
+
 import json
 import logging
 import math
@@ -32,6 +34,8 @@ VIEWPORT_MOVE_THRESHOLD = 1.0  # degrees before re-cropping map
 
 
 class ISSTracker(BasePlugin):
+    """Tracks the ISS using TLE data and renders its position, pass predictions, and crew info."""
+
     def __init__(self, config, **dependencies):
         super().__init__(config, **dependencies)
         self._lock = threading.Lock()
@@ -145,6 +149,7 @@ class ISSTracker(BasePlugin):
         return arc
 
     def generate_image(self, settings, device_config):
+        """Compute the current ISS position and render the tracker display."""
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":
             dimensions = dimensions[::-1]

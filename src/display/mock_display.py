@@ -1,3 +1,5 @@
+"""Mock display driver — saves images to disk for local development."""
+
 import os
 import logging
 from datetime import datetime

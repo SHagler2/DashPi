@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""DashPi — main Flask application entry point.
+
+Initializes the display, config, plugin system, and refresh task, then serves
+the web UI via Waitress. Supports --dev mode for local development on port 8080.
+"""
 
 # set up logging
 import os, logging.config

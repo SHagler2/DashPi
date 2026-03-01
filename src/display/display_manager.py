@@ -1,3 +1,10 @@
+"""Display manager — auto-detects hardware and delegates rendering.
+
+Probes for Inky (I2C), LCD (/dev/fb0 + sysfs), or Waveshare e-paper on
+startup, then routes all display_image() calls to the concrete driver.
+Also handles brightness scheduling and image enhancement.
+"""
+
 import fnmatch
 import logging
 import os

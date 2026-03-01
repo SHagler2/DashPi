@@ -1,3 +1,5 @@
+"""Base plugin module — defines the abstract base class for all DashPi plugins."""
+
 import logging
 import os
 from utils.app_utils import resolve_path

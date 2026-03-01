@@ -19,6 +19,8 @@ CHICAGO_IIIF_URL = "https://www.artic.edu/iiif/2"
 
 
 class ArtMuseum(BasePlugin):
+    """Displays random artworks from the Met Museum or Art Institute of Chicago APIs."""
+
     def __init__(self, config, **deps):
         super().__init__(config, **deps)
         self._met_ids = None  # Cached list of Met object IDs with images
@@ -30,6 +32,7 @@ class ArtMuseum(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Fetch a random artwork and render it with an optional title overlay."""
         logger.info("=== Art Museum Plugin: Starting ===")
 
         museum = settings.get("museum", "both")

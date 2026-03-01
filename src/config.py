@@ -1,3 +1,5 @@
+"""Device configuration — JSON-backed settings with atomic writes and thread safety."""
+
 import os
 import json
 import logging

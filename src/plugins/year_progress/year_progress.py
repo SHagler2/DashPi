@@ -1,3 +1,5 @@
+"""Year Progress plugin — displays a progress bar showing how much of the year has elapsed."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw
 from datetime import datetime, timezone
@@ -8,12 +10,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 class YearProgress(BasePlugin):
+    """Calculates the current year's progress and renders it as a visual progress bar."""
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['style_settings'] = True
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Calculate year progress percentage and render the progress bar display."""
         import pytz
 
         dimensions = device_config.get_resolution()

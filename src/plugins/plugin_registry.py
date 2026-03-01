@@ -1,4 +1,4 @@
-# app_registry.py
+"""Plugin registry — discovers, loads, and instantiates plugins from the plugins directory."""
 
 import os
 import importlib

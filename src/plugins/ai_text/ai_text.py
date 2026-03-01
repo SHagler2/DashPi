@@ -1,3 +1,5 @@
+"""AI Text plugin — generates and displays text from OpenAI or Google Gemini models."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from datetime import datetime
 from PIL import Image, ImageDraw
@@ -18,6 +20,8 @@ DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
 
 
 class AIText(BasePlugin):
+    """Sends a prompt to an AI model and renders the generated text on the display."""
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['api_key'] = {
@@ -29,6 +33,7 @@ class AIText(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Generate text via the configured AI provider and render it on the display."""
         logger.info("=== AI Text Plugin: Starting text generation ===")
 
         provider = settings.get("provider", "openai")

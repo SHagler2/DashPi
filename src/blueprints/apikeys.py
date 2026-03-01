@@ -1,3 +1,5 @@
+"""API keys blueprint — manage .env secrets via the web UI."""
+
 from flask import Blueprint, request, jsonify, current_app, render_template
 from dotenv import dotenv_values
 import os

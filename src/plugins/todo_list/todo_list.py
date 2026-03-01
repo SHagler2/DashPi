@@ -1,3 +1,5 @@
+"""To-do list plugin — renders styled task lists on the display."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw
 from utils.app_utils import get_font, FONT_SIZES
@@ -15,12 +17,15 @@ BULLET_CHARS = {
 }
 
 class TodoList(BasePlugin):
+    """Renders one or more to-do lists with configurable bullet styles and fonts."""
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['style_settings'] = True
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Build and render the to-do list layout from the configured list items."""
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":
             dimensions = dimensions[::-1]

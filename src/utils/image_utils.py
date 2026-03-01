@@ -1,3 +1,5 @@
+"""Image utilities — download, resize, orientation, enhancement, and hashing."""
+
 from PIL import Image, ImageEnhance, ImageOps, ImageFilter
 from io import BytesIO
 import os
@@ -19,6 +21,7 @@ def get_image(image_url):
     return img
 
 def change_orientation(image, orientation, inverted=False):
+    """Rotate image to match the configured display orientation."""
     if orientation == 'horizontal':
         angle = 0
     elif orientation == 'vertical':
@@ -32,6 +35,7 @@ def change_orientation(image, orientation, inverted=False):
     return image.rotate(angle, expand=1)
 
 def resize_image(image, desired_size, image_settings=None):
+    """Crop and resize image to exact dimensions, maintaining aspect ratio."""
     if image_settings is None:
         image_settings = []
     img_width, img_height = image.size
@@ -65,6 +69,7 @@ def resize_image(image, desired_size, image_settings=None):
     return image.resize((desired_width, desired_height), Image.BICUBIC)
 
 def apply_image_enhancement(img, image_settings=None):
+    """Apply brightness, contrast, saturation, and sharpness adjustments."""
     if image_settings is None:
         image_settings = {}
     # Convert image to RGB mode if necessary for enhancement operations
@@ -101,6 +106,7 @@ def compute_image_hash(image):
     return format(zlib.adler32(thumb.tobytes()) & 0xffffffff, '08x')
 
 def pad_image_blur(img: Image, dimensions: tuple[int, int]) -> Image:
+    """Letterbox an image with a blurred version of itself as the background."""
     bkg = ImageOps.fit(img, dimensions)
     bkg = bkg.filter(ImageFilter.BoxBlur(8))
     img = ImageOps.contain(img, dimensions)

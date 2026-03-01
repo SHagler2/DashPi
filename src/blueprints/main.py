@@ -1,3 +1,5 @@
+"""Main blueprint — dashboard, display, diagnostics, and loop control API."""
+
 from flask import Blueprint, request, jsonify, current_app, render_template, send_file
 import logging
 import os
@@ -19,6 +21,7 @@ def get_version():
 
 @main_bp.route('/')
 def main_page():
+    """Dashboard home page — plugin grid with loop status."""
     device_config = current_app.config['DEVICE_CONFIG']
     loop_enabled = device_config.get_config("loop_enabled", default=True)
     loop_override = device_config.get_loop_override()

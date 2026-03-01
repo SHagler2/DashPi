@@ -1,3 +1,5 @@
+"""App utilities — fonts, paths, form parsing, startup image, and file handling."""
+
 import logging
 import os
 import socket
@@ -52,6 +54,7 @@ FONTS = {
 }
 
 def resolve_path(file_path):
+    """Resolve a relative path against the src directory."""
     src_dir = os.getenv("SRC_DIR")
     if src_dir is None:
         # Default to the src directory
@@ -61,12 +64,14 @@ def resolve_path(file_path):
     return str(src_path / file_path)
 
 def get_ip_address():
+    """Get the device's LAN IP address by probing a UDP socket."""
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.connect(("8.8.8.8", 80))
         ip_address = s.getsockname()[0]
     return ip_address
 
 def get_wifi_name():
+    """Get the current WiFi network name (SSID), or None if not connected."""
     try:
         output = subprocess.check_output(['iwgetid', '-r']).decode('utf-8').strip()
         return output
@@ -112,6 +117,7 @@ def get_font(font_name, font_size=50, font_weight="normal"):
     return None
 
 def get_fonts():
+    """Return a list of all bundled font variants with paths and metadata."""
     fonts_list = []
     for font_family, variants in FONT_FAMILIES.items():
         for variant in variants:
@@ -124,9 +130,11 @@ def get_fonts():
     return fonts_list
 
 def get_font_path(font_name):
+    """Return the absolute path for a font by its short name."""
     return resolve_path(os.path.join("static", "fonts", FONTS[font_name]))
 
 def generate_startup_image(dimensions=(800,480)):
+    """Generate the first-boot splash image showing hostname and access URL."""
     bg_color = (255,255,255)
     text_color = (0,0,0)
     width, height = dimensions
@@ -158,7 +166,7 @@ def generate_startup_image(dimensions=(800,480)):
     return image
 
 def parse_form(request_form):
-    # Use getlist to handle the hidden+checkbox pattern correctly.
+    """Parse Flask form data, handling the hidden+checkbox toggle pattern.
     # For checkboxes with a hidden fallback (hidden value="false", checkbox value="true"),
     # the form sends both values when checked. We take the LAST value for scalar fields,
     # which is the checkbox value when checked, or the hidden value when unchecked.
@@ -172,6 +180,7 @@ def parse_form(request_form):
     return request_dict
 
 def handle_request_files(request_files, form_data=None):
+    """Process uploaded files: save to disk, fix EXIF orientation, return path map."""
     if form_data is None:
         form_data = {}
     allowed_file_extensions = {'pdf', 'png', 'avif', 'jpg', 'jpeg', 'gif', 'webp', 'heif', 'heic'}

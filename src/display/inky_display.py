@@ -1,3 +1,5 @@
+"""Inky e-paper display driver using Pimoroni's auto-detection."""
+
 import logging
 from inky.auto import auto
 from display.abstract_display import AbstractDisplay

@@ -1,3 +1,6 @@
+"""Abstract base class defining the display driver interface."""
+
+
 class AbstractDisplay:
     """
     Abstract base class for all display devices.

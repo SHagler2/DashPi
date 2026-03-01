@@ -1,8 +1,11 @@
+"""Time utilities — interval conversion helpers."""
+
 import logging
 
 logger = logging.getLogger(__name__)
 
 def calculate_seconds(interval, unit):
+    """Convert an interval + unit (minute/hour/day) to total seconds."""
     seconds = 5 * 60 # default to five minutes
     if unit == "minute":
         seconds = interval * 60

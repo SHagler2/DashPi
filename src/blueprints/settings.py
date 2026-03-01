@@ -1,3 +1,5 @@
+"""Settings blueprint — device config, OTA updates, shutdown/reboot, log download."""
+
 from flask import Blueprint, request, jsonify, current_app, render_template, Response
 from datetime import datetime, timedelta
 import os
@@ -37,12 +39,14 @@ def _get_version():
 
 @settings_bp.route('/settings')
 def settings_page():
+    """Render device settings page (display, timezone, brightness schedule)."""
     device_config = current_app.config['DEVICE_CONFIG']
     timezones = sorted(pytz.all_timezones_set)
     return render_template('settings.html', device_settings=device_config.get_config(), timezones=timezones)
 
 @settings_bp.route('/save_settings', methods=['POST'])
 def save_settings():
+    """Save device settings from the settings form."""
     device_config = current_app.config['DEVICE_CONFIG']
 
     try:
@@ -95,6 +99,7 @@ def save_settings():
 
 @settings_bp.route('/shutdown', methods=['POST'])
 def shutdown():
+    """Shutdown or reboot the Pi. Send {"reboot": true} for reboot."""
     data = request.get_json() or {}
     try:
         if data.get("reboot"):
@@ -249,6 +254,7 @@ def apply_update():
 
 @settings_bp.route('/download-logs')
 def download_logs():
+    """Download service logs as a text file. Reads from systemd journal."""
     try:
         buffer = io.StringIO()
         

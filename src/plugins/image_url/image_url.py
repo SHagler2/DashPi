@@ -1,10 +1,15 @@
+"""Image URL plugin — fetches and displays an image from a user-provided URL."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 import logging
 
 logger = logging.getLogger(__name__)
 
 class ImageURL(BasePlugin):
+    """Downloads an image from a URL and renders it to fit the display."""
+
     def generate_image(self, settings, device_config):
+        """Fetch the image from the configured URL and render it for display."""
         logger.info("=== Image URL Plugin: Starting image generation ===")
 
         url = settings.get('url')

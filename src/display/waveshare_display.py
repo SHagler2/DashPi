@@ -1,3 +1,5 @@
+"""Waveshare e-paper display driver with dynamic model loading."""
+
 import inspect
 import importlib
 import logging

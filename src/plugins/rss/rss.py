@@ -1,3 +1,5 @@
+"""RSS plugin — fetches and renders headlines from an RSS or Atom feed."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw
 from io import BytesIO
@@ -13,6 +15,8 @@ import html
 logger = logging.getLogger(__name__)
 
 class Rss(BasePlugin):
+    """Parses an RSS/Atom feed and renders a list of headlines with optional thumbnails."""
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['style_settings'] = True
@@ -24,6 +28,7 @@ class Rss(BasePlugin):
     THUMBNAIL_HARD_TIMEOUT_SECS = 5
 
     def generate_image(self, settings, device_config):
+        """Fetch the RSS feed and render headlines as a styled list."""
         title = settings.get("title")
         feed_url = settings.get("feedUrl")
         if not feed_url:

@@ -1,3 +1,5 @@
+"""Weather plugin — renders a multi-panel weather dashboard with forecasts and moon phase."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw
 from utils.app_utils import get_font
@@ -81,6 +83,7 @@ class Weather(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Fetch weather data and render the dashboard image."""
         # Validate and convert coordinates with proper error handling
         try:
             lat = float(settings.get('latitude'))

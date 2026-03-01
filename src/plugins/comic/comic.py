@@ -1,3 +1,5 @@
+"""Comic plugin — fetches and displays web comic strips from various sources."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw
 import logging
@@ -8,12 +10,15 @@ from utils.app_utils import get_font
 logger = logging.getLogger(__name__)
 
 class Comic(BasePlugin):
+    """Fetches the latest strip from a configured web comic and renders it for display."""
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['comics'] = list(COMICS)
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Fetch the latest comic panel and render it with an optional caption."""
         logger.info("=== Comic Plugin: Starting image generation ===")
 
         comic = settings.get("comic")

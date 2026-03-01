@@ -1,3 +1,5 @@
+"""Calendar plugin — displays a calendar view with Google Calendar event integration."""
+
 import os
 import calendar as cal_mod
 from utils.app_utils import resolve_path, get_font
@@ -14,6 +16,8 @@ from utils.http_client import get_http_session
 logger = logging.getLogger(__name__)
 
 class Calendar(BasePlugin):
+    """Renders day, week, or month calendar views with events fetched from iCal URLs."""
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['style_settings'] = True
@@ -21,6 +25,7 @@ class Calendar(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Fetch calendar events and render the selected view as an image."""
         import pytz
 
         calendar_urls = settings.get('calendarURLs[]')

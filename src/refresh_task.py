@@ -1,3 +1,11 @@
+"""Background display refresh engine.
+
+Runs a daemon thread that cycles through plugins in the active loop,
+generates images, and pushes them to the display. Handles manual update
+requests from the web UI, loop scheduling, auto-refresh (skip unchanged
+images), and per-plugin status tracking for the live status bar.
+"""
+
 import threading
 import tempfile
 import time
@@ -21,7 +29,13 @@ GLOBAL_STATUS_FILE = os.path.join(GLOBAL_STATUS_DIR, "refresh_status.json")
 PLUGINS_DIR = os.path.join(SRC_DIR, "plugins")
 
 class RefreshTask:
-    """Handles the logic for refreshing the display using a background thread."""
+    """Background thread that drives the display refresh loop.
+
+    The main loop (_run) waits for the rotation interval, determines the
+    active loop via LoopManager, generates an image from the next plugin,
+    and sends it to the DisplayManager. Manual updates from the web UI
+    interrupt the wait and trigger an immediate refresh.
+    """
 
     def __init__(self, device_config, display_manager):
         self.device_config = device_config

@@ -1,3 +1,5 @@
+"""Image Upload plugin — displays user-uploaded images from local storage."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageOps, ImageColor, ImageDraw, ImageFont
 import logging
@@ -11,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 
 class ImageUpload(BasePlugin):
+    """Loads and renders user-uploaded images with configurable fit and caption options."""
+
     def open_image(self, img_index: int, image_locations: list, dimensions: tuple, resize: bool = True, fit_mode: str = 'fill') -> Image:
         """
         Open image with adaptive loader for memory efficiency.
@@ -36,6 +40,7 @@ class ImageUpload(BasePlugin):
 
 
     def generate_image(self, settings, device_config) -> Image:
+        """Select and render an uploaded image with optional caption overlay."""
         logger.info("=== Image Upload Plugin: Starting image generation ===")
 
         # Ensure _previous_files is available (form POST doesn't include it)

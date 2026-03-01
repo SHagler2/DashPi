@@ -1,3 +1,5 @@
+"""Countdown plugin — displays a countdown or count-up to a target date."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw
 from datetime import datetime, timezone
@@ -7,12 +9,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 class Countdown(BasePlugin):
+    """Renders a day counter showing days remaining until or elapsed since a target date."""
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['style_settings'] = True
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Calculate days to/from the target date and render the countdown display."""
         import pytz
 
         title = settings.get('title')

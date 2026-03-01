@@ -1,3 +1,5 @@
+"""Data models — RefreshInfo, LoopManager, Loop, and PluginReference."""
+
 import os
 import json
 import logging

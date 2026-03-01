@@ -1,3 +1,5 @@
+"""Stocks plugin — displays a stock ticker dashboard with price charts."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw
 from utils.app_utils import get_font
@@ -69,6 +71,7 @@ class Stocks(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Fetch stock data via yfinance and render ticker cards in a grid layout."""
         title = settings.get("title", "Stock Prices")
         tickers_input = settings.get("tickers", "")
 

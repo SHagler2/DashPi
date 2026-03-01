@@ -1,3 +1,5 @@
+"""Newspaper plugin — displays today's newspaper front page from Freedom Forum."""
+
 from plugins.base_plugin.base_plugin import BasePlugin
 from datetime import datetime, timedelta
 from PIL import Image
@@ -8,7 +10,10 @@ logger = logging.getLogger(__name__)
 
 FREEDOM_FORUM_URL = "https://cdn.freedomforum.org/dfp/jpg{}/lg/{}.jpg"
 class Newspaper(BasePlugin):
+    """Fetches and displays a newspaper front page image from the Freedom Forum archive."""
+
     def generate_image(self, settings, device_config):
+        """Download the latest front page image and fit it to the display."""
         newspaper_slug = settings.get('newspaperSlug')
 
         if not newspaper_slug:

@@ -1,3 +1,5 @@
+"""Image Album plugin — displays photos from an Immich or Google Photos album."""
+
 import logging
 from random import choice
 
@@ -10,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 class ImmichProvider:
+    """Fetches album photos from a self-hosted Immich server."""
+
     def __init__(self, base_url: str, key: str, image_loader):
         self.base_url = base_url
         self.key = key
@@ -107,6 +111,8 @@ class ImmichProvider:
 
 
 class ImageAlbum(BasePlugin):
+    """Renders a random photo from a configured Immich or Google Photos album."""
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['api_key'] = {
@@ -117,6 +123,7 @@ class ImageAlbum(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Fetch a random photo from the configured album and render it for display."""
         logger.info("=== Image Album Plugin: Starting image generation ===")
 
         orientation = device_config.get_config("orientation")

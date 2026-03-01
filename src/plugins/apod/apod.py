@@ -17,6 +17,8 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 
 class Apod(BasePlugin):
+    """Fetches NASA's Astronomy Picture of the Day and renders it for display."""
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['api_key'] = {
@@ -28,6 +30,7 @@ class Apod(BasePlugin):
         return template_params
 
     def generate_image(self, settings, device_config):
+        """Fetch and render the APOD image for the configured or random date."""
         logger.info("=== APOD Plugin: Starting image generation ===")
 
         api_key = device_config.load_env_key("NASA_SECRET")

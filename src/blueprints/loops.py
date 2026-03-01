@@ -1,3 +1,5 @@
+"""Loops blueprint — create, edit, and manage time-based plugin rotation loops."""
+
 from flask import Blueprint, request, jsonify, current_app, render_template
 from utils.time_utils import calculate_seconds
 from utils.http_client import get_http_session

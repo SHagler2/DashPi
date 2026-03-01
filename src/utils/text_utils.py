@@ -1,3 +1,5 @@
+"""Text utilities — wrapping, truncation, and multi-line rendering for PIL."""
+
 from PIL import ImageDraw, ImageFont
 
 
