@@ -90,9 +90,7 @@ class AIImage(BasePlugin):
             image = self.image_loader.resize_image(image, dimensions, fit_mode=fit_mode)
 
             # Add title overlay — use original headline for news, final prompt otherwise
-            show_title_raw = settings.get("showTitle", "true")
-            logger.info(f"showTitle raw value: '{show_title_raw}' (type: {type(show_title_raw).__name__})")
-            show_title = show_title_raw != "false"
+            show_title = settings.get("showTitle", "true") != "false"
             title = original_headline if original_headline else final_prompt
             if show_title and title:
                 title = title.strip()
