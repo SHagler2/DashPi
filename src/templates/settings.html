@@ -482,19 +482,16 @@
             <!-- Inline WiFi change form -->
             <div id="wifiChangeForm" style="display: none; margin-top: 12px; padding: 12px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color);">
                 <div style="margin-bottom: 8px;">
-                    <select id="wifiNetworkList" onchange="onWifiNetworkSelect()"
-                            style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; background: var(--bg-color); color: var(--text-color);">
+                    <select id="wifiNetworkList" onchange="onWifiNetworkSelect()" class="form-input">
                         <option value="">Select a network...</option>
                     </select>
                 </div>
                 <div id="wifiOtherRow" style="display: none; margin-bottom: 8px;">
-                    <input type="text" id="newWifiSsid" placeholder="Network name (SSID)"
-                           style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; background: var(--bg-color); color: var(--text-color);"
+                    <input type="text" id="newWifiSsid" placeholder="Network name (SSID)" class="form-input"
                            autocapitalize="none" autocorrect="off">
                 </div>
                 <div id="wifiPasswordRow" style="display: none; margin-bottom: 10px;">
-                    <input type="password" id="newWifiPassword" placeholder="Password"
-                           style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; background: var(--bg-color); color: var(--text-color);"
+                    <input type="password" id="newWifiPassword" placeholder="Password" class="form-input"
                            autocapitalize="none" autocorrect="off">
                 </div>
                 <div style="display: flex; gap: 8px;">
