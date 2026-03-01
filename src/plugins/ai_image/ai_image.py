@@ -26,7 +26,9 @@ OPENAI_IMAGE_MODELS = ["dall-e-3", "dall-e-2", "gpt-image-1"]
 DEFAULT_OPENAI_MODEL = "dall-e-3"
 
 # Gemini models
-GEMINI_IMAGE_MODELS = ["imagen-4.0-generate-001", "imagen-4.0-fast-generate-001", "imagen-4.0-ultra-generate-001"]
+GEMINI_IMAGEN_MODELS = ["imagen-4.0-generate-001", "imagen-4.0-fast-generate-001", "imagen-4.0-ultra-generate-001"]
+GEMINI_NATIVE_MODELS = ["gemini-2.5-flash-image", "gemini-3-pro-image-preview", "gemini-3.1-flash-image-preview"]
+GEMINI_IMAGE_MODELS = GEMINI_IMAGEN_MODELS + GEMINI_NATIVE_MODELS
 DEFAULT_GEMINI_MODEL = "imagen-4.0-generate-001"
 
 
@@ -255,6 +257,7 @@ class AIImage(BasePlugin):
 
         try:
             from google import genai
+            from google.genai import types
 
             client = genai.Client(api_key=api_key)
 
@@ -276,23 +279,40 @@ class AIImage(BasePlugin):
             else:
                 aspect_ratio = "9:16"
 
-            result = client.models.generate_images(
-                model=image_model,
-                prompt=enhanced_prompt,
-                config={
-                    "number_of_images": 1,
-                    "aspect_ratio": aspect_ratio,
-                }
-            )
-
-            if result.generated_images:
-                # Get the first image
-                img_data = result.generated_images[0].image
-                # Convert to PIL Image
-                img = Image.open(BytesIO(img_data.image_bytes))
-                return img, text_prompt
+            if image_model in GEMINI_NATIVE_MODELS:
+                # Native Gemini image generation
+                response = client.models.generate_content(
+                    model=image_model,
+                    contents=enhanced_prompt,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["IMAGE"],
+                        image_config=types.ImageConfig(
+                            aspect_ratio=aspect_ratio,
+                        ),
+                    ),
+                )
+                for part in response.parts:
+                    if part.inline_data is not None:
+                        img = part.as_image()
+                        return img, text_prompt
+                raise RuntimeError("Gemini returned no image in response")
             else:
-                raise RuntimeError("Gemini returned no images")
+                # Imagen image generation
+                result = client.models.generate_images(
+                    model=image_model,
+                    prompt=enhanced_prompt,
+                    config={
+                        "number_of_images": 1,
+                        "aspect_ratio": aspect_ratio,
+                    }
+                )
+
+                if result.generated_images:
+                    img_data = result.generated_images[0].image
+                    img = Image.open(BytesIO(img_data.image_bytes))
+                    return img, text_prompt
+                else:
+                    raise RuntimeError("Gemini returned no images")
 
         except ImportError:
             logger.error("google-genai package not installed")
