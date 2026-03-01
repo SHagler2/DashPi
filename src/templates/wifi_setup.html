@@ -329,8 +329,8 @@
                                     {{ net.security if net.security else 'Open' }}
                                 </div>
                             </div>
-                            {% if net.security %}<span class="lock-icon">&#128274;</span>{% endif %}
-                            <span class="signal-icon">{{ '&#9679;&#9679;&#9679;' if net.signal > 66 else ('&#9679;&#9679;&#9675;' if net.signal > 33 else '&#9679;&#9675;&#9675;') }}</span>
+                            {% if net.security %}<span class="lock-icon">🔒</span>{% endif %}
+                            <span class="signal-icon">{{ '●●●' if net.signal > 66 else ('●●○' if net.signal > 33 else '●○○') }}</span>
                         </li>
                         {% endfor %}
                     {% else %}
@@ -382,7 +382,7 @@
 
         <!-- Success -->
         <div class="card success-card" id="successCard">
-            <div class="success-icon">&#10004;</div>
+            <div class="success-icon">✔</div>
             <h2>Connected!</h2>
             <p>Your device is now on the network.</p>
             <div class="ip-address" id="newIpAddress"></div>
@@ -475,9 +475,9 @@
 
             if (networks && networks.length > 0) {
                 networks.forEach((net, i) => {
-                    const signalIcons = net.signal > 66 ? '&#9679;&#9679;&#9679;' :
-                                       (net.signal > 33 ? '&#9679;&#9679;&#9675;' : '&#9679;&#9675;&#9675;');
-                    const lockIcon = net.security ? '<span class="lock-icon">&#128274;</span>' : '';
+                    const signalIcons = net.signal > 66 ? '●●●' :
+                                       (net.signal > 33 ? '●●○' : '●○○');
+                    const lockIcon = net.security ? '<span class="lock-icon">🔒</span>' : '';
                     html += `
                         <li class="network-item" onclick="selectNetwork(this, '${net.ssid.replace(/'/g, "\\'")}', '${net.security}')">
                             <input type="radio" name="network" value="${net.ssid}" id="net-${i}">
