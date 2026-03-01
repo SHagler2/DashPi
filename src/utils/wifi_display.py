@@ -41,8 +41,8 @@ def generate_wifi_setup_image(dimensions, ap_ssid, portal_url="http://10.42.0.1/
     width, height = dimensions
     bg_color = (255, 255, 255)
     text_color = (0, 0, 0)
-    accent_color = (26, 188, 156)  # DashPi teal #1abc9c
-    muted_color = (100, 100, 100)
+    heading_color = (0, 0, 0)  # Black — readable on both LCD and e-ink
+    muted_color = (80, 80, 80)
 
     image = Image.new("RGB", dimensions, bg_color)
     draw = ImageDraw.Draw(image)
@@ -67,7 +67,7 @@ def generate_wifi_setup_image(dimensions, ap_ssid, portal_url="http://10.42.0.1/
     title_font = get_font("Jost", title_size, "bold")
     draw.text(
         (width / 2, y_title), "WiFi Setup Required",
-        anchor="mm", fill=accent_color, font=title_font
+        anchor="mm", fill=heading_color, font=title_font
     )
 
     # --- Network name ---
@@ -119,13 +119,13 @@ def generate_wifi_setup_image(dimensions, ap_ssid, portal_url="http://10.42.0.1/
             url_font = get_font("Jost", instruction_size)
             draw.text(
                 (width / 2, y_qr_center), portal_url,
-                anchor="mm", fill=accent_color, font=url_font
+                anchor="mm", fill=heading_color, font=url_font
             )
     else:
         url_font = get_font("Jost", instruction_size)
         draw.text(
             (width / 2, y_qr_center), portal_url,
-            anchor="mm", fill=accent_color, font=url_font
+            anchor="mm", fill=heading_color, font=url_font
         )
 
     # --- Instructions ---
