@@ -466,7 +466,8 @@ class AIImage(BasePlugin):
 
         response = client.models.generate_content(
             model="gemini-2.0-flash",
-            contents=prompt_request
+            contents=prompt_request,
+            config={"temperature": 2.0}
         )
         prompt = response.text.strip()
         # Hard cap: truncate to 25 words max to prevent oversized prompts
