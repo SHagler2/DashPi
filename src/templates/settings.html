@@ -128,8 +128,39 @@
             }
         }
 
+        function toggleWifiForm() {
+            const form = document.getElementById('wifiChangeForm');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function switchWifi() {
+            const ssid = document.getElementById('newWifiSsid').value.trim();
+            const password = document.getElementById('newWifiPassword').value;
+            if (!ssid) {
+                showResponseModal('failure', 'Please enter a network name.');
+                return;
+            }
+            try {
+                const resp = await fetch('/wifi/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ssid, password })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    showResponseModal('success',
+                        `Connected to ${data.ssid}! New IP: ${data.ip}\n\nThis page will reload shortly.`);
+                    setTimeout(() => location.reload(), 5000);
+                } else {
+                    showResponseModal('failure', data.error || 'Connection failed.');
+                }
+            } catch (e) {
+                showResponseModal('failure', 'Connection failed — the device may be reconnecting.');
+            }
+        }
+
         async function reconfigureWifi() {
-            if (!confirm('This will disconnect DashPi from WiFi and start a setup hotspot. You will need to connect your phone to the hotspot to configure a new network.\n\nProceed?')) {
+            if (!confirm('This will disconnect from WiFi and start a setup hotspot.\nUse your phone to connect to the hotspot and configure a new network.\n\nProceed?')) {
                 return;
             }
             try {
@@ -137,7 +168,7 @@
                 const data = await resp.json();
                 if (data.success) {
                     showResponseModal('success',
-                        `WiFi hotspot started!\n\nConnect to "${data.ap_ssid}" on your phone to configure WiFi.`);
+                        `WiFi hotspot started!\n\nConnect to "${data.ap_ssid}" on your phone to configure WiFi.\nPassword: dashpisetup`);
                 } else {
                     showResponseModal('failure', data.error || 'Failed to start WiFi hotspot.');
                 }
@@ -392,8 +423,25 @@
                         Not connected
                     {% endif %}
                 </span>
+                <button type="button" class="header-button"
+                        onclick="toggleWifiForm()">Change WiFi</button>
                 <button type="button" class="header-button" style="background-color: #e67e22; color: #fff;"
-                        onclick="reconfigureWifi()">Reconfigure WiFi</button>
+                        onclick="reconfigureWifi()">Hotspot Setup</button>
+            </div>
+            <!-- Inline WiFi change form -->
+            <div id="wifiChangeForm" style="display: none; margin-top: 12px; padding: 12px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color);">
+                <div style="margin-bottom: 8px;">
+                    <input type="text" id="newWifiSsid" placeholder="Network name (SSID)"
+                           style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; background: var(--bg-color); color: var(--text-color);"
+                           autocapitalize="none" autocorrect="off">
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <input type="password" id="newWifiPassword" placeholder="Password (leave blank for open network)"
+                           style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; background: var(--bg-color); color: var(--text-color);"
+                           autocapitalize="none" autocorrect="off">
+                </div>
+                <button type="button" class="header-button" onclick="switchWifi()"
+                        style="background-color: #1abc9c; color: #fff;">Connect</button>
             </div>
         </div>
 

@@ -203,6 +203,13 @@ class WifiManager:
             # Remove any existing hotspot connection profile to start clean
             _run_nmcli(["connection", "delete", AP_CONNECTION_NAME], timeout=10)
 
+            # Disconnect current WiFi first — on netplan-managed systems (Trixie),
+            # nmcli hotspot hangs if the interface is still connected
+            if self._previous_connection:
+                logger.info("Disconnecting current WiFi: %s", self._previous_connection)
+                _run_nmcli(["connection", "down", self._previous_connection], timeout=10)
+                time.sleep(2)
+
             # Create and activate hotspot with password (nmcli requires min 8 chars)
             success, output = _run_nmcli([
                 "dev", "wifi", "hotspot",
@@ -211,7 +218,7 @@ class WifiManager:
                 "ssid", ap_ssid,
                 "band", "bg",
                 "password", AP_PASSWORD,
-            ], timeout=20)
+            ], timeout=30)
 
             if success:
                 self.state = STATE_AP_MODE

@@ -171,6 +171,57 @@ def wifi_reconfigure():
         return jsonify({"success": False, "error": "Failed to start WiFi hotspot"}), 500
 
 
+@wifi_bp.route('/wifi/switch', methods=['POST'])
+def wifi_switch():
+    """Switch to a different WiFi network directly (no hotspot needed).
+
+    Called from the Settings page when the device is already on a network
+    and the user wants to connect to a different visible network. Unlike
+    reconfigure, this doesn't enter AP mode — it just switches networks.
+    """
+    wifi_manager = current_app.config.get('WIFI_MANAGER')
+    display_manager = current_app.config.get('DISPLAY_MANAGER')
+    device_config = current_app.config['DEVICE_CONFIG']
+
+    if not wifi_manager:
+        return jsonify({"success": False, "error": "WiFi manager not available"}), 500
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "Invalid request"}), 400
+
+    ssid = data.get('ssid', '').strip()
+    password = data.get('password', '')
+
+    if not ssid:
+        return jsonify({"success": False, "error": "Network name is required"}), 400
+
+    success, result = wifi_manager.connect(ssid, password)
+
+    if success:
+        logger.info("WiFi switched successfully: %s (IP: %s)", ssid, result)
+        if display_manager:
+            try:
+                from utils.app_utils import generate_startup_image
+                img = generate_startup_image(device_config.get_resolution())
+                display_manager.display_image(img)
+            except Exception as e:
+                logger.warning("Failed to update display after WiFi switch: %s", e)
+
+        return jsonify({
+            "success": True,
+            "ip": result,
+            "ssid": ssid,
+            "message": f"Connected to {ssid}!"
+        })
+    else:
+        logger.warning("WiFi switch failed: %s — %s", ssid, result)
+        return jsonify({
+            "success": False,
+            "error": f"Could not connect to '{ssid}'. Check the password and try again."
+        })
+
+
 # --- Captive Portal Detection Endpoints ---
 # When a phone connects to the AP hotspot, the OS automatically probes these
 # URLs to check for internet access. By redirecting them to /wifi, the phone's
