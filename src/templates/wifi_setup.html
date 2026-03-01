@@ -40,10 +40,11 @@
 
         .card {
             background: #fff;
+            border: 1px solid #e0e0e0;
             border-radius: 12px;
             padding: 20px;
             margin-bottom: 16px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
 
         .card h2 {
@@ -65,7 +66,7 @@
             border-bottom: 1px solid #f0f0f0;
             cursor: pointer;
             border-radius: 8px;
-            transition: background 0.15s;
+            transition: background 0.3s ease;
         }
 
         .network-item:hover, .network-item.selected {
@@ -111,7 +112,7 @@
 
         .hidden-network {
             padding: 12px;
-            border-top: 1px solid #f0f0f0;
+            border-top: 1px solid #e0e0e0;
         }
 
         .hidden-network label {
@@ -140,17 +141,18 @@
 
         input[type="text"], input[type="password"] {
             width: 100%;
-            padding: 12px;
+            padding: 12px 14px;
             font-size: 16px;
-            border: 1px solid #ddd;
+            border: 1px solid #e0e0e0;
             border-radius: 8px;
             background: #fafafa;
             outline: none;
-            transition: border-color 0.15s;
+            transition: all 0.3s ease;
         }
 
         input[type="text"]:focus, input[type="password"]:focus {
             border-color: #1abc9c;
+            box-shadow: 0 0 0 3px rgba(26, 188, 156, 0.3);
         }
 
         .password-section {
@@ -182,27 +184,39 @@
             border: none;
             border-radius: 10px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s ease;
         }
 
         .btn-primary {
             background: #1abc9c;
             color: white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
         }
 
-        .btn-primary:hover { background: #16a085; }
+        .btn-primary:hover {
+            background: #16a085;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
         .btn-primary:disabled {
             background: #a0d8cd;
             cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
         }
 
         .btn-secondary {
             background: #e8e8e8;
             color: #555;
             margin-top: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
         }
 
-        .btn-secondary:hover { background: #ddd; }
+        .btn-secondary:hover {
+            background: #ddd;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
 
         .status-area {
             display: none;
@@ -251,7 +265,8 @@
             font-size: 20px;
             font-weight: 600;
             color: #333;
-            background: #f0f0f0;
+            background: #e8f8f5;
+            border: 1px solid #1abc9c;
             padding: 12px 20px;
             border-radius: 8px;
             display: inline-block;
@@ -270,6 +285,7 @@
             background: #fdf0f0;
             color: #c0392b;
             padding: 12px;
+            border: 1px solid #f5c6cb;
             border-radius: 8px;
             font-size: 14px;
             margin-bottom: 12px;
