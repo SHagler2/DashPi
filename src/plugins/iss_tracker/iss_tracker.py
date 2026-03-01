@@ -212,7 +212,7 @@ class ISSTracker(BasePlugin):
             if (self._cached_over_text is None or self._over_text_position is None or
                     abs(iss_lat - self._over_text_position[0]) > GEOCODE_MOVE_THRESHOLD or
                     abs(iss_lon - self._over_text_position[1]) > GEOCODE_MOVE_THRESHOLD):
-                self._cached_over_text = _reverse_geocode_from_data(iss_lat, iss_lon, landmarks)
+                self._cached_over_text = _reverse_geocode_from_data(iss_lat, iss_lon, landmarks, units)
                 self._over_text_position = (iss_lat, iss_lon)
             over_text = self._cached_over_text
 
@@ -1124,7 +1124,7 @@ def _compute_ground_track(tle_lines, now_utc):
     return points
 
 
-def _reverse_geocode_from_data(lat, lon, landmarks):
+def _reverse_geocode_from_data(lat, lon, landmarks, units="metric"):
     """Find nearest landmark using pre-loaded landmarks data."""
     if not landmarks:
         return _ocean_fallback(lat, lon)
@@ -1136,6 +1136,9 @@ def _reverse_geocode_from_data(lat, lon, landmarks):
             min_dist = d
             nearest = lm
     if nearest and min_dist < 1000:
+        if units == "imperial":
+            dist_mi = min_dist * 0.621371
+            return f"{dist_mi:.0f} mi from {nearest['name']}"
         return f"{min_dist:.0f} km from {nearest['name']}"
     return _ocean_fallback(lat, lon)
 
