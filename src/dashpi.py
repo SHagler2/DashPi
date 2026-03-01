@@ -19,6 +19,7 @@ import warnings
 warnings.filterwarnings("ignore", message=".*Busy Wait: Held high.*")
 
 from utils.app_utils import generate_startup_image
+from utils.wifi_manager import WifiManager
 from flask import Flask
 from config import Config
 from display.display_manager import DisplayManager
@@ -28,6 +29,7 @@ from blueprints.settings import settings_bp
 from blueprints.plugin import plugin_bp
 from blueprints.apikeys import apikeys_bp
 from blueprints.loops import loops_bp
+from blueprints.wifi import wifi_bp
 from jinja2 import ChoiceLoader, FileSystemLoader
 from plugins.plugin_registry import load_plugins
 from waitress import serve
@@ -60,7 +62,8 @@ app.jinja_loader = ChoiceLoader([FileSystemLoader(directory) for directory in te
 
 device_config = Config()
 display_manager = DisplayManager(device_config)
-refresh_task = RefreshTask(device_config, display_manager)
+wifi_manager = WifiManager()
+refresh_task = RefreshTask(device_config, display_manager, wifi_manager)
 
 load_plugins(device_config.get_plugins())
 
@@ -77,6 +80,7 @@ if not _device_name:
 app.config['DEVICE_CONFIG'] = device_config
 app.config['DISPLAY_MANAGER'] = display_manager
 app.config['REFRESH_TASK'] = refresh_task
+app.config['WIFI_MANAGER'] = wifi_manager
 
 # Set additional parameters
 app.config['MAX_FORM_PARTS'] = 10_000
@@ -87,6 +91,7 @@ app.register_blueprint(settings_bp)
 app.register_blueprint(plugin_bp)
 app.register_blueprint(apikeys_bp)
 app.register_blueprint(loops_bp)
+app.register_blueprint(wifi_bp)
 
 # Inject project_name and version into all templates
 @app.context_processor
@@ -110,9 +115,34 @@ if __name__ == '__main__':
     # display startup image on first boot
     if device_config.get_config("startup") is True:
         logger.info("Startup flag is set, displaying startup image")
-        img = generate_startup_image(device_config.get_resolution())
-        display_manager.display_image(img)
+        if wifi_manager.check_connectivity():
+            img = generate_startup_image(device_config.get_resolution())
+            display_manager.display_image(img)
+        else:
+            # No WiFi — enter AP mode and show setup screen
+            logger.info("No WiFi at startup, entering AP mode")
+            from utils.wifi_display import generate_wifi_setup_image
+            device_name = device_config.get_config("device_name", default="DashPi")
+            ap_ssid = wifi_manager.get_ap_ssid(device_name)
+            wifi_manager.start_ap_mode(device_name)
+            portal_url = f"http://{wifi_manager.get_hotspot_ip()}"
+            img = generate_wifi_setup_image(
+                device_config.get_resolution(), ap_ssid, portal_url
+            )
+            display_manager.display_image(img)
         device_config.update_value("startup", False, write=True)
+    elif not wifi_manager.check_connectivity():
+        # Not first boot, but no WiFi — enter AP mode
+        logger.info("No WiFi detected, entering AP mode")
+        from utils.wifi_display import generate_wifi_setup_image
+        device_name = device_config.get_config("device_name", default="DashPi")
+        ap_ssid = wifi_manager.get_ap_ssid(device_name)
+        wifi_manager.start_ap_mode(device_name)
+        portal_url = f"http://{wifi_manager.get_hotspot_ip()}"
+        img = generate_wifi_setup_image(
+            device_config.get_resolution(), ap_ssid, portal_url
+        )
+        display_manager.display_image(img)
 
     try:
         # Run the Flask app

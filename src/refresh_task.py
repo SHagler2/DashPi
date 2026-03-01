@@ -37,9 +37,10 @@ class RefreshTask:
     interrupt the wait and trigger an immediate refresh.
     """
 
-    def __init__(self, device_config, display_manager):
+    def __init__(self, device_config, display_manager, wifi_manager=None):
         self.device_config = device_config
         self.display_manager = display_manager
+        self.wifi_manager = wifi_manager
 
         self.thread = None
         self.lock = threading.Lock()
@@ -240,6 +241,35 @@ class RefreshTask:
                     # Exit if `stop()` is called
                     if not self.running:
                         break
+
+                    # Check WiFi connectivity — skip plugin generation if in AP mode
+                    if self.wifi_manager and not self.manual_update_request:
+                        from utils.wifi_manager import STATE_AP_MODE, STATE_CONNECTED
+                        if self.wifi_manager.state == STATE_AP_MODE:
+                            logger.debug("In AP mode, skipping plugin refresh")
+                            self.refresh_event.set()
+                            continue
+                        if not self.wifi_manager.check_connectivity():
+                            if self.wifi_manager.state != STATE_AP_MODE:
+                                logger.warning("WiFi lost, entering AP mode")
+                                device_name = self.device_config.get_config(
+                                    "device_name", default="DashPi"
+                                )
+                                self.wifi_manager.start_ap_mode(device_name)
+                                try:
+                                    from utils.wifi_display import generate_wifi_setup_image
+                                    ap_ssid = self.wifi_manager.get_ap_ssid(device_name)
+                                    portal_url = f"http://{self.wifi_manager.get_hotspot_ip()}"
+                                    img = generate_wifi_setup_image(
+                                        self.device_config.get_resolution(),
+                                        ap_ssid, portal_url
+                                    )
+                                    self.display_manager.display_image(img)
+                                except Exception as e:
+                                    logger.error("Failed to show WiFi setup image: %s", e)
+                                self._set_global_status("idle", "WiFi Setup — waiting for configuration")
+                            self.refresh_event.set()
+                            continue
 
                     latest_refresh = self.device_config.get_refresh_info()
                     current_dt = self._get_current_datetime()

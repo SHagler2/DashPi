@@ -42,7 +42,14 @@ def settings_page():
     """Render device settings page (display, timezone, brightness schedule)."""
     device_config = current_app.config['DEVICE_CONFIG']
     timezones = sorted(pytz.all_timezones_set)
-    return render_template('settings.html', device_settings=device_config.get_config(), timezones=timezones)
+
+    # Get WiFi info for display
+    wifi_manager = current_app.config.get('WIFI_MANAGER')
+    wifi_ssid = wifi_manager.get_wifi_ssid() if wifi_manager else None
+    wifi_ip = wifi_manager.get_ip_address() if wifi_manager else None
+
+    return render_template('settings.html', device_settings=device_config.get_config(),
+                           timezones=timezones, wifi_ssid=wifi_ssid, wifi_ip=wifi_ip)
 
 @settings_bp.route('/save_settings', methods=['POST'])
 def save_settings():

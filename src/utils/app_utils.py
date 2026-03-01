@@ -140,7 +140,6 @@ def generate_startup_image(dimensions=(800,480)):
     width, height = dimensions
 
     hostname = socket.gethostname()
-    ip = get_ip_address()
 
     image = Image.new("RGBA", dimensions, bg_color)
     image_draw = ImageDraw.Draw(image)
@@ -155,13 +154,17 @@ def generate_startup_image(dimensions=(800,480)):
     y_text = height * 3 / 4
     image_draw.text((width/2, y_text), text, anchor="mm", fill=text_color, font=get_font("Jost", text_font_size))
 
-    # Draw the IP on a line below
-    ip_text = f"or http://{ip}"
-    ip_text_font_size = width * 0.032
-    bbox = image_draw.textbbox((0, 0), text, font=get_font("Jost", text_font_size))
-    text_height = bbox[3] - bbox[1]
-    ip_y = y_text + text_height * 1.35
-    image_draw.text((width/2, ip_y), ip_text, anchor="mm", fill=text_color, font=get_font("Jost", ip_text_font_size))
+    # Draw the IP on a line below (skip if no network)
+    try:
+        ip = get_ip_address()
+        ip_text = f"or http://{ip}"
+        ip_text_font_size = width * 0.032
+        bbox = image_draw.textbbox((0, 0), text, font=get_font("Jost", text_font_size))
+        text_height = bbox[3] - bbox[1]
+        ip_y = y_text + text_height * 1.35
+        image_draw.text((width/2, ip_y), ip_text, anchor="mm", fill=text_color, font=get_font("Jost", ip_text_font_size))
+    except OSError:
+        logger.warning("Could not get IP address for startup image (no network)")
 
     return image
 

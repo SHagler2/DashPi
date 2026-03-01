@@ -22,5 +22,7 @@ shazamio
 ai-edge-litert
 skyfield>=1.45
 sgp4
+# WiFi provisioning (QR code for captive portal)
+qrcode[pil]>=7.4
 # E-ink display support (Inky auto-detect)
 inky==2.2.1
