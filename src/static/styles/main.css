@@ -592,6 +592,7 @@ textarea {
     padding: 0.5rem;
     font-size: 1rem;
     font-family: 'Poppins', sans-serif;
+    resize: vertical;
     transition: all 0.3s ease;
 }
 
