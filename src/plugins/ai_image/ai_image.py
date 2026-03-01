@@ -460,7 +460,8 @@ class AIImage(BasePlugin):
             prompt_request = (
                 "Generate a completely random and unique image prompt. Focus on unexpected, "
                 "unconventional, and bizarre combinations of art style, medium, subjects, "
-                "time periods, and moods. Include a random artist, movie, tv show or time period. "
+                "time periods, and moods. Pick from a WIDE range of obscure and well-known "
+                "artists, genres, cultures, and eras — do NOT default to surrealism or Dali. "
                 "Keep it 20 words or less. Just provide the prompt, no explanation."
             )
 
