@@ -94,6 +94,10 @@ class AIImage(BasePlugin):
             title = original_headline if original_headline else final_prompt
             if show_title and title:
                 title = title.strip()
+                # Truncate long titles to keep overlay concise
+                words = title.split()
+                if len(words) > 10:
+                    title = ' '.join(words[:10]) + '...'
                 image = self._add_title_overlay(image, title)
                 logger.info(f"Added title overlay: {title}")
 
