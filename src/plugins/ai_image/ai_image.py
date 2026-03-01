@@ -293,7 +293,7 @@ class AIImage(BasePlugin):
                 )
                 for part in response.parts:
                     if part.inline_data is not None:
-                        img = part.as_image()
+                        img = Image.open(BytesIO(part.inline_data.data))
                         return img, text_prompt
                 raise RuntimeError("Gemini returned no image in response")
             else:
