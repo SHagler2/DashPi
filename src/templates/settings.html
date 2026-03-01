@@ -128,16 +128,67 @@
             }
         }
 
-        function toggleWifiForm() {
+        async function toggleWifiForm() {
             const form = document.getElementById('wifiChangeForm');
-            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+            if (form.style.display === 'none') {
+                form.style.display = 'block';
+                await scanWifiNetworks();
+            } else {
+                form.style.display = 'none';
+            }
+        }
+
+        async function scanWifiNetworks() {
+            const list = document.getElementById('wifiNetworkList');
+            list.innerHTML = '<option value="">Scanning...</option>';
+            document.getElementById('newWifiPassword').value = '';
+            document.getElementById('wifiPasswordRow').style.display = 'none';
+            try {
+                const resp = await fetch('/wifi/scan');
+                const data = await resp.json();
+                let html = '<option value="">Select a network...</option>';
+                if (data.networks && data.networks.length > 0) {
+                    data.networks.forEach(net => {
+                        const signal = net.signal > 66 ? '▰▰▰' : (net.signal > 33 ? '▰▰▱' : '▰▱▱');
+                        const lock = net.security ? ' 🔒' : '';
+                        html += `<option value="${net.ssid}" data-security="${net.security}">${net.ssid} ${signal}${lock}</option>`;
+                    });
+                }
+                html += '<option value="__other__">Other network...</option>';
+                list.innerHTML = html;
+            } catch (e) {
+                list.innerHTML = '<option value="">Scan failed</option>';
+            }
+        }
+
+        function onWifiNetworkSelect() {
+            const select = document.getElementById('wifiNetworkList');
+            const val = select.value;
+            const otherRow = document.getElementById('wifiOtherRow');
+            const pwRow = document.getElementById('wifiPasswordRow');
+
+            if (val === '__other__') {
+                otherRow.style.display = 'block';
+                pwRow.style.display = 'block';
+            } else if (val) {
+                otherRow.style.display = 'none';
+                const opt = select.options[select.selectedIndex];
+                pwRow.style.display = opt.dataset.security ? 'block' : 'none';
+            } else {
+                otherRow.style.display = 'none';
+                pwRow.style.display = 'none';
+            }
         }
 
         async function switchWifi() {
-            const ssid = document.getElementById('newWifiSsid').value.trim();
+            const select = document.getElementById('wifiNetworkList');
+            let ssid = select.value;
+            if (ssid === '__other__') {
+                ssid = document.getElementById('newWifiSsid').value.trim();
+            }
             const password = document.getElementById('newWifiPassword').value;
             if (!ssid) {
-                showResponseModal('failure', 'Please enter a network name.');
+                showResponseModal('failure', 'Please select or enter a network name.');
                 return;
             }
             try {
@@ -431,17 +482,26 @@
             <!-- Inline WiFi change form -->
             <div id="wifiChangeForm" style="display: none; margin-top: 12px; padding: 12px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color);">
                 <div style="margin-bottom: 8px;">
+                    <select id="wifiNetworkList" onchange="onWifiNetworkSelect()"
+                            style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; background: var(--bg-color); color: var(--text-color);">
+                        <option value="">Select a network...</option>
+                    </select>
+                </div>
+                <div id="wifiOtherRow" style="display: none; margin-bottom: 8px;">
                     <input type="text" id="newWifiSsid" placeholder="Network name (SSID)"
                            style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; background: var(--bg-color); color: var(--text-color);"
                            autocapitalize="none" autocorrect="off">
                 </div>
-                <div style="margin-bottom: 10px;">
-                    <input type="password" id="newWifiPassword" placeholder="Password (leave blank for open network)"
+                <div id="wifiPasswordRow" style="display: none; margin-bottom: 10px;">
+                    <input type="password" id="newWifiPassword" placeholder="Password"
                            style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; background: var(--bg-color); color: var(--text-color);"
                            autocapitalize="none" autocorrect="off">
                 </div>
-                <button type="button" class="header-button" onclick="switchWifi()"
-                        style="background-color: #1abc9c; color: #fff;">Connect</button>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="header-button" onclick="switchWifi()"
+                            style="background-color: #1abc9c; color: #fff;">Connect</button>
+                    <button type="button" class="header-button" onclick="scanWifiNetworks()">Rescan</button>
+                </div>
             </div>
         </div>
 
