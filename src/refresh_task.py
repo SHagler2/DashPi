@@ -249,9 +249,19 @@ class RefreshTask:
                             logger.debug("In AP mode, skipping plugin refresh")
                             self.refresh_event.set()
                             continue
-                        if not self.wifi_manager.check_connectivity():
+                        # Retry connectivity check to avoid false positives from
+                        # momentary drops (e.g. right after WiFi provisioning)
+                        wifi_ok = False
+                        for attempt in range(3):
+                            if self.wifi_manager.check_connectivity():
+                                wifi_ok = True
+                                break
+                            if attempt < 2:
+                                logger.debug("Connectivity check failed (attempt %d/3), retrying...", attempt + 1)
+                                time.sleep(5)
+                        if not wifi_ok:
                             if self.wifi_manager.state != STATE_AP_MODE:
-                                logger.warning("WiFi lost, entering AP mode")
+                                logger.warning("WiFi lost after 3 checks, entering AP mode")
                                 device_name = self.device_config.get_config(
                                     "device_name", default="DashPi"
                                 )
