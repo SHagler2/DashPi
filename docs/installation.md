@@ -5,8 +5,8 @@
 1. Install the Raspberry Pi Imager from the [official download page](https://www.raspberrypi.com/software/)
 2. Insert the target SD Card into your computer and launch the Raspberry Pi Imager software
     - Raspberry Pi Device: Choose your Pi model
-    - Operating System: Select **Raspberry Pi OS (Legacy, 64-bit) Lite**
-        - Do not use the default "Raspberry Pi OS (64-bit)" Desktop image. The Lite image saves significant RAM and disk space by excluding the desktop environment, browser, and other unnecessary packages — critical for the Pi Zero 2W's 512 MB of RAM.
+    - Operating System: Select **Raspberry Pi OS Lite (64-bit)**
+        - Use the **Lite** image, not the Desktop image. The Lite image saves significant RAM and disk space by excluding the desktop environment, browser, and other unnecessary packages — critical for the Pi Zero 2W's 512 MB of RAM.
     - Storage: Select the target SD Card
 
 <img src="./images/raspberry_pi_imager.png" alt="Raspberry Pi Imager" width="500"/>

@@ -9,15 +9,14 @@ sudo systemctl status dashpi.service
 
 If the service is running, this should output `Active: active (running)`:
 ```bash
-● dashpi.service - DashPi App
+● dashpi.service - dashpi App
      Loaded: loaded (/etc/systemd/system/dashpi.service; enabled; preset: enabled)
-     Active: active (running) since Sun 2024-12-22 20:48:53 GMT; 28s ago
+     Active: active (running) since ...
    Main PID: 48333 (bash)
-      Tasks: 6 (limit: 166)
-        CPU: 6.333s
+      Tasks: 6
      CGroup: /system.slice/dashpi.service
-             ├─48333 bash /usr/local/bin/dashpi -d
-             └─48336 python -u /home/pi/inky/src/dashpi.py -d
+             ├─48333 bash /usr/local/bin/dashpi
+             └─48336 python -u /usr/local/dashpi/src/dashpi.py
 ```
 
 If the service is not running, check the logs for any errors or issues.
@@ -74,19 +73,16 @@ RuntimeError: No EEPROM detected! You must manually initialise your Inky board.
 
 DashPi uses the [inky python library](https://github.com/pimoroni/inky) from Pimoroni to detect and interface with Inky displays. However, the auto-detect functionality does not work on some boards, which requires manual setup (see [Manual Setup](https://github.com/pimoroni/inky?tab=readme-ov-file#manual-setup)).
 
-Manually import and instantiate the correct Inky module in src/display_manager.py. For the 7.3 Inky Impression, modify the file as follows:
+Manually import and instantiate the correct Inky module in `src/display/inky_display.py`. For the 7.3 Inky Impression, modify the file as follows:
 ```
 @@ -1,5 +1,5 @@
- import os
+ import logging
 -from inky.auto import auto
 +from inky.inky_ac073tc1a import Inky
- from utils.image_utils import resize_image, change_orientation
- from plugins.plugin_registry import get_plugin_instance
+ from display.abstract_display import AbstractDisplay
 
-@@ -8,7 +8,7 @@ class DisplayManager:
-     def __init__(self, device_config):
-         """Manages the display and rendering of images."""
-         self.device_config = device_config
+@@ -30,7 +30,7 @@ class InkyDisplay(AbstractDisplay):
+     def initialize_display(self):
 -        self.inky_display = auto()
 +        self.inky_display = Inky()
          self.inky_display.set_border(self.inky_display.BLACK)
@@ -154,9 +150,11 @@ If you encounter this error, please feel free to open an Issue, including the na
 
 Also consider supporting the important work of Freedom Forum, an organization dedicated to promoting and protecting free press and the First Amendment: https://www.freedomforum.org/take-action/
 
-## Known Issues during Pi Zero W Installation
+## Known Issues during Pi Zero Installation
 
-Due to limitations with the Pi Zero W, there are some known issues during the DashPi installation process. For more details and community discussion, refer to this [GitHub Issue](https://github.com/SHagler2/DashPi/issues/5).
+The Pi Zero 2W has only 512 MB of RAM, which can cause out-of-memory issues during installation. As of v2.0, the install script handles this automatically by expanding swap to 2 GB and installing pip packages in small batches. If you still encounter issues, the manual fixes below may help.
+
+For more details and community discussion, refer to this [GitHub Issue](https://github.com/SHagler2/DashPi/issues/5).
 
 ### Pip Installation Error
 
@@ -166,10 +164,10 @@ WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status
 ```
 
 #### Recommended solution
-Manually install the required pip packages in the dashpi virtual environment:
+Re-run the install script — v2.0 automatically detects low-memory devices and installs packages in batches. If the issue persists, manually install the required pip packages:
 ```bash
 source "/usr/local/dashpi/venv_dashpi/bin/activate"
-pip install -r install/requirements.txt
+pip install --no-cache-dir -r install/requirements.txt
 deactivate
 ```
 Restart the dashpi service to apply the changes:
@@ -192,7 +190,7 @@ To resolve this issue, manually reinstall the Pillow library in the dashpi virtu
 sudo su
 source "/usr/local/dashpi/venv_dashpi/bin/activate"
 pip uninstall Pillow
-pip install Pillow
+pip install --no-cache-dir Pillow
 deactivate
 ```
 
