@@ -167,9 +167,11 @@ def generate_startup_image(dimensions=(800,480)):
 
 def parse_form(request_form):
     """Parse Flask form data, handling the hidden+checkbox toggle pattern.
-    # For checkboxes with a hidden fallback (hidden value="false", checkbox value="true"),
-    # the form sends both values when checked. We take the LAST value for scalar fields,
-    # which is the checkbox value when checked, or the hidden value when unchecked.
+
+    For checkboxes with a hidden fallback (hidden value="false", checkbox value="true"),
+    the form sends both values when checked. We take the LAST value for scalar fields,
+    which is the checkbox value when checked, or the hidden value when unchecked.
+    """
     request_dict = {}
     for key in request_form.keys():
         if key.endswith('[]'):
