@@ -125,9 +125,10 @@ if __name__ == '__main__':
             device_name = device_config.get_config("device_name", default="DashPi")
             ap_ssid = wifi_manager.get_ap_ssid(device_name)
             wifi_manager.start_ap_mode(device_name)
-            portal_url = f"http://{wifi_manager.get_hotspot_ip()}"
+            portal_url = f"http://{wifi_manager.get_hotspot_ip()}/wifi"
             img = generate_wifi_setup_image(
-                device_config.get_resolution(), ap_ssid, portal_url
+                device_config.get_resolution(), ap_ssid, portal_url,
+                password=wifi_manager.get_ap_password()
             )
             display_manager.display_image(img)
         device_config.update_value("startup", False, write=True)
@@ -138,9 +139,10 @@ if __name__ == '__main__':
         device_name = device_config.get_config("device_name", default="DashPi")
         ap_ssid = wifi_manager.get_ap_ssid(device_name)
         wifi_manager.start_ap_mode(device_name)
-        portal_url = f"http://{wifi_manager.get_hotspot_ip()}"
+        portal_url = f"http://{wifi_manager.get_hotspot_ip()}/wifi"
         img = generate_wifi_setup_image(
-            device_config.get_resolution(), ap_ssid, portal_url
+            device_config.get_resolution(), ap_ssid, portal_url,
+            password=wifi_manager.get_ap_password()
         )
         display_manager.display_image(img)
 

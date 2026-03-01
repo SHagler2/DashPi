@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # AP mode settings
 AP_SSID_SUFFIX = "-Setup"
-AP_IP = "192.168.4.1"
+AP_PASSWORD = "dashpisetup"
 AP_CONNECTION_NAME = "DashPi-Hotspot"
 
 # States
@@ -171,12 +171,16 @@ class WifiManager:
         """
         return f"{device_name}{AP_SSID_SUFFIX}"
 
+    def get_ap_password(self):
+        """Get the hotspot password."""
+        return AP_PASSWORD
+
     def start_ap_mode(self, device_name="DashPi"):
         """Start a WiFi hotspot for captive portal provisioning.
 
-        Creates an open (no password) WiFi hotspot that users can connect to
-        with their phone. The captive portal web UI runs on the existing
-        Flask server at http://192.168.4.1.
+        Creates a WPA-protected hotspot (nmcli requires a password). Users
+        connect with their phone using the password shown on the display,
+        then the captive portal auto-opens for WiFi configuration.
 
         Args:
             device_name: Device name used to generate the AP SSID.
@@ -191,7 +195,7 @@ class WifiManager:
 
         with self._lock:
             ap_ssid = self.get_ap_ssid(device_name)
-            logger.info("Starting WiFi hotspot: %s", ap_ssid)
+            logger.info("Starting WiFi hotspot: %s (password: %s)", ap_ssid, AP_PASSWORD)
 
             # Remember current connection for later restoration
             self._previous_connection = self._get_active_wifi_connection()
@@ -199,29 +203,15 @@ class WifiManager:
             # Remove any existing hotspot connection profile to start clean
             _run_nmcli(["connection", "delete", AP_CONNECTION_NAME], timeout=10)
 
-            # Create and activate hotspot
-            # nmcli dev wifi hotspot creates an AP with DHCP built in
+            # Create and activate hotspot with password (nmcli requires min 8 chars)
             success, output = _run_nmcli([
                 "dev", "wifi", "hotspot",
                 "ifname", "wlan0",
                 "con-name", AP_CONNECTION_NAME,
                 "ssid", ap_ssid,
                 "band", "bg",
-                "password", "",  # Open network
+                "password", AP_PASSWORD,
             ], timeout=20)
-
-            if not success:
-                # Some nmcli versions require a password for hotspot
-                # Try with a minimal password
-                logger.warning("Open hotspot failed, trying with password")
-                success, output = _run_nmcli([
-                    "dev", "wifi", "hotspot",
-                    "ifname", "wlan0",
-                    "con-name", AP_CONNECTION_NAME,
-                    "ssid", ap_ssid,
-                    "band", "bg",
-                    "password", "dashpisetup",
-                ], timeout=20)
 
             if success:
                 self.state = STATE_AP_MODE

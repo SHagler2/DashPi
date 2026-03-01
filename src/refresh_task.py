@@ -259,10 +259,11 @@ class RefreshTask:
                                 try:
                                     from utils.wifi_display import generate_wifi_setup_image
                                     ap_ssid = self.wifi_manager.get_ap_ssid(device_name)
-                                    portal_url = f"http://{self.wifi_manager.get_hotspot_ip()}"
+                                    portal_url = f"http://{self.wifi_manager.get_hotspot_ip()}/wifi"
                                     img = generate_wifi_setup_image(
                                         self.device_config.get_resolution(),
-                                        ap_ssid, portal_url
+                                        ap_ssid, portal_url,
+                                        password=self.wifi_manager.get_ap_password()
                                     )
                                     self.display_manager.display_image(img)
                                 except Exception as e:

@@ -21,19 +21,19 @@ except ImportError:
     logger.debug("qrcode library not available, QR codes will be skipped")
 
 
-def generate_wifi_setup_image(dimensions, ap_ssid, portal_url="http://10.42.0.1",
+def generate_wifi_setup_image(dimensions, ap_ssid, portal_url="http://10.42.0.1/wifi",
                                password=None):
     """Generate a display image for WiFi setup mode.
 
-    Shows the AP hotspot name, connection instructions, and optionally a QR code
+    Shows the AP hotspot name, password, connection instructions, and a QR code
     linking to the captive portal. Designed to be readable on both high-res LCD
     and low-res e-ink displays.
 
     Args:
         dimensions: Tuple of (width, height) in pixels.
         ap_ssid: The WiFi hotspot SSID to display (e.g., "Lumi-Setup").
-        portal_url: URL for the captive portal (e.g., "http://10.42.0.1").
-        password: Optional hotspot password. If None, shown as open network.
+        portal_url: URL for the captive portal (e.g., "http://10.42.0.1/wifi").
+        password: Hotspot password. Required for connection.
 
     Returns:
         PIL Image in RGB mode, ready for display_manager.display_image().
@@ -42,48 +42,60 @@ def generate_wifi_setup_image(dimensions, ap_ssid, portal_url="http://10.42.0.1"
     bg_color = (255, 255, 255)
     text_color = (0, 0, 0)
     accent_color = (26, 188, 156)  # DashPi teal #1abc9c
+    muted_color = (100, 100, 100)
 
     image = Image.new("RGB", dimensions, bg_color)
     draw = ImageDraw.Draw(image)
 
     # Scale font sizes relative to display width
-    title_size = int(width * 0.06)
-    ssid_size = int(width * 0.055)
-    instruction_size = int(width * 0.03)
-    small_size = int(width * 0.025)
+    title_size = int(width * 0.055)
+    label_size = int(width * 0.028)
+    value_size = int(width * 0.045)
+    instruction_size = int(width * 0.028)
+    small_size = int(width * 0.022)
 
-    # Layout: title at top, QR in center, instructions below
-    # Vertical spacing proportional to height
-    y_title = height * 0.08
-    y_ssid = height * 0.18
-    y_qr_center = height * 0.48
-    y_instructions_start = height * 0.72
+    # Layout: compact top section, QR in center, instructions below
+    y_title = height * 0.07
+    y_network_label = height * 0.15
+    y_network_value = height * 0.20
+    y_password_label = height * 0.27
+    y_password_value = height * 0.32
+    y_qr_center = height * 0.52
+    y_instructions_start = height * 0.73
 
     # --- Title ---
     title_font = get_font("Jost", title_size, "bold")
     draw.text(
-        (width / 2, y_title), "WiFi Setup",
+        (width / 2, y_title), "WiFi Setup Required",
         anchor="mm", fill=accent_color, font=title_font
     )
 
-    # --- SSID ---
-    ssid_font = get_font("Jost", ssid_size)
+    # --- Network name ---
+    label_font = get_font("Jost", label_size)
+    value_font = get_font("Jost", value_size, "bold")
+
     draw.text(
-        (width / 2, y_ssid), f'Connect to:  "{ap_ssid}"',
-        anchor="mm", fill=text_color, font=ssid_font
+        (width / 2, y_network_label), "On your phone, join this WiFi network:",
+        anchor="mm", fill=muted_color, font=label_font
+    )
+    draw.text(
+        (width / 2, y_network_value), ap_ssid,
+        anchor="mm", fill=text_color, font=value_font
     )
 
-    # --- Password (if required) ---
+    # --- Password ---
     if password:
-        pw_y = y_ssid + height * 0.06
-        pw_font = get_font("Jost", instruction_size)
         draw.text(
-            (width / 2, pw_y), f"Password:  {password}",
-            anchor="mm", fill=text_color, font=pw_font
+            (width / 2, y_password_label), "Password:",
+            anchor="mm", fill=muted_color, font=label_font
+        )
+        draw.text(
+            (width / 2, y_password_value), password,
+            anchor="mm", fill=text_color, font=value_font
         )
 
     # --- QR Code ---
-    qr_size = int(min(width, height) * 0.3)
+    qr_size = int(min(width, height) * 0.25)
 
     if HAS_QRCODE:
         try:
@@ -104,14 +116,12 @@ def generate_wifi_setup_image(dimensions, ap_ssid, portal_url="http://10.42.0.1"
             image.paste(qr_img.convert("RGB"), (qr_x, qr_y))
         except Exception as e:
             logger.warning("QR code generation failed: %s", e)
-            # Fall back to text-only
             url_font = get_font("Jost", instruction_size)
             draw.text(
                 (width / 2, y_qr_center), portal_url,
                 anchor="mm", fill=accent_color, font=url_font
             )
     else:
-        # No qrcode library — show URL as text
         url_font = get_font("Jost", instruction_size)
         draw.text(
             (width / 2, y_qr_center), portal_url,
@@ -123,13 +133,13 @@ def generate_wifi_setup_image(dimensions, ap_ssid, portal_url="http://10.42.0.1"
     small_font = get_font("Jost", small_size)
 
     instructions = [
-        "1.  Connect your phone to the WiFi above",
-        "2.  A setup page will open automatically",
-        "3.  Select your WiFi network and enter password",
+        "1.  Connect your phone to the network above",
+        "2.  A setup page will open  —  or scan the QR code",
+        "3.  Choose your home WiFi and enter its password",
     ]
 
     y = y_instructions_start
-    line_spacing = height * 0.055
+    line_spacing = height * 0.05
     for line in instructions:
         draw.text(
             (width / 2, y), line,
@@ -140,8 +150,8 @@ def generate_wifi_setup_image(dimensions, ap_ssid, portal_url="http://10.42.0.1"
     # --- Footer ---
     draw.text(
         (width / 2, height * 0.94),
-        f"Or visit {portal_url} in your browser",
-        anchor="mm", fill=(128, 128, 128), font=small_font
+        f"Or visit {portal_url} after connecting",
+        anchor="mm", fill=(150, 150, 150), font=small_font
     )
 
     return image
