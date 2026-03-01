@@ -246,7 +246,13 @@ class AIImage(BasePlugin):
             raise RuntimeError("OpenAI request failure, please check logs.")
 
     def _generate_with_gemini(self, settings, device_config, text_prompt, randomize_prompt, orientation, is_news=False):
-        """Generate image using Google Gemini Imagen."""
+        """Generate image using Google Gemini.
+
+        Supports two API paths (same API key and SDK):
+        - Imagen models: Uses client.models.generate_images() — returns raw image bytes.
+        - Native Gemini models: Uses client.models.generate_content() with
+          response_modalities=["IMAGE"] — returns inline_data bytes in the response.
+        """
         api_key = device_config.load_env_key("GOOGLE_GEMINI_SECRET")
         if not api_key:
             logger.error("Google Gemini API Key not configured")
@@ -432,7 +438,19 @@ class AIImage(BasePlugin):
         return prompt
 
     def _fetch_gemini_prompt(self, client, from_prompt=None, is_news=False):
-        """Generate a creative prompt using Gemini."""
+        """Generate a creative image prompt using Gemini 2.0 Flash as a text model.
+
+        Uses high temperature (2.0) for maximum variety. Three modes:
+        - News: Transforms a headline into an editorial illustration prompt,
+          focusing on emotion/impact rather than literal depiction.
+        - Rewrite: Takes a user prompt and makes it more detailed/imaginative
+          while staying true to the original idea.
+        - Random: Generates a fully random prompt from scratch, drawing from
+          a wide range of artists, genres, cultures, and eras.
+
+        Prompts are capped at 25 words to keep image generation fast (long
+        prompts cause slow font-scaling in the title overlay on Pi hardware).
+        """
         logger.info("Getting random image prompt from Gemini...")
 
         if from_prompt and from_prompt.strip() and is_news:
