@@ -465,5 +465,10 @@ class AIImage(BasePlugin):
             contents=prompt_request
         )
         prompt = response.text.strip()
+        # Hard cap: truncate to 25 words max to prevent oversized prompts
+        words = prompt.split()
+        if len(words) > 25:
+            prompt = ' '.join(words[:25])
+            logger.info(f"Truncated prompt from {len(words)} to 25 words")
         logger.info(f"Generated random image prompt: {prompt}")
         return prompt

@@ -26,7 +26,8 @@
     <div class="form-group">
         <label for="randomizePrompt" class="form-label">Randomize Text Prompt:</label>
         <div class="toggle-container">
-            <input type="checkbox" id="randomizePrompt" name="randomizePrompt" class="toggle-checkbox" value="false" onclick="this.value=this.checked ? 'true' : 'false';">
+            <input type="hidden" name="randomizePrompt" value="false">
+            <input type="checkbox" id="randomizePrompt" name="randomizePrompt" class="toggle-checkbox" value="true">
             <label for="randomizePrompt" class="toggle-label"></label>
         </div>
     </div>
@@ -110,7 +111,8 @@
 <div class="form-group">
     <label for="showTitle" class="form-label">Show Prompt Title:</label>
     <div class="toggle-container">
-        <input type="checkbox" id="showTitle" name="showTitle" class="toggle-checkbox" value="true" checked onclick="this.value=this.checked ? 'true' : 'false';">
+        <input type="hidden" name="showTitle" value="false">
+        <input type="checkbox" id="showTitle" name="showTitle" class="toggle-checkbox" value="true" checked>
         <label for="showTitle" class="toggle-label"></label>
     </div>
 </div>
