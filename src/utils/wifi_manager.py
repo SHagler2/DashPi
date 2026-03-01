@@ -203,14 +203,10 @@ class WifiManager:
             # Remove any existing hotspot connection profile to start clean
             _run_nmcli(["connection", "delete", AP_CONNECTION_NAME], timeout=10)
 
-            # Disconnect current WiFi first — on netplan-managed systems (Trixie),
-            # nmcli hotspot hangs if the interface is still connected
-            if self._previous_connection:
-                logger.info("Disconnecting current WiFi: %s", self._previous_connection)
-                _run_nmcli(["connection", "down", self._previous_connection], timeout=10)
-                time.sleep(2)
-
-            # Create and activate hotspot with password (nmcli requires min 8 chars)
+            # Try hotspot WITHOUT disconnecting WiFi first. nmcli hotspot
+            # will take over wlan0 automatically on Bookworm. If it fails
+            # (e.g. on Trixie/netplan), we still have WiFi connectivity
+            # and don't get stuck offline.
             success, output = _run_nmcli([
                 "dev", "wifi", "hotspot",
                 "ifname", "wlan0",
@@ -223,15 +219,13 @@ class WifiManager:
             if success:
                 self.state = STATE_AP_MODE
                 logger.info("WiFi hotspot started: %s", ap_ssid)
-
-                # Configure the hotspot IP to a known address
-                # nmcli hotspot auto-assigns 10.42.0.1 by default
-                # We'll use that instead of fighting it
                 return True
             else:
                 logger.error("Failed to start hotspot: %s", output)
-                # Try to restore previous connection
-                self._restore_wifi()
+                # Clean up the failed hotspot profile
+                _run_nmcli(["connection", "delete", AP_CONNECTION_NAME], timeout=10)
+                # DON'T call _restore_wifi() — we never disconnected,
+                # so WiFi should still be up
                 return False
 
     def stop_ap_mode(self):
