@@ -1,6 +1,7 @@
 """Plugin blueprint — plugin settings pages, image upload/delete, and update endpoints."""
 
 from flask import Blueprint, request, jsonify, current_app, render_template, send_from_directory
+from werkzeug.utils import secure_filename
 from plugins.plugin_registry import get_plugin_instance
 from utils.app_utils import resolve_path, handle_request_files, parse_form
 from refresh_task import ManualRefresh
@@ -123,7 +124,7 @@ def upload_image():
         if extension not in allowed_extensions:
             return jsonify({"error": f"File type .{extension} not allowed"}), 400
 
-        file_name = os.path.basename(file.filename)
+        file_name = secure_filename(file.filename)
         file_save_dir = resolve_path(os.path.join("static", "images", "saved"))
         os.makedirs(file_save_dir, exist_ok=True)
         file_path = os.path.join(file_save_dir, file_name)
@@ -152,19 +153,29 @@ def upload_image():
 
     except Exception as e:
         logger.exception(f"Error uploading image: {str(e)}")
-        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
+        return jsonify({"error": "Upload failed"}), 500
 
 
 @plugin_bp.route('/check_files', methods=['POST'])
 def check_files():
-    """Check which files from a list exist on disk. Returns a map of path -> exists."""
+    """Check which files from a list exist on disk. Only allows paths under the saved images directory."""
     try:
         data = request.get_json()
         file_paths = data.get('file_paths', [])
-        result = {fp: os.path.isfile(fp) for fp in file_paths}
+
+        # Security: only allow checking files in the saved images directory
+        saved_dir = os.path.abspath(resolve_path(os.path.join("static", "images", "saved")))
+        result = {}
+        for fp in file_paths:
+            abs_path = os.path.abspath(fp)
+            if abs_path.startswith(saved_dir):
+                result[fp] = os.path.isfile(abs_path)
+            else:
+                result[fp] = False
+
         return jsonify(result), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Failed to check files"}), 500
 
 
 @plugin_bp.route('/delete_image', methods=['POST'])

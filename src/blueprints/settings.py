@@ -268,7 +268,7 @@ def download_logs():
         # Get 'hours' from query parameters, default to 2 if not provided or invalid
         hours_str = request.args.get('hours', '2')
         try:
-            hours = int(hours_str)
+            hours = min(max(int(hours_str), 1), 168)  # Clamp 1 hour to 1 week
         except ValueError:
             hours = 2
         since = datetime.now() - timedelta(hours=hours)
@@ -314,5 +314,5 @@ def download_logs():
 
     except Exception as e:
         logger.error(f"Error reading logs: {e}")
-        return Response(f"Error reading logs: {e}", status=500, mimetype="text/plain")
+        return Response("Error reading logs", status=500, mimetype="text/plain")
 

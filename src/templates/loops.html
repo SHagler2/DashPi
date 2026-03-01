@@ -87,24 +87,24 @@
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
                         {% set is_override = loop_override and loop_override.type == 'loop' and loop_override.loop_name == loop_item.name %}
-                        <button onclick="{% if is_override %}clearOverride(){% else %}activateLoopOverride('{{ loop_item.name }}'){% endif %}"
+                        <button onclick="{% if is_override %}clearOverride(){% else %}activateLoopOverride({{ loop_item.name|tojson }}){% endif %}"
                                 class="action-button"
                                 style="padding: 8px 14px; font-size: 14px; font-weight: 500; background: {{ 'var(--warning-border, #ffc107)' if is_override else 'var(--accent-primary, #007bff)' }}; color: {{ 'var(--warning-text, #856404)' if is_override else 'white' }};"
                                 title="{{ 'Deactivate override' if is_override else 'Activate this loop as override' }}">
                             {{ 'Deactivate' if is_override else 'Activate' }}
                         </button>
-                        <button onclick="toggleRandomize('{{ loop_item.name }}')"
+                        <button onclick="toggleRandomize({{ loop_item.name|tojson }})"
                                 id="randomize-{{ loop_item.name }}"
                                 class="action-button"
                                 style="padding: 8px 14px; font-size: 14px; font-weight: 500; background: {{ 'var(--success-color)' if loop_item.randomize else 'var(--button-bg)' }}; color: {{ 'white' if loop_item.randomize else 'var(--text-primary)' }};"
                                 title="Toggle random plugin order">
                             {{ 'Random' if loop_item.randomize else 'Sequential' }}
                         </button>
-                        <button onclick="openEditLoopModal('{{ loop_item.name }}', '{{ loop_item.start_time }}', '{{ loop_item.end_time }}')"
+                        <button onclick="openEditLoopModal({{ loop_item.name|tojson }}, {{ loop_item.start_time|tojson }}, {{ loop_item.end_time|tojson }})"
                                 class="action-button" style="background: var(--button-bg); padding: 8px 14px; font-size: 14px; font-weight: 500; color: var(--text-primary);">
                             Edit
                         </button>
-                        <button onclick="deleteLoop('{{ loop_item.name }}')"
+                        <button onclick="deleteLoop({{ loop_item.name|tojson }})"
                                 class="action-button" style="background: #dc3545 !important; padding: 8px 14px; font-size: 14px; font-weight: 500; color: white !important;">
                             Delete
                         </button>

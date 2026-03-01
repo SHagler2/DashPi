@@ -330,7 +330,7 @@
                 <ul class="network-list" id="networkList">
                     {% if networks %}
                         {% for net in networks %}
-                        <li class="network-item" onclick="selectNetwork(this, '{{ net.ssid }}', '{{ net.security }}')">
+                        <li class="network-item" onclick="selectNetwork(this, {{ net.ssid|tojson }}, {{ net.security|tojson }})">
                             <input type="radio" name="network" value="{{ net.ssid }}" id="net-{{ loop.index }}">
                             <div class="network-info">
                                 <div class="network-name">{{ net.ssid }}</div>
