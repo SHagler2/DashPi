@@ -37,22 +37,28 @@ For documentation on building custom plugins, see [Building Plugins](./docs/buil
 
 ## Installation
 
-1. Clone the repository:
+1. Install git (if not already installed):
+    ```bash
+    sudo apt-get update && sudo apt-get install -y git
+    ```
+2. Clone the repository:
     ```bash
     git clone https://github.com/SHagler2/DashPi.git
     ```
-2. Navigate to the project directory:
+3. Navigate to the project directory:
     ```bash
     cd DashPi
     ```
-3. Run the installation script with sudo:
+4. Run the installation script with sudo:
     ```bash
     sudo bash install/install.sh
     ```
 
 After the installation is complete, the script will prompt you to reboot your Raspberry Pi. Once rebooted, DashPi will auto-detect your display and show the startup screen.
 
-**Note**: The installation script requires sudo privileges. We recommend starting with a fresh installation of Raspberry Pi OS. The installer automatically enables SPI and I2C interfaces when needed.
+**Note**: The installation script requires sudo privileges. We recommend starting with a fresh installation of Raspberry Pi OS. The installer automatically enables SPI and I2C interfaces, expands swap on low-memory devices (Pi Zero), and handles all dependencies.
+
+**Pi Zero users**: Installation takes longer on low-memory devices (15-20 minutes). The installer automatically manages swap and installs packages in batches to avoid out-of-memory issues.
 
 ## Update
 

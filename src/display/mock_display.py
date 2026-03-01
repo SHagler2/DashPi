@@ -8,9 +8,15 @@ logger = logging.getLogger(__name__)
 class MockDisplay(AbstractDisplay):
     """Mock display for development without hardware."""
     
+    DEFAULT_RESOLUTION = [800, 480]
+
     def __init__(self, device_config):
         self.device_config = device_config
         resolution = device_config.get_resolution()
+        if not resolution or len(resolution) < 2:
+            resolution = self.DEFAULT_RESOLUTION
+            device_config.update_value("resolution", resolution, write=True)
+            logger.info(f"No resolution configured, using default: {resolution}")
         self.width = resolution[0]
         self.height = resolution[1]
         self.output_dir = device_config.get_config('output_dir', 'mock_display_output')

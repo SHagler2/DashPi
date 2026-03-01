@@ -101,30 +101,114 @@ install_debian_dependencies() {
   fi
 }
 
+# Get total system RAM in MB
+get_total_ram_mb() {
+  awk '/MemTotal/ {printf "%d", $2 / 1024}' /proc/meminfo
+}
+
+is_low_memory() {
+  local ram_mb
+  ram_mb=$(get_total_ram_mb)
+  [ "$ram_mb" -lt 1024 ]
+}
+
+setup_swap() {
+  # On low-memory devices (Pi Zero, < 1GB RAM), expand swap to prevent OOM
+  # during pip install. This is safe to run on all devices.
+  if is_low_memory; then
+    local ram_mb
+    ram_mb=$(get_total_ram_mb)
+    echo "Low-memory device detected (${ram_mb}MB RAM). Expanding swap for installation."
+
+    local SWAP_CONF="/etc/dphys-swapfile"
+    if [ -f "$SWAP_CONF" ]; then
+      local CURRENT_SWAP
+      CURRENT_SWAP=$(grep -E "^CONF_SWAPSIZE=" "$SWAP_CONF" | cut -d= -f2)
+      if [ "${CURRENT_SWAP:-0}" -lt 2048 ]; then
+        sudo sed -i 's/^CONF_SWAPSIZE=.*/CONF_SWAPSIZE=2048/' "$SWAP_CONF"
+        sudo systemctl restart dphys-swapfile
+        echo_success "\tSwap expanded to 2GB"
+      else
+        echo_success "\tSwap already at ${CURRENT_SWAP}MB"
+      fi
+    fi
+  fi
+}
+
+wait_for_apt() {
+  # Wait for any running apt/dpkg processes to finish
+  while sudo fuser /var/lib/dpkg/lock-frontend > /dev/null 2>&1; do
+    sleep 1
+  done
+}
+
 setup_zramswap_service() {
   echo "Enabling and starting zramswap service."
-  sudo apt-get install -y zram-tools > /dev/null
+  wait_for_apt
+  sudo apt-get install -y zram-tools > /dev/null 2>&1
   echo -e "ALGO=zstd\nPERCENT=60" | sudo tee /etc/default/zramswap > /dev/null
   sudo systemctl enable --now zramswap
 }
 
 setup_earlyoom_service() {
   echo "Enabling and starting earlyoom service."
-  sudo apt-get install -y earlyoom > /dev/null
+  wait_for_apt
+  sudo apt-get install -y earlyoom > /dev/null 2>&1
   sudo systemctl enable --now earlyoom
 }
 
 create_venv(){
   echo "Creating python virtual environment. "
   python3 -m venv "$VENV_PATH"
-  $VENV_PATH/bin/python -m pip install --upgrade pip setuptools wheel > /dev/null
-  $VENV_PATH/bin/python -m pip install -r $PIP_REQUIREMENTS_FILE -qq > /dev/null &
-  show_loader "\tInstalling python dependencies. "
+  $VENV_PATH/bin/python -m pip install --no-cache-dir --upgrade pip setuptools wheel > /dev/null
+
+  if is_low_memory; then
+    # On low-memory devices, install packages in small batches to avoid OOM.
+    # Runs pip in foreground (not background) to properly detect failures.
+    echo "Installing python dependencies (low-memory mode)..."
+    local batch_size=5
+    local batch=1
+    local tmpfile
+    tmpfile=$(mktemp)
+
+    # Extract non-comment, non-empty lines
+    grep -v '^\s*#\|^\s*$' "$PIP_REQUIREMENTS_FILE" > "$tmpfile"
+    local total
+    total=$(wc -l < "$tmpfile")
+    local total_batches=$(( (total + batch_size - 1) / batch_size ))
+
+    local batch_file
+    batch_file=$(mktemp)
+    local line_num=0
+
+    while IFS= read -r line; do
+      echo "$line" >> "$batch_file"
+      line_num=$((line_num + 1))
+
+      if [ $((line_num % batch_size)) -eq 0 ] || [ "$line_num" -eq "$total" ]; then
+        printf "\tInstalling python dependencies (batch $batch/$total_batches)... "
+        if $VENV_PATH/bin/python -m pip install --no-cache-dir -r "$batch_file" -qq > /dev/null 2>&1; then
+          printf "[\e[32m\xE2\x9C\x94\e[0m]\n"
+        else
+          printf "[\e[31m\xE2\x9C\x98\e[0m]\n"
+          echo_error "\tBatch $batch failed. Retrying with output..."
+          $VENV_PATH/bin/python -m pip install --no-cache-dir -r "$batch_file" 2>&1 | tail -10
+        fi
+        batch=$((batch + 1))
+        : > "$batch_file"
+      fi
+    done < "$tmpfile"
+
+    rm -f "$tmpfile" "$batch_file"
+  else
+    $VENV_PATH/bin/python -m pip install --no-cache-dir -r $PIP_REQUIREMENTS_FILE -qq > /dev/null &
+    show_loader "\tInstalling python dependencies. "
+  fi
 
   # Install Waveshare e-paper GPIO dependencies if ws-requirements.txt exists
   WS_REQUIREMENTS="$SCRIPT_DIR/ws-requirements.txt"
   if [ -f "$WS_REQUIREMENTS" ]; then
-    $VENV_PATH/bin/python -m pip install -r $WS_REQUIREMENTS -qq > /dev/null 2>&1 &
+    $VENV_PATH/bin/python -m pip install --no-cache-dir -r $WS_REQUIREMENTS -qq > /dev/null 2>&1 &
     show_loader "\tInstalling e-paper display dependencies. "
   fi
 }
@@ -149,7 +233,7 @@ KillSignal=SIGINT
 StandardOutput=journal
 StandardError=journal
 CPUQuota=40%
-MemoryMax=300M
+MemoryMax=380M
 
 [Install]
 WantedBy=multi-user.target
@@ -318,8 +402,42 @@ ask_for_reboot() {
   fi
 }
 
+enable_interfaces() {
+  echo "Enabling hardware interfaces."
+  # Enable I2C (required for Inky e-paper auto-detection)
+  if sudo raspi-config nonint get_i2c | grep -q "1"; then
+    sudo raspi-config nonint do_i2c 0
+    echo_success "\tI2C enabled"
+  else
+    echo_success "\tI2C already enabled"
+  fi
+  # Enable SPI (required for e-paper and some display communication)
+  if sudo raspi-config nonint get_spi | grep -q "1"; then
+    sudo raspi-config nonint do_spi 0
+    echo_success "\tSPI enabled"
+  else
+    echo_success "\tSPI already enabled"
+  fi
+
+  # Add spi0-0cs overlay to prevent kernel from claiming the SPI chip select pin.
+  # Required for Inky e-paper displays on newer kernels (6.x+).
+  CONFIG_TXT="/boot/firmware/config.txt"
+  if [ ! -f "$CONFIG_TXT" ]; then
+    CONFIG_TXT="/boot/config.txt"
+  fi
+  if [ -f "$CONFIG_TXT" ]; then
+    if ! grep -q "spi0-0cs" "$CONFIG_TXT"; then
+      echo "dtoverlay=spi0-0cs" >> "$CONFIG_TXT"
+      echo_success "\tAdded spi0-0cs overlay for e-paper compatibility"
+    else
+      echo_success "\tspi0-0cs overlay already configured"
+    fi
+  fi
+}
+
 check_permissions
 stop_service
+enable_interfaces
 install_debian_dependencies
 # check OS version for Bookworm to setup zramswap
 if [[ $(get_os_version) = "12" ]] ; then
@@ -329,6 +447,7 @@ else
   echo "OS version is not Bookworm - skipping zramswap setup."
 fi
 setup_earlyoom_service
+setup_swap
 install_src
 install_cli
 create_venv

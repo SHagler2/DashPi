@@ -33,19 +33,14 @@ def _detect_display_type():
     """Auto-detect the connected display hardware.
 
     Detection order:
-    1. Linux framebuffer (/dev/fb0) -> LCD
-    2. Inky e-paper via I2C auto-detection -> inky
+    1. Inky e-paper via I2C auto-detection -> inky (most specific)
+    2. LCD framebuffer with valid sysfs resolution -> lcd
     3. Fall back to mock for development
 
     Returns:
         str: The detected display type ("lcd", "inky", or "mock").
     """
-    # Check for LCD framebuffer
-    if os.path.exists("/dev/fb0"):
-        logger.info("Auto-detected LCD display (/dev/fb0 present)")
-        return "lcd"
-
-    # Try Inky auto-detection (uses I2C)
+    # Try Inky auto-detection first (I2C probe is definitive)
     if InkyDisplay is not None:
         try:
             from inky.auto import auto
@@ -54,6 +49,14 @@ def _detect_display_type():
             return "inky"
         except Exception:
             logger.debug("Inky auto-detection failed, not an Inky display")
+
+    # Check for LCD framebuffer with valid sysfs resolution.
+    # /dev/fb0 exists on all Pis (console framebuffer), so we also verify
+    # that the sysfs virtual_size file exists (only present with real HDMI display).
+    fb_sysfs = "/sys/class/graphics/fb0/virtual_size"
+    if os.path.exists("/dev/fb0") and os.path.exists(fb_sysfs):
+        logger.info("Auto-detected LCD display (/dev/fb0 + sysfs present)")
+        return "lcd"
 
     logger.info("No display hardware detected, falling back to mock")
     return "mock"
