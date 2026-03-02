@@ -136,6 +136,17 @@
         setTimeout(() => {
             document.getElementById("uploadProgress").style.display = "none";
         }, 3000);
+        autoSaveFileList();
+    }
+
+    function autoSaveFileList() {
+        const inputs = document.querySelectorAll('#hiddenFileInputs input[name="imageFiles[]"]');
+        const filePaths = Array.from(inputs).map(input => input.value);
+        fetch('/save_image_list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_paths: filePaths })
+        }).catch(err => console.error('Auto-save file list failed:', err));
     }
 
     function addFileToList(fileName, filePath, missing) {
@@ -179,7 +190,7 @@
         if (el) el.remove();
         if (hidden) hidden.remove();
 
-        // Delete from disk
+        // Delete from disk (also updates plugin_last_settings)
         if (filePath) {
             fetch('/delete_image', {
                 method: 'POST',
@@ -189,6 +200,7 @@
         }
 
         updateFileListHeader();
+        autoSaveFileList();
     }
 
     function clearAllFiles() {
@@ -213,6 +225,7 @@
         });
 
         updateFileListHeader();
+        autoSaveFileList();
     }
 
     function updateFileListHeader() {

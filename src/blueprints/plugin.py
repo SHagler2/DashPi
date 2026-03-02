@@ -216,6 +216,29 @@ def delete_image():
         return jsonify({"error": f"Delete failed: {str(e)}"}), 500
 
 
+@plugin_bp.route('/save_image_list', methods=['POST'])
+def save_image_list():
+    """Auto-save the current image file list to plugin_last_settings after upload/removal."""
+    device_config = current_app.config['DEVICE_CONFIG']
+    try:
+        data = request.get_json()
+        file_paths = data.get('file_paths', [])
+        if not isinstance(file_paths, list):
+            return jsonify({"error": "Invalid file_paths"}), 400
+
+        settings = device_config.get_config(
+            "plugin_last_settings_image_upload", default={}
+        )
+        settings["imageFiles[]"] = file_paths
+        device_config.update_value(
+            "plugin_last_settings_image_upload", settings, write=True
+        )
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        logger.exception(f"Error saving image list: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
 @plugin_bp.route('/update_now_async', methods=['POST'])
 def update_now_async():
     """Non-blocking update endpoint. Queues the update and returns immediately.
