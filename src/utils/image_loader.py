@@ -11,13 +11,34 @@ from io import BytesIO
 from utils.http_client import get_http_session
 import logging
 import gc
+import ipaddress
 import psutil
 import tempfile
 import time
 import os
 import requests
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_url(url):
+    """Validate a URL to prevent SSRF attacks. Blocks private/loopback IPs."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        raise ValueError(f"URL scheme '{parsed.scheme}' not allowed")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("No hostname in URL")
+    try:
+        import socket
+        resolved = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for family, _, _, _, sockaddr in resolved:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                raise ValueError(f"URL resolves to blocked address: {ip}")
+    except socket.gaierror:
+        raise ValueError(f"Cannot resolve hostname: {hostname}")
 
 
 _LOW_RESOURCE_CACHE = None
@@ -94,6 +115,8 @@ class AdaptiveImageLoader:
             PIL Image object resized to dimensions, or None on error
         """
         logger.debug(f"Loading image from URL: {url} (fit_mode={fit_mode})")
+
+        _validate_url(url)
 
         if self.is_low_resource:
             return self._load_from_url_lowmem(url, dimensions, timeout_ms, resize, headers, fit_mode)

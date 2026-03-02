@@ -132,6 +132,15 @@ def upload_image():
         # Save raw bytes to disk (no PIL processing to avoid OOM)
         file.save(file_path)
 
+        # Validate file content matches an image type (magic bytes check)
+        try:
+            from PIL import Image
+            with Image.open(file_path) as img:
+                img.verify()
+        except Exception:
+            os.remove(file_path)
+            return jsonify({"error": "File is not a valid image"}), 400
+
         # Fix EXIF orientation for JPEGs (skip very large images)
         if extension in {'jpg', 'jpeg'}:
             try:

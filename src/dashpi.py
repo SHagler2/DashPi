@@ -101,6 +101,22 @@ def inject_globals():
     device_name = device_config.get_config("device_name", default="DashPi")
     return dict(project_name="DashPi", device_name=device_name, version=get_version())
 
+# Security headers
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self'; "
+        "connect-src 'self'"
+    )
+    return response
+
 # Register opener for HEIF/HEIC images
 try:
     from pi_heif import register_heif_opener
