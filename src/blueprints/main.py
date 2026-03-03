@@ -313,9 +313,8 @@ def set_brightness():
 
     The override persists until the schedule transitions to the next
     period (day/evening/night), or until manually cleared.
+    Applies immediately by re-rendering the current image (no full plugin refresh).
     """
-    from refresh_task import ManualRefresh
-
     display_manager = current_app.config.get('DISPLAY_MANAGER')
     if not display_manager:
         return jsonify({"error": "Display manager not initialized"}), 503
@@ -339,10 +338,11 @@ def set_brightness():
 
     display_manager.set_brightness_override(brightness)
 
-    # Re-render current image with new brightness
-    refresh_task = current_app.config.get('REFRESH_TASK')
-    if refresh_task and refresh_task.running:
-        refresh_task.queue_manual_update(ManualRefresh(force=True))
+    # Reapply brightness to current image immediately (no full plugin re-render)
+    try:
+        display_manager.reapply_brightness()
+    except Exception as e:
+        logger.warning(f"Failed to reapply brightness: {e}")
 
     return jsonify({
         "success": True,
@@ -354,18 +354,17 @@ def set_brightness():
 @main_bp.route('/api/clear_brightness_override', methods=['POST'])
 def clear_brightness_override():
     """Clear the temporary brightness override, reverting to schedule."""
-    from refresh_task import ManualRefresh
-
     display_manager = current_app.config.get('DISPLAY_MANAGER')
     if not display_manager:
         return jsonify({"error": "Display manager not initialized"}), 503
 
     display_manager.clear_brightness_override()
 
-    # Re-render current image with scheduled brightness
-    refresh_task = current_app.config.get('REFRESH_TASK')
-    if refresh_task and refresh_task.running:
-        refresh_task.queue_manual_update(ManualRefresh(force=True))
+    # Reapply scheduled brightness immediately
+    try:
+        display_manager.reapply_brightness()
+    except Exception as e:
+        logger.warning(f"Failed to reapply brightness: {e}")
 
     return jsonify({"success": True, "message": "Brightness override cleared"})
 

@@ -171,6 +171,49 @@ class DisplayManager:
         # Pass to the concrete instance to render to the device.
         self.display.display_image(image, image_settings)
 
+    def reapply_brightness(self):
+        """Re-render the current image with updated brightness.
+
+        Reads the saved current_image.png and pushes it through the
+        resize/enhance/display pipeline with the current brightness.
+        Much faster than a full plugin re-render.
+        """
+        from PIL import Image
+
+        image_path = self.device_config.current_image_file
+        if not os.path.exists(image_path):
+            logger.warning("No current image to reapply brightness to")
+            return
+
+        if self.display.has_backlight():
+            brightness = self._get_effective_brightness()
+            if brightness == 0:
+                if not self._display_blanked:
+                    self.display.blank_display()
+                    self._display_blanked = True
+                return
+
+            if self._display_blanked:
+                self.display.unblank_display()
+                self._display_blanked = False
+        else:
+            return  # E-ink: no backlight control
+
+        image = Image.open(image_path)
+        if image.mode not in ('RGB', 'L'):
+            image = image.convert('RGB')
+
+        image = change_orientation(image, self.device_config.get_config("orientation"))
+        image = resize_image(image, self.device_config.get_resolution())
+        if self.device_config.get_config("inverted_image"):
+            image = image.rotate(180)
+        effective_settings = self.device_config.get_config("image_settings") or {}
+        effective_settings["brightness"] = brightness
+        image = apply_image_enhancement(image, effective_settings)
+
+        self.display.display_image(image)
+        logger.info(f"Reapplied brightness: {brightness}")
+
     def get_current_brightness(self):
         """Return the current brightness value and override state for API use.
 
