@@ -369,8 +369,9 @@ def export_config():
 
         buffer.seek(0)
         now_str = datetime.now().strftime("%Y-%m-%d")
-        device_name = (device_config.get_config().get('device_name') or 'dashpi').lower().replace(' ', '-')
-        filename = f"{device_name}-backup-{now_str}.zip"
+        device_name = device_config.get_config().get('device_name') or 'DashPi'
+        version = _get_version()
+        filename = f"{device_name}-DashPi V{version}-{now_str}.zip"
         return send_file(
             buffer,
             mimetype='application/zip',
