@@ -142,39 +142,13 @@
             }
         })();
         const refreshIntervalMs = 3 * 1000;
-        let lastImageUrl = null;
 
-        async function refreshImage() {
+        function refreshImage() {
             const img = document.querySelector('.image-container img');
             if (!img) return;
 
-            try {
-                const response = await fetch('{{ url_for("main.get_current_image") }}');
-
-                if (!response.ok) {
-                    console.error('Failed to fetch image:', response.status);
-                    return;
-                }
-
-                const blob = await response.blob();
-                const objectUrl = URL.createObjectURL(blob);
-
-                // Wait for new image to load before swapping
-                const oldUrl = lastImageUrl;
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                    img.src = objectUrl;
-                });
-                lastImageUrl = objectUrl;
-
-                // Revoke old blob URL after new image is displayed
-                if (oldUrl && oldUrl.startsWith('blob:')) {
-                    URL.revokeObjectURL(oldUrl);
-                }
-            } catch (error) {
-                console.error('Error refreshing image:', error);
-            }
+            // Cache-busting query param — browser handles loading natively
+            img.src = '/api/current_image?t=' + Date.now();
         }
 
         // Countdown timer — stores an absolute epoch target (seconds) so both
