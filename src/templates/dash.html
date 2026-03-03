@@ -159,13 +159,19 @@
                 const blob = await response.blob();
                 const objectUrl = URL.createObjectURL(blob);
 
-                // Revoke previous blob URL to avoid memory leak
-                if (lastImageUrl && lastImageUrl.startsWith('blob:')) {
-                    URL.revokeObjectURL(lastImageUrl);
-                }
-
-                img.src = objectUrl;
+                // Wait for new image to load before swapping
+                const oldUrl = lastImageUrl;
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                    img.src = objectUrl;
+                });
                 lastImageUrl = objectUrl;
+
+                // Revoke old blob URL after new image is displayed
+                if (oldUrl && oldUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(oldUrl);
+                }
             } catch (error) {
                 console.error('Error refreshing image:', error);
             }
