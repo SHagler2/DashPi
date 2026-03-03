@@ -361,6 +361,11 @@
                         <input type="checkbox" id="logSystemStats" name="logSystemStats" {% if device_settings.log_system_stats %}checked{% endif %}>
                     </label>
                 </div>
+                <div class="form-group nowrap">
+                    <label class="form-label" for="displayTransitions">Crossfade Transitions (LCD)</label>
+                        <input type="checkbox" id="displayTransitions" name="displayTransitions" {% if device_settings.get('display_transitions', {}).get('enabled') %}checked{% endif %}>
+                    </label>
+                </div>
 
                 <div class="separator" style="margin: 16px 0;"></div>
                 <div class="form-group">

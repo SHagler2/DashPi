@@ -94,7 +94,12 @@ def save_settings():
                 "day_start": form_data.get("dayStart", "07:00"),
                 "evening_start": form_data.get("eveningStart", "18:00"),
                 "night_start": form_data.get("nightStart", "22:00"),
-            }
+            },
+            "display_transitions": {
+                "enabled": "displayTransitions" in form_data,
+                "steps": 10,
+                "duration_ms": 800,
+            },
         }
         # Remove None device_name to keep existing value
         if settings["device_name"] is None:
@@ -364,7 +369,8 @@ def export_config():
 
         buffer.seek(0)
         now_str = datetime.now().strftime("%Y-%m-%d")
-        filename = f"dashpi-backup-{now_str}.zip"
+        device_name = (device_config.get_config().get('device_name') or 'dashpi').lower().replace(' ', '-')
+        filename = f"{device_name}-backup-{now_str}.zip"
         return send_file(
             buffer,
             mimetype='application/zip',

@@ -9,11 +9,12 @@ import fnmatch
 import logging
 import os
 import threading
+import time
 from datetime import datetime
 
 import pytz
 
-from utils.image_utils import resize_image, change_orientation, apply_image_enhancement
+from utils.image_utils import resize_image, change_orientation, apply_image_enhancement, crossfade_frames
 from display.mock_display import MockDisplay
 
 logger = logging.getLogger(__name__)
@@ -123,10 +124,34 @@ class DisplayManager:
         # look like a period transition and incorrectly clear overrides
         self._last_period = self._get_current_period()
 
-    def display_image(self, image, image_settings=None):
+    def _process_image(self, image, brightness, image_settings=None):
+        """Apply the full image processing pipeline (orientation, resize, enhance).
 
+        Args:
+            image (PIL.Image): Raw image to process.
+            brightness (float): Brightness value to apply.
+            image_settings (list, optional): Extra settings like 'keep-width'.
+
+        Returns:
+            PIL.Image: Fully processed image ready for the display.
         """
-        Delegates image rendering to the appropriate display instance.
+        if image.mode not in ('RGB', 'L'):
+            image = image.convert('RGB')
+        image = change_orientation(image, self.device_config.get_config("orientation"))
+        image = resize_image(image, self.device_config.get_resolution(), image_settings)
+        if self.device_config.get_config("inverted_image"):
+            image = image.rotate(180)
+        effective_settings = (self.device_config.get_config("image_settings") or {}).copy()
+        effective_settings["brightness"] = brightness
+        image = apply_image_enhancement(image, effective_settings)
+        return image
+
+    def display_image(self, image, image_settings=None):
+        """Render an image to the display, optionally with a crossfade transition.
+
+        On LCD displays with transitions enabled, crossfades from the previous
+        image to the new one. On e-ink or with transitions disabled, displays
+        the new image directly.
 
         Args:
             image (PIL.Image): The image to be displayed.
@@ -135,11 +160,21 @@ class DisplayManager:
         Raises:
             ValueError: If no valid display instance is found.
         """
+        from PIL import Image as PILImage
 
         if not hasattr(self, "display"):
             raise ValueError("No valid display instance initialized.")
 
-        # Save the image atomically (temp file + rename) so the web UI
+        # Load old image BEFORE saving the new one (needed for transitions)
+        old_image_path = self.device_config.current_image_file
+        old_image = None
+        if os.path.exists(old_image_path):
+            try:
+                old_image = PILImage.open(old_image_path).copy()
+            except Exception:
+                old_image = None
+
+        # Save the new image atomically (temp file + rename) so the web UI
         # never fetches a half-written file
         logger.info(f"Saving image to {self.device_config.current_image_file}")
         tmp_path = self.device_config.current_image_file.replace(".png", "_tmp.png")
@@ -161,22 +196,35 @@ class DisplayManager:
                     self.display.unblank_display()
                     self._display_blanked = False
             else:
-                brightness = 1.0  # E-ink: no backlight, always full brightness for enhancement
+                brightness = 1.0  # E-ink: no backlight, always full brightness
 
-            # Convert to RGB once at the start of the pipeline
-            if image.mode not in ('RGB', 'L'):
-                image = image.convert('RGB')
+            # Process the new image through the full pipeline
+            new_processed = self._process_image(image, brightness, image_settings)
 
-            # Resize and adjust orientation
-            image = change_orientation(image, self.device_config.get_config("orientation"))
-            image = resize_image(image, self.device_config.get_resolution(), image_settings)
-            if self.device_config.get_config("inverted_image"): image = image.rotate(180)
-            effective_settings = self.device_config.get_config("image_settings") or {}
-            effective_settings["brightness"] = brightness
-            image = apply_image_enhancement(image, effective_settings)
+            # Attempt crossfade transition on LCD displays
+            transition_config = self.device_config.get_config("display_transitions") or {}
+            transitions_enabled = transition_config.get("enabled", False)
 
-            # Pass to the concrete instance to render to the device.
-            self.display.display_image(image, image_settings)
+            if (transitions_enabled and old_image is not None
+                    and self.display.supports_fast_refresh()):
+                try:
+                    old_processed = self._process_image(old_image, brightness, image_settings)
+
+                    # Ensure both images are same size and mode for blending
+                    if old_processed.size == new_processed.size and old_processed.mode == new_processed.mode:
+                        steps = transition_config.get("steps", 10)
+                        duration_ms = transition_config.get("duration_ms", 800)
+                        delay = duration_ms / 1000.0 / steps
+
+                        for frame in crossfade_frames(old_processed, new_processed, steps):
+                            self.display.display_image(frame, image_settings)
+                            time.sleep(delay)
+                        return  # Final frame already displayed
+                except Exception as e:
+                    logger.warning(f"Transition failed, falling back to direct display: {e}")
+
+            # Direct display (no transition, e-ink, or transition failed)
+            self.display.display_image(new_processed, image_settings)
 
     def reapply_brightness(self):
         """Re-render the current image with updated brightness.

@@ -105,6 +105,20 @@ def compute_image_hash(image):
         thumb = thumb.convert("RGB")
     return format(zlib.adler32(thumb.tobytes()) & 0xffffffff, '08x')
 
+def crossfade_frames(old_image, new_image, steps=10):
+    """Generate crossfade blend frames between two images.
+
+    Yields PIL Images blended from old_image to new_image.
+    Both images must be the same size and mode (RGB).
+    Uses ease-in-out curve for smoother perceived transition.
+    """
+    for i in range(1, steps + 1):
+        # Ease-in-out: slow start and end, fast middle
+        t = i / steps
+        alpha = t * t * (3 - 2 * t)  # smoothstep
+        yield Image.blend(old_image, new_image, alpha)
+
+
 def pad_image_blur(img: Image, dimensions: tuple[int, int]) -> Image:
     """Letterbox an image with a blurred version of itself as the background."""
     bkg = ImageOps.fit(img, dimensions)
