@@ -582,7 +582,8 @@ class ISSTracker(BasePlugin):
                 set_dir = _azimuth_to_compass(set_az)
                 duration_s = (next_visible["set_utc"] - next_visible["rise_utc"]).total_seconds()
                 duration_min = int(duration_s // 60)
-                _right_align(f"Look {rise_dir} \u2192 {set_dir}, {duration_min} min",
+                max_el = next_visible.get("max_elevation", 0)
+                _right_align(f"Look {rise_dir} \u2192 {set_dir}, {duration_min} min, Max {max_el:.0f}\u00b0",
                              y_base + line_spacing * line, meta_color, small_font)
         elif next_any:
             # No visible passes — show next overhead as headline
