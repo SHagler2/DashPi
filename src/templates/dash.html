@@ -168,12 +168,17 @@
                 const blob = await response.blob();
                 if (!blob || blob.size === 0) return; // Don't replace with empty image
 
-                const oldSrc = img.src;
-                const objectUrl = URL.createObjectURL(blob);
-                img.src = objectUrl;
-                // Revoke previous objectUrl to prevent memory leak (skip static URL)
-                if (oldSrc && oldSrc.startsWith('blob:')) URL.revokeObjectURL(oldSrc);
-                lastModified = response.headers.get('Last-Modified');
+                // Load blob into a temporary Image first to verify it's valid
+                const testUrl = URL.createObjectURL(blob);
+                const testImg = new Image();
+                testImg.onload = function() {
+                    img.src = testUrl;
+                    lastModified = response.headers.get('Last-Modified');
+                };
+                testImg.onerror = function() {
+                    URL.revokeObjectURL(testUrl); // Discard bad blob
+                };
+                testImg.src = testUrl;
 
                 // New image detected - refresh status bar immediately
                 updateCountdown();
