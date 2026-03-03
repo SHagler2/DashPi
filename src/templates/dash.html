@@ -210,15 +210,33 @@
                         countdownLabelEl.textContent = loopEnabled ? 'Changes in' : 'Status';
                     }
 
-                    // Update brightness indicator
-                    const brightnessEl = document.getElementById('brightnessIndicator');
-                    if (brightnessEl && data.current_brightness !== undefined) {
-                        if (data.current_brightness === 0) {
-                            brightnessEl.textContent = 'Display Off';
-                            brightnessEl.style.fontWeight = '700';
-                        } else {
-                            brightnessEl.textContent = 'Brightness: ' + Math.round(data.current_brightness * 100) + '%';
-                            brightnessEl.style.fontWeight = '500';
+                    // Update brightness — slider (LCD) or text indicator (e-ink)
+                    const brightnessSlider = document.getElementById('brightnessSlider');
+                    if (brightnessSlider && data.current_brightness !== undefined) {
+                        // Only update slider if user isn't actively dragging
+                        if (!brightnessSlider._userDragging) {
+                            brightnessSlider.value = Math.round(data.current_brightness * 100);
+                        }
+                        const valueEl = document.getElementById('brightnessValue');
+                        if (valueEl) {
+                            const pct = Math.round(data.current_brightness * 100);
+                            valueEl.textContent = pct === 0 ? 'Off' : pct + '%';
+                        }
+                        const resetEl = document.getElementById('brightnessReset');
+                        if (resetEl) {
+                            resetEl.style.display = data.brightness_overridden ? 'inline' : 'none';
+                        }
+                    } else {
+                        // Fallback for e-ink: simple text display
+                        const brightnessEl = document.getElementById('brightnessIndicator');
+                        if (brightnessEl && data.current_brightness !== undefined) {
+                            if (data.current_brightness === 0) {
+                                brightnessEl.textContent = 'Display Off';
+                                brightnessEl.style.fontWeight = '700';
+                            } else {
+                                brightnessEl.textContent = 'Brightness: ' + Math.round(data.current_brightness * 100) + '%';
+                                brightnessEl.style.fontWeight = '500';
+                            }
                         }
                     }
 
@@ -345,6 +363,9 @@
             // Initialize loop toggle button style
             updateLoopToggleStyle();
 
+            // Initialize brightness slider (LCD only)
+            initBrightnessSlider();
+
             // Register service worker for PWA
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/static/sw.js')
@@ -379,6 +400,57 @@
                 }
             } catch (error) {
                 alert('Error toggling loop: ' + error.message);
+            }
+        }
+
+        // Brightness slider — debounced API calls
+        let brightnessTimeout = null;
+
+        function initBrightnessSlider() {
+            const slider = document.getElementById('brightnessSlider');
+            if (!slider) return;
+
+            slider.addEventListener('input', function() {
+                // Update label immediately for responsiveness
+                const valueEl = document.getElementById('brightnessValue');
+                const pct = parseInt(this.value);
+                if (valueEl) valueEl.textContent = pct === 0 ? 'Off' : pct + '%';
+
+                // Debounce API call
+                clearTimeout(brightnessTimeout);
+                brightnessTimeout = setTimeout(() => {
+                    setBrightness(pct / 100);
+                }, 300);
+            });
+
+            // Track drag state so polling doesn't fight the user
+            slider.addEventListener('mousedown', () => { slider._userDragging = true; });
+            slider.addEventListener('touchstart', () => { slider._userDragging = true; });
+            slider.addEventListener('mouseup', () => { slider._userDragging = false; });
+            slider.addEventListener('touchend', () => { slider._userDragging = false; });
+        }
+
+        async function setBrightness(value) {
+            try {
+                await fetch('/api/set_brightness', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ brightness: value })
+                });
+            } catch (error) {
+                console.error('Error setting brightness:', error);
+            }
+        }
+
+        async function clearBrightnessOverride() {
+            try {
+                const response = await fetch('/api/clear_brightness_override', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    updateCountdown();
+                }
+            } catch (error) {
+                console.error('Error clearing brightness override:', error);
             }
         }
 
@@ -520,7 +592,18 @@
             <div class="image-container">
                 <img src="{{ url_for('static', filename='images/current_image.png') }}" alt="Current Image">
             </div>
+            {% if has_backlight %}
+            <div id="brightnessControl" style="display: flex; align-items: center; justify-content: center; gap: 10px; padding: 8px 16px 4px;">
+                <span style="font-size: 16px; flex-shrink: 0; line-height: 1;" title="Brightness">☀️</span>
+                <input type="range" id="brightnessSlider" min="0" max="200" step="5" value="100"
+                       style="flex: 1; max-width: 280px; height: 6px; cursor: pointer; accent-color: var(--accent-primary, #1abc9c);">
+                <span id="brightnessValue" style="font-size: 13px; color: var(--text-secondary); font-weight: 600; min-width: 38px; text-align: right;">100%</span>
+                <a href="#" id="brightnessReset" onclick="clearBrightnessOverride(); return false;"
+                   style="display: none; font-size: 12px; color: var(--accent-primary, #1abc9c); text-decoration: none; white-space: nowrap; margin-left: 2px;">Reset</a>
+            </div>
+            {% else %}
             <div id="brightnessIndicator" style="text-align: center; padding: 4px 0 2px; font-size: 14px; color: var(--text-secondary, #888); font-weight: 500;"></div>
+            {% endif %}
         </div>
 
         <!-- Plugins Section -->

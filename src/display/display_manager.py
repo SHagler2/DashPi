@@ -89,6 +89,8 @@ class DisplayManager:
 
         self.device_config = device_config
         self._display_blanked = False
+        self._brightness_override = None  # Temporary override from dashboard slider
+        self._last_period = None  # Track schedule period for auto-clearing override
 
         display_type = device_config.get_config("display_type", default="auto")
 
@@ -140,7 +142,7 @@ class DisplayManager:
 
         # Check scheduled brightness — only applies to displays with backlight
         if self.display.has_backlight():
-            brightness = self._get_scheduled_brightness()
+            brightness = self._get_effective_brightness()
             if brightness == 0:
                 if not self._display_blanked:
                     self.display.blank_display()
@@ -170,10 +172,41 @@ class DisplayManager:
         self.display.display_image(image, image_settings)
 
     def get_current_brightness(self):
-        """Return the current scheduled brightness value for API use."""
+        """Return the current brightness value and override state for API use.
+
+        Returns:
+            dict: {"brightness": float, "overridden": bool}
+        """
         if self.display.has_backlight():
-            return self._get_scheduled_brightness()
-        return 1.0
+            return {
+                "brightness": self._get_effective_brightness(),
+                "overridden": self._brightness_override is not None,
+            }
+        return {"brightness": 1.0, "overridden": False}
+
+    def set_brightness_override(self, value):
+        """Set a temporary brightness override from the dashboard slider.
+
+        The override persists until the schedule transitions to the next
+        period (day/evening/night), or until manually cleared.
+
+        Args:
+            value (float): Brightness value 0.0–2.0 (0 = display off).
+        """
+        self._brightness_override = value
+        logger.info(f"Brightness override set to {value}")
+
+    def clear_brightness_override(self):
+        """Clear the temporary brightness override, reverting to schedule."""
+        if self._brightness_override is not None:
+            self._brightness_override = None
+            logger.info("Brightness override cleared")
+
+    def _get_effective_brightness(self):
+        """Return brightness with override applied if set."""
+        if self._brightness_override is not None:
+            return self._brightness_override
+        return self._get_scheduled_brightness()
 
     def get_display_capabilities(self):
         """Return display capability info for the web UI and API."""
@@ -184,46 +217,67 @@ class DisplayManager:
             "supports_fast_refresh": self.display.supports_fast_refresh(),
         }
 
+    def _get_current_period(self):
+        """Determine the current schedule period name.
+
+        Returns:
+            str: "day", "evening", or "night" based on current time and schedule.
+                 Returns "day" if schedule is disabled.
+        """
+        schedule = self.device_config.get_config("brightness_schedule") or {}
+        if not schedule.get("enabled"):
+            return "day"
+
+        day_start = schedule.get("day_start", "07:00")
+        evening_start = schedule.get("evening_start", "18:00")
+        night_start = schedule.get("night_start", "22:00")
+
+        tz_str = self.device_config.get_config("timezone", default="UTC")
+        current_time = datetime.now(pytz.timezone(tz_str)).strftime("%H:%M")
+
+        times = [day_start, evening_start, night_start]
+        if times == sorted(times):
+            if current_time >= night_start or current_time < day_start:
+                return "night"
+            elif current_time >= evening_start:
+                return "evening"
+            else:
+                return "day"
+        else:
+            if current_time >= day_start and current_time < evening_start:
+                return "day"
+            elif current_time >= evening_start and current_time < night_start:
+                return "evening"
+            else:
+                return "night"
+
     def _get_scheduled_brightness(self):
         """Determine the current brightness based on the day/evening/night schedule.
 
         Returns the appropriate brightness value (float) based on current time
         and the configured schedule. Falls back to day_brightness if schedule
-        is disabled or not configured.
+        is disabled or not configured. Also auto-clears any brightness override
+        when the schedule period transitions.
         """
         schedule = self.device_config.get_config("brightness_schedule") or {}
         day_brightness = schedule.get("day_brightness", 1.0)
+
+        # Detect period transitions and auto-clear override
+        current_period = self._get_current_period()
+        if self._last_period is not None and current_period != self._last_period:
+            if self._brightness_override is not None:
+                logger.info(
+                    f"Schedule period changed ({self._last_period} -> {current_period}), "
+                    "clearing brightness override"
+                )
+                self._brightness_override = None
+        self._last_period = current_period
 
         if not schedule.get("enabled"):
             return day_brightness
 
         evening_brightness = schedule.get("evening_brightness", 0.6)
         night_brightness = schedule.get("night_brightness", 0.3)
-        day_start = schedule.get("day_start", "07:00")
-        evening_start = schedule.get("evening_start", "18:00")
-        night_start = schedule.get("night_start", "22:00")
 
-        # Get current time in device timezone
-        tz_str = self.device_config.get_config("timezone", default="UTC")
-        current_time = datetime.now(pytz.timezone(tz_str)).strftime("%H:%M")
-
-        # Determine which period the current time falls into.
-        # Periods are ordered: day_start -> evening_start -> night_start
-        # Night wraps across midnight back to day_start.
-        times = [day_start, evening_start, night_start]
-        if times == sorted(times):
-            # Non-wrapping: all times in chronological order
-            if current_time >= night_start or current_time < day_start:
-                return night_brightness
-            elif current_time >= evening_start:
-                return evening_brightness
-            else:
-                return day_brightness
-        else:
-            # Wrapping across midnight: night_start is after midnight
-            if current_time >= day_start and current_time < evening_start:
-                return day_brightness
-            elif current_time >= evening_start and current_time < night_start:
-                return evening_brightness
-            else:
-                return night_brightness
+        period_map = {"day": day_brightness, "evening": evening_brightness, "night": night_brightness}
+        return period_map.get(current_period, day_brightness)

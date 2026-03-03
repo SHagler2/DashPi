@@ -23,13 +23,16 @@ def get_version():
 def main_page():
     """Dashboard home page — plugin grid with loop status."""
     device_config = current_app.config['DEVICE_CONFIG']
+    display_manager = current_app.config.get('DISPLAY_MANAGER')
     loop_enabled = device_config.get_config("loop_enabled", default=True)
     loop_override = device_config.get_loop_override()
+    has_backlight = display_manager.display.has_backlight() if display_manager else False
     return render_template('dash.html',
                          config=device_config.get_config(),
                          plugins=device_config.get_plugins(),
                          loop_enabled=loop_enabled,
-                         loop_override=loop_override)
+                         loop_override=loop_override,
+                         has_backlight=has_backlight)
 
 @main_bp.route('/display')
 def display_page():
@@ -276,9 +279,11 @@ def get_next_change_time():
     # Check if loop is enabled
     loop_enabled = device_config.get_config("loop_enabled", default=True)
 
-    # Get current brightness level
+    # Get current brightness level and override state
     display_manager = current_app.config.get('DISPLAY_MANAGER')
-    current_brightness = display_manager.get_current_brightness() if display_manager else 1.0
+    brightness_info = display_manager.get_current_brightness() if display_manager else {"brightness": 1.0, "overridden": False}
+    current_brightness = brightness_info["brightness"]
+    brightness_overridden = brightness_info["overridden"]
 
     # Get override info with display name
     loop_override = device_config.get_loop_override()
@@ -298,8 +303,72 @@ def get_next_change_time():
         "current_plugin_id": current_plugin_id,
         "next_plugin": next_plugin_name,
         "current_brightness": current_brightness,
+        "brightness_overridden": brightness_overridden,
         "override": loop_override
     })
+
+@main_bp.route('/api/set_brightness', methods=['POST'])
+def set_brightness():
+    """Set a temporary brightness override from the dashboard slider.
+
+    The override persists until the schedule transitions to the next
+    period (day/evening/night), or until manually cleared.
+    """
+    from refresh_task import ManualRefresh
+
+    display_manager = current_app.config.get('DISPLAY_MANAGER')
+    if not display_manager:
+        return jsonify({"error": "Display manager not initialized"}), 503
+
+    if not display_manager.display.has_backlight():
+        return jsonify({"error": "Display does not support brightness control"}), 400
+
+    data = request.get_json() or {}
+    brightness = data.get('brightness')
+
+    if brightness is None:
+        return jsonify({"error": "brightness is required"}), 400
+
+    try:
+        brightness = float(brightness)
+    except (TypeError, ValueError):
+        return jsonify({"error": "brightness must be a number"}), 400
+
+    if not (0 <= brightness <= 2.0):
+        return jsonify({"error": "brightness must be between 0 and 2.0"}), 400
+
+    display_manager.set_brightness_override(brightness)
+
+    # Re-render current image with new brightness
+    refresh_task = current_app.config.get('REFRESH_TASK')
+    if refresh_task and refresh_task.running:
+        refresh_task.queue_manual_update(ManualRefresh(force=True))
+
+    return jsonify({
+        "success": True,
+        "message": f"Brightness set to {int(brightness * 100)}%",
+        "brightness": brightness
+    })
+
+
+@main_bp.route('/api/clear_brightness_override', methods=['POST'])
+def clear_brightness_override():
+    """Clear the temporary brightness override, reverting to schedule."""
+    from refresh_task import ManualRefresh
+
+    display_manager = current_app.config.get('DISPLAY_MANAGER')
+    if not display_manager:
+        return jsonify({"error": "Display manager not initialized"}), 503
+
+    display_manager.clear_brightness_override()
+
+    # Re-render current image with scheduled brightness
+    refresh_task = current_app.config.get('REFRESH_TASK')
+    if refresh_task and refresh_task.running:
+        refresh_task.queue_manual_update(ManualRefresh(force=True))
+
+    return jsonify({"success": True, "message": "Brightness override cleared"})
+
 
 @main_bp.route('/api/display_capabilities')
 def get_display_capabilities():

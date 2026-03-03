@@ -402,6 +402,19 @@ ask_for_reboot() {
   fi
 }
 
+setup_persistent_journal() {
+  echo "Enabling persistent journal storage."
+  # Raspberry Pi OS defaults to volatile journald (logs lost on reboot).
+  # Switch to persistent so crash logs survive power cycles.
+  if grep -q "^Storage=volatile" /etc/systemd/journald.conf 2>/dev/null; then
+    sudo sed -i 's/^Storage=volatile/Storage=persistent/' /etc/systemd/journald.conf
+  fi
+  # Cap journal size to 50M to avoid filling the SD card
+  sudo mkdir -p /etc/systemd/journald.conf.d
+  echo -e "[Journal]\nSystemMaxUse=50M" | sudo tee /etc/systemd/journald.conf.d/size-limit.conf > /dev/null
+  sudo systemctl restart systemd-journald
+}
+
 enable_interfaces() {
   echo "Enabling hardware interfaces."
   # Enable I2C (required for Inky e-paper auto-detection)
@@ -455,6 +468,7 @@ install_executable
 install_config
 install_app_service
 setup_clean_boot
+setup_persistent_journal
 
 echo "Update JS and CSS files"
 bash $SCRIPT_DIR/update_vendors.sh > /dev/null
