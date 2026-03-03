@@ -348,11 +348,16 @@ def export_config():
                 if os.path.isfile(env_path):
                     zf.write(env_path, '.env')
 
-            # Optionally include saved images
+            # Optionally include saved images (skip dotfiles and non-image files)
             if include_images:
+                image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'}
                 saved_dir = os.path.join(base_dir, 'src', 'static', 'images', 'saved')
                 if os.path.isdir(saved_dir):
                     for fname in os.listdir(saved_dir):
+                        if fname.startswith('.'):
+                            continue
+                        if os.path.splitext(fname)[1].lower() not in image_extensions:
+                            continue
                         fpath = os.path.join(saved_dir, fname)
                         if os.path.isfile(fpath):
                             zf.write(fpath, f'saved_images/{fname}')
