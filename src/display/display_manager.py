@@ -8,6 +8,7 @@ Also handles brightness scheduling and image enhancement.
 import fnmatch
 import logging
 import os
+import threading
 from datetime import datetime
 
 import pytz
@@ -91,6 +92,7 @@ class DisplayManager:
         self._display_blanked = False
         self._brightness_override = None  # Temporary override from dashboard slider
         self._last_period = None  # Track schedule period for auto-clearing override
+        self._display_lock = threading.Lock()  # Prevent race between refresh task and brightness slider
 
         display_type = device_config.get_config("display_type", default="auto")
 
@@ -117,6 +119,10 @@ class DisplayManager:
         else:
             raise ValueError(f"Unsupported display type: {display_type}")
 
+        # Initialize period tracking so the first brightness call doesn't
+        # look like a period transition and incorrectly clear overrides
+        self._last_period = self._get_current_period()
+
     def display_image(self, image, image_settings=None):
 
         """
@@ -140,36 +146,37 @@ class DisplayManager:
         image.save(tmp_path)
         os.replace(tmp_path, self.device_config.current_image_file)
 
-        # Check scheduled brightness — only applies to displays with backlight
-        if self.display.has_backlight():
-            brightness = self._get_effective_brightness()
-            if brightness == 0:
-                if not self._display_blanked:
-                    self.display.blank_display()
-                    self._display_blanked = True
-                return
+        with self._display_lock:
+            # Check scheduled brightness — only applies to displays with backlight
+            if self.display.has_backlight():
+                brightness = self._get_effective_brightness()
+                if brightness == 0:
+                    if not self._display_blanked:
+                        self.display.blank_display()
+                        self._display_blanked = True
+                    return
 
-            # Restore display if it was blanked
-            if self._display_blanked:
-                self.display.unblank_display()
-                self._display_blanked = False
-        else:
-            brightness = 1.0  # E-ink: no backlight, always full brightness for enhancement
+                # Restore display if it was blanked
+                if self._display_blanked:
+                    self.display.unblank_display()
+                    self._display_blanked = False
+            else:
+                brightness = 1.0  # E-ink: no backlight, always full brightness for enhancement
 
-        # Convert to RGB once at the start of the pipeline
-        if image.mode not in ('RGB', 'L'):
-            image = image.convert('RGB')
+            # Convert to RGB once at the start of the pipeline
+            if image.mode not in ('RGB', 'L'):
+                image = image.convert('RGB')
 
-        # Resize and adjust orientation
-        image = change_orientation(image, self.device_config.get_config("orientation"))
-        image = resize_image(image, self.device_config.get_resolution(), image_settings)
-        if self.device_config.get_config("inverted_image"): image = image.rotate(180)
-        effective_settings = self.device_config.get_config("image_settings") or {}
-        effective_settings["brightness"] = brightness
-        image = apply_image_enhancement(image, effective_settings)
+            # Resize and adjust orientation
+            image = change_orientation(image, self.device_config.get_config("orientation"))
+            image = resize_image(image, self.device_config.get_resolution(), image_settings)
+            if self.device_config.get_config("inverted_image"): image = image.rotate(180)
+            effective_settings = self.device_config.get_config("image_settings") or {}
+            effective_settings["brightness"] = brightness
+            image = apply_image_enhancement(image, effective_settings)
 
-        # Pass to the concrete instance to render to the device.
-        self.display.display_image(image, image_settings)
+            # Pass to the concrete instance to render to the device.
+            self.display.display_image(image, image_settings)
 
     def reapply_brightness(self):
         """Re-render the current image with updated brightness.
@@ -185,34 +192,35 @@ class DisplayManager:
             logger.warning("No current image to reapply brightness to")
             return
 
-        if self.display.has_backlight():
-            brightness = self._get_effective_brightness()
-            if brightness == 0:
-                if not self._display_blanked:
-                    self.display.blank_display()
-                    self._display_blanked = True
-                return
+        with self._display_lock:
+            if self.display.has_backlight():
+                brightness = self._get_effective_brightness()
+                if brightness == 0:
+                    if not self._display_blanked:
+                        self.display.blank_display()
+                        self._display_blanked = True
+                    return
 
-            if self._display_blanked:
-                self.display.unblank_display()
-                self._display_blanked = False
-        else:
-            return  # E-ink: no backlight control
+                if self._display_blanked:
+                    self.display.unblank_display()
+                    self._display_blanked = False
+            else:
+                return  # E-ink: no backlight control
 
-        image = Image.open(image_path)
-        if image.mode not in ('RGB', 'L'):
-            image = image.convert('RGB')
+            image = Image.open(image_path)
+            if image.mode not in ('RGB', 'L'):
+                image = image.convert('RGB')
 
-        image = change_orientation(image, self.device_config.get_config("orientation"))
-        image = resize_image(image, self.device_config.get_resolution())
-        if self.device_config.get_config("inverted_image"):
-            image = image.rotate(180)
-        effective_settings = self.device_config.get_config("image_settings") or {}
-        effective_settings["brightness"] = brightness
-        image = apply_image_enhancement(image, effective_settings)
+            image = change_orientation(image, self.device_config.get_config("orientation"))
+            image = resize_image(image, self.device_config.get_resolution())
+            if self.device_config.get_config("inverted_image"):
+                image = image.rotate(180)
+            effective_settings = self.device_config.get_config("image_settings") or {}
+            effective_settings["brightness"] = brightness
+            image = apply_image_enhancement(image, effective_settings)
 
-        self.display.display_image(image)
-        logger.info(f"Reapplied brightness: {brightness}")
+            self.display.display_image(image)
+            logger.info(f"Reapplied brightness: {brightness}")
 
     def get_current_brightness(self):
         """Return the current brightness value and override state for API use.
