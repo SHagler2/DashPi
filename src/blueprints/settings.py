@@ -1,13 +1,16 @@
-"""Settings blueprint — device config, OTA updates, shutdown/reboot, log download."""
+"""Settings blueprint — device config, OTA updates, shutdown/reboot, log download, config backup/restore."""
 
-from flask import Blueprint, request, jsonify, current_app, render_template, Response
+from flask import Blueprint, request, jsonify, current_app, render_template, Response, send_file
 from datetime import datetime, timedelta
+from werkzeug.utils import secure_filename
 import os
 import subprocess
 import pytz
 import logging
 import io
 import json
+import zipfile
+import shutil
 
 # Try to import cysystemd for journal reading (Linux only)
 try:
@@ -315,4 +318,176 @@ def download_logs():
     except Exception as e:
         logger.error(f"Error reading logs: {e}")
         return Response("Error reading logs", status=500, mimetype="text/plain")
+
+
+@settings_bp.route('/api/config/export')
+def export_config():
+    """Export device configuration as a ZIP archive.
+
+    Query params:
+        include_env: Include .env API keys (default false)
+        include_images: Include saved user images (default false)
+    """
+    try:
+        device_config = current_app.config['DEVICE_CONFIG']
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        include_env = request.args.get('include_env', 'false').lower() == 'true'
+        include_images = request.args.get('include_images', 'false').lower() == 'true'
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # Always include device.json (exclude transient state)
+            config = device_config.get_config().copy()
+            config.pop('refresh_info', None)
+            config.pop('loop_override', None)
+            zf.writestr('device.json', json.dumps(config, indent=2))
+
+            # Optionally include .env
+            if include_env:
+                env_path = os.path.join(base_dir, '.env')
+                if os.path.isfile(env_path):
+                    zf.write(env_path, '.env')
+
+            # Optionally include saved images
+            if include_images:
+                saved_dir = os.path.join(base_dir, 'src', 'static', 'images', 'saved')
+                if os.path.isdir(saved_dir):
+                    for fname in os.listdir(saved_dir):
+                        fpath = os.path.join(saved_dir, fname)
+                        if os.path.isfile(fpath):
+                            zf.write(fpath, f'saved_images/{fname}')
+
+        buffer.seek(0)
+        now_str = datetime.now().strftime("%Y-%m-%d")
+        filename = f"dashpi-backup-{now_str}.zip"
+        return send_file(
+            buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        logger.error(f"Config export failed: {e}")
+        return jsonify({"error": f"Export failed: {e}"}), 500
+
+
+@settings_bp.route('/api/config/import', methods=['POST'])
+def import_config():
+    """Import device configuration from a previously exported ZIP archive.
+
+    Validates the ZIP contents, backs up current config, then applies.
+    Returns JSON with restart_required flag.
+    """
+    try:
+        device_config = current_app.config['DEVICE_CONFIG']
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+        file = request.files.get('file')
+        if not file or not file.filename:
+            return jsonify({"error": "No file uploaded"}), 400
+
+        # Validate file extension
+        if not file.filename.lower().endswith('.zip'):
+            return jsonify({"error": "File must be a .zip archive"}), 400
+
+        # Read ZIP into memory
+        zip_data = io.BytesIO(file.read())
+        if not zipfile.is_zipfile(zip_data):
+            return jsonify({"error": "File is not a valid ZIP archive"}), 400
+
+        zip_data.seek(0)
+        with zipfile.ZipFile(zip_data, 'r') as zf:
+            names = zf.namelist()
+
+            # Must contain device.json
+            if 'device.json' not in names:
+                return jsonify({"error": "ZIP must contain device.json"}), 400
+
+            # Validate device.json
+            try:
+                config_data = json.loads(zf.read('device.json'))
+            except (json.JSONDecodeError, ValueError) as e:
+                return jsonify({"error": f"Invalid device.json: {e}"}), 400
+
+            if not isinstance(config_data, dict):
+                return jsonify({"error": "device.json must be a JSON object"}), 400
+
+            # Check for expected keys (at least orientation should exist)
+            if 'orientation' not in config_data:
+                return jsonify({"error": "device.json missing required fields"}), 400
+
+            # Validate .env if present
+            has_env = '.env' in names
+            if has_env:
+                env_content = zf.read('.env').decode('utf-8', errors='ignore')
+                for line in env_content.strip().splitlines():
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    if '=' not in line:
+                        return jsonify({"error": f"Invalid .env line: {line[:50]}"}), 400
+
+            # Validate images if present
+            image_files = [n for n in names if n.startswith('saved_images/') and not n.endswith('/')]
+            for img_name in image_files:
+                img_data = zf.read(img_name)
+                try:
+                    from PIL import Image
+                    img = Image.open(io.BytesIO(img_data))
+                    img.verify()
+                except Exception:
+                    return jsonify({"error": f"Invalid image: {os.path.basename(img_name)}"}), 400
+
+            # --- All validation passed, apply changes ---
+
+            # Backup current device.json
+            config_path = device_config.config_file
+            backup_path = config_path + '.bak'
+            if os.path.isfile(config_path):
+                shutil.copy2(config_path, backup_path)
+                logger.info(f"Backed up config to {backup_path}")
+
+            # Apply device.json
+            device_config.update_config(config_data)
+            logger.info("Imported device.json")
+
+            # Apply .env if present
+            if has_env:
+                env_path = os.path.join(base_dir, '.env')
+                env_backup = env_path + '.bak'
+                if os.path.isfile(env_path):
+                    shutil.copy2(env_path, env_backup)
+                with open(env_path, 'w') as f:
+                    f.write(env_content)
+                logger.info("Imported .env")
+
+            # Apply saved images if present
+            if image_files:
+                saved_dir = os.path.join(base_dir, 'src', 'static', 'images', 'saved')
+                os.makedirs(saved_dir, exist_ok=True)
+                for img_name in image_files:
+                    fname = secure_filename(os.path.basename(img_name))
+                    if fname:
+                        with open(os.path.join(saved_dir, fname), 'wb') as f:
+                            f.write(zf.read(img_name))
+                logger.info(f"Imported {len(image_files)} saved image(s)")
+
+        summary = "Restored: device.json"
+        if has_env:
+            summary += ", API keys"
+        if image_files:
+            summary += f", {len(image_files)} image(s)"
+
+        return jsonify({
+            "success": True,
+            "message": summary + ". Restart required for changes to take effect.",
+            "restart_required": True,
+            "restored_env": has_env,
+            "restored_images": len(image_files)
+        })
+
+    except Exception as e:
+        logger.error(f"Config import failed: {e}")
+        return jsonify({"error": f"Import failed: {e}"}), 500
 

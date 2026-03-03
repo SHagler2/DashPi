@@ -502,6 +502,38 @@
             </div>
         </div>
 
+        <!-- Backup & Restore Section -->
+        <div class="separator"></div>
+        <div class="form-group" style="padding: 0 16px;">
+            <label class="form-label" style="font-size: 1.1em; font-weight: bold;">Backup & Restore</label>
+
+            <!-- Export -->
+            <div style="margin-top: 8px;">
+                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                    <button type="button" class="header-button" style="background-color: #2c66b1; color: #fff;"
+                            onclick="exportConfig()">Export Config</button>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" id="exportIncludeEnv"> Include API Keys
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                        <input type="checkbox" id="exportIncludeImages"> Include Saved Images
+                    </label>
+                </div>
+            </div>
+
+            <!-- Import -->
+            <div style="margin-top: 12px;">
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <input type="file" id="importFile" accept=".zip" style="max-width: 300px;" class="form-input">
+                    <button type="button" class="header-button" style="background-color: #e67e22; color: #fff;"
+                            onclick="importConfig()" id="importBtn">Import Config</button>
+                </div>
+                <span class="form-hint" style="font-size: 0.8em; opacity: 0.7; margin-top: 4px; display: block;">
+                    Upload a previously exported .zip backup to restore settings.
+                </span>
+            </div>
+        </div>
+
         <!-- Buttons -->
         <div class="buttons-container">
             <button type="button" onclick="handleAction()" class="action-button">Save</button>
@@ -509,5 +541,97 @@
     </div>
     <!-- Success/Error Modal -->
     {% include 'response_modal.html' %}
+
+    <script>
+        function exportConfig() {
+            const includeEnv = document.getElementById('exportIncludeEnv').checked;
+            const includeImages = document.getElementById('exportIncludeImages').checked;
+            const params = new URLSearchParams();
+            if (includeEnv) params.set('include_env', 'true');
+            if (includeImages) params.set('include_images', 'true');
+            window.location.href = '/api/config/export?' + params.toString();
+        }
+
+        async function importConfig() {
+            const fileInput = document.getElementById('importFile');
+            const file = fileInput.files[0];
+            if (!file) {
+                showResponseModal('failure', 'Please select a .zip backup file first.');
+                return;
+            }
+            if (!file.name.toLowerCase().endsWith('.zip')) {
+                showResponseModal('failure', 'File must be a .zip archive.');
+                return;
+            }
+            if (!confirm('This will replace your current configuration with the backup.\n\nA backup of your current config will be saved automatically.\n\nProceed?')) {
+                return;
+            }
+
+            const btn = document.getElementById('importBtn');
+            btn.disabled = true;
+            btn.textContent = 'Importing...';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const resp = await fetch('/api/config/import', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    showResponseModal('failure', data.error || 'Import failed.');
+                    btn.disabled = false;
+                    btn.textContent = 'Import Config';
+                    return;
+                }
+
+                showResponseModal('success', data.message);
+
+                if (data.restart_required) {
+                    if (confirm('Restart service now to apply changes?')) {
+                        btn.textContent = 'Restarting...';
+                        await fetch("{{ url_for('settings.shutdown') }}", {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ reboot: true })
+                        });
+                        // Poll until service comes back
+                        setTimeout(() => {
+                            let attempts = 0;
+                            const poll = setInterval(async () => {
+                                attempts++;
+                                try {
+                                    const r = await fetch('/settings', { method: 'HEAD' });
+                                    if (r.ok) {
+                                        clearInterval(poll);
+                                        window.location.reload();
+                                    }
+                                } catch (e) { /* still restarting */ }
+                                if (attempts > 30) {
+                                    clearInterval(poll);
+                                    btn.textContent = 'Reload';
+                                    btn.disabled = false;
+                                    btn.onclick = () => window.location.reload();
+                                }
+                            }, 2000);
+                        }, 5000);
+                    } else {
+                        btn.disabled = false;
+                        btn.textContent = 'Import Config';
+                    }
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = 'Import Config';
+                }
+            } catch (err) {
+                showResponseModal('failure', 'Import failed: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Import Config';
+            }
+        }
+    </script>
 </body>
 </html>
