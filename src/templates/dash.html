@@ -141,24 +141,15 @@
                 document.documentElement.setAttribute('data-theme', 'dark');
             }
         })();
-        let lastModified = null;
         const refreshIntervalMs = 3 * 1000;
+        let lastImageUrl = null;
 
         async function refreshImage() {
             const img = document.querySelector('.image-container img');
             if (!img) return;
 
             try {
-                const headers = {};
-                if (lastModified) {
-                    headers['If-Modified-Since'] = lastModified;
-                }
-
-                const response = await fetch('{{ url_for("main.get_current_image") }}', { headers });
-                
-                if (response.status === 304) {
-                    return;
-                }
+                const response = await fetch('{{ url_for("main.get_current_image") }}');
 
                 if (!response.ok) {
                     console.error('Failed to fetch image:', response.status);
@@ -166,22 +157,15 @@
                 }
 
                 const blob = await response.blob();
-                if (!blob || blob.size === 0) return; // Don't replace with empty image
+                const objectUrl = URL.createObjectURL(blob);
 
-                // Load blob into a temporary Image first to verify it's valid
-                const testUrl = URL.createObjectURL(blob);
-                const testImg = new Image();
-                testImg.onload = function() {
-                    img.src = testUrl;
-                    lastModified = response.headers.get('Last-Modified');
-                };
-                testImg.onerror = function() {
-                    URL.revokeObjectURL(testUrl); // Discard bad blob
-                };
-                testImg.src = testUrl;
+                // Revoke previous blob URL to avoid memory leak
+                if (lastImageUrl && lastImageUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(lastImageUrl);
+                }
 
-                // New image detected - refresh status bar immediately
-                updateCountdown();
+                img.src = objectUrl;
+                lastImageUrl = objectUrl;
             } catch (error) {
                 console.error('Error refreshing image:', error);
             }

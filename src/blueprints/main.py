@@ -53,28 +53,9 @@ def get_current_image():
     if not os.path.exists(image_path):
         return jsonify({"error": "Image not found"}), 404
     
-    # Get the file's last modified time (truncate to seconds to match HTTP header precision)
-    file_mtime = int(os.path.getmtime(image_path))
-    last_modified = datetime.fromtimestamp(file_mtime)
-    
-    # Check If-Modified-Since header
-    if_modified_since = request.headers.get('If-Modified-Since')
-    if if_modified_since:
-        try:
-            # Parse the If-Modified-Since header
-            client_mtime = datetime.strptime(if_modified_since, '%a, %d %b %Y %H:%M:%S %Z')
-            client_mtime_seconds = int(client_mtime.timestamp())
-            
-            # Compare (both now in seconds, no sub-second precision)
-            if file_mtime <= client_mtime_seconds:
-                return '', 304
-        except (ValueError, AttributeError) as e:
-            logger.debug("Could not parse If-Modified-Since header: %s", e)
-    
-    # Send the file with Last-Modified header
+    # Always serve fresh — local network, negligible overhead, avoids 304 caching bugs
     response = send_file(image_path, mimetype='image/png')
-    response.headers['Last-Modified'] = last_modified.strftime('%a, %d %b %Y %H:%M:%S GMT')
-    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Cache-Control'] = 'no-store'
     return response
 
 
