@@ -3,6 +3,7 @@
 from flask import Blueprint, request, jsonify, current_app, render_template, send_file
 import logging
 import os
+import threading
 import time
 from datetime import datetime
 
@@ -307,6 +308,14 @@ def get_next_change_time():
         "override": loop_override
     })
 
+def _safe_reapply_brightness(display_manager):
+    """Reapply brightness in a background thread (non-blocking)."""
+    try:
+        display_manager.reapply_brightness()
+    except Exception as e:
+        logger.warning(f"Failed to reapply brightness: {e}")
+
+
 @main_bp.route('/api/set_brightness', methods=['POST'])
 def set_brightness():
     """Set a temporary brightness override from the dashboard slider.
@@ -338,11 +347,11 @@ def set_brightness():
 
     display_manager.set_brightness_override(brightness)
 
-    # Reapply brightness to current image immediately (no full plugin re-render)
-    try:
-        display_manager.reapply_brightness()
-    except Exception as e:
-        logger.warning(f"Failed to reapply brightness: {e}")
+    # Reapply brightness in a background thread so the API response
+    # returns immediately and doesn't block other Flask requests
+    threading.Thread(
+        target=_safe_reapply_brightness, args=(display_manager,), daemon=True
+    ).start()
 
     return jsonify({
         "success": True,
@@ -360,11 +369,10 @@ def clear_brightness_override():
 
     display_manager.clear_brightness_override()
 
-    # Reapply scheduled brightness immediately
-    try:
-        display_manager.reapply_brightness()
-    except Exception as e:
-        logger.warning(f"Failed to reapply brightness: {e}")
+    # Reapply in background thread
+    threading.Thread(
+        target=_safe_reapply_brightness, args=(display_manager,), daemon=True
+    ).start()
 
     return jsonify({"success": True, "message": "Brightness override cleared"})
 

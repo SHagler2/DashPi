@@ -166,9 +166,13 @@
                 }
 
                 const blob = await response.blob();
-                const objectUrl = URL.createObjectURL(blob);
+                if (!blob || blob.size === 0) return; // Don't replace with empty image
 
+                const oldSrc = img.src;
+                const objectUrl = URL.createObjectURL(blob);
                 img.src = objectUrl;
+                // Revoke previous objectUrl to prevent memory leak (skip static URL)
+                if (oldSrc && oldSrc.startsWith('blob:')) URL.revokeObjectURL(oldSrc);
                 lastModified = response.headers.get('Last-Modified');
 
                 // New image detected - refresh status bar immediately
