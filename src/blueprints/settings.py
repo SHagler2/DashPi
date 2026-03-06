@@ -460,8 +460,12 @@ def import_config():
                 shutil.copy2(config_path, backup_path)
                 logger.info(f"Backed up config to {backup_path}")
 
-            # Apply device.json
+            # Apply device.json — update in-memory config AND rebuild model objects
+            # (write_config serializes from loop_manager, so we must reload it
+            # or the old in-memory state overwrites the imported loops)
             device_config.update_config(config_data)
+            if 'loop_config' in config_data:
+                device_config.loop_manager = device_config.load_loop_manager()
             logger.info("Imported device.json")
 
             # Apply .env if present
