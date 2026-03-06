@@ -37,6 +37,13 @@ For documentation on building custom plugins, see [Building Plugins](./docs/buil
 
 ## Installation
 
+**Quick install** (one command):
+```bash
+curl -sSL https://raw.githubusercontent.com/SHagler2/DashPi/main/install/bootstrap.sh | sudo bash
+```
+
+**Or step by step:**
+
 1. Install git (if not already installed):
     ```bash
     sudo apt-get update && sudo apt-get install -y git
