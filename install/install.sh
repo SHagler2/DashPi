@@ -240,6 +240,14 @@ WantedBy=multi-user.target
 EOF
   sudo systemctl daemon-reload
   sudo systemctl enable $SERVICE_FILE
+
+  # Service runs as root but repo is owned by the user — tell git to trust it
+  # (required for self-update via the web UI)
+  REPO_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
+  if ! git config --global --get-all safe.directory 2>/dev/null | grep -qF "$REPO_DIR"; then
+    git config --global --add safe.directory "$REPO_DIR"
+    echo_success "\tAdded $REPO_DIR to git safe.directory"
+  fi
 }
 
 setup_clean_boot() {
