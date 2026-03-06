@@ -12,6 +12,7 @@ import io
 import json
 import logging
 import os
+import tempfile
 import time
 
 from PIL import Image, ImageDraw, ImageFont
@@ -30,6 +31,9 @@ RAW_SAMPLE_RATE = 44100
 DOWN_SAMPLE_RATE = 16000
 AUDIO_GAIN = 1.0
 WEATHER_CACHE_MINUTES = 30
+EINK_IDLE_REFRESH_MINUTES = 30  # How often to repaint idle screen on e-ink
+SHAZAM_API_TIMEOUT = 15        # Seconds before giving up on Shazam API
+ALBUM_ART_TIMEOUT_MS = 8000    # Milliseconds before giving up on album art download
 STATUS_FILE = os.path.join(PLUGIN_DIR, "status.json")
 
 
@@ -47,6 +51,10 @@ class ShazamPi(BasePlugin):
         self._last_weather = None
         self._last_weather_fetch = None
         self._recording_duration = None
+        self._idle_displayed_at = None  # Timestamp of last idle render (for e-ink dedup)
+        self._cached_mic_card = None    # Cached ALSA card number (doesn't change mid-session)
+        self._mic_configured = False    # Whether amixer settings have been applied
+        self._event_loop = None         # Reusable asyncio event loop for Shazam calls
 
     def _set_status(self, stage, detail=""):
         """Write current status to a JSON file for the web UI to poll."""
@@ -98,26 +106,33 @@ class ShazamPi(BasePlugin):
                 self._shazam_fail_count = 0
                 self._consecutive_misses = 0
                 self._last_song_time = time.time()
+                self._idle_displayed_at = None
                 self._set_status("rendering", f"Found: {song['title']} by {song['artist']}")
                 return self._render_song(song, dimensions, settings)
 
-            # Retry: re-record and try Shazam once more
-            self._set_status("no_match", "Shazam: no match. Retrying...")
-            logger.info("Shazam failed, retrying with fresh recording...")
-            self._set_status("recording", f"Retrying — recording {recording_duration}s...")
-            raw_wav_bytes2, _ = self._record_audio(recording_duration)
-            self._set_status("identifying", "Retry: asking Shazam again...")
-            song = self._identify_song(raw_wav_bytes2)
-            if song:
-                self._last_song = song
-                self._shazam_fail_count = 0
-                self._consecutive_misses = 0
-                self._last_song_time = time.time()
-                self._set_status("rendering", f"Found: {song['title']} by {song['artist']}")
-                return self._render_song(song, dimensions, settings)
+            # Retry only if YAMNet confidence is strong enough to justify the cost
+            # (a second recording + Shazam call adds ~7s to the cycle)
+            retry_threshold = confidence + 0.10
+            if top_score >= retry_threshold:
+                self._set_status("no_match", "Shazam: no match. Retrying...")
+                logger.info(f"Shazam failed, retrying (YAMNet score {top_score:.0%} >= retry threshold {retry_threshold:.0%})")
+                self._set_status("recording", f"Retrying — recording {recording_duration}s...")
+                raw_wav_bytes2, _ = self._record_audio(recording_duration)
+                self._set_status("identifying", "Retry: asking Shazam again...")
+                song = self._identify_song(raw_wav_bytes2)
+                if song:
+                    self._last_song = song
+                    self._shazam_fail_count = 0
+                    self._consecutive_misses = 0
+                    self._last_song_time = time.time()
+                    self._idle_displayed_at = None
+                    self._set_status("rendering", f"Found: {song['title']} by {song['artist']}")
+                    return self._render_song(song, dimensions, settings)
+            else:
+                logger.info(f"Skipping Shazam retry (YAMNet score {top_score:.0%} < retry threshold {retry_threshold:.0%})")
 
             self._shazam_fail_count = getattr(self, '_shazam_fail_count', 0) + 1
-            logger.warning(f"Shazam failed to identify after retry (attempt #{self._shazam_fail_count})")
+            logger.warning(f"Shazam failed to identify (attempt #{self._shazam_fail_count})")
             self._set_status("unidentified", f"Could not identify song (attempt #{self._shazam_fail_count})")
             return self._render_unidentified(
                 dimensions, settings, device_config, top_class, top_score
@@ -159,24 +174,32 @@ class ShazamPi(BasePlugin):
 
         logger.info(f"Recording {recording_duration}s of audio...")
 
-        # Find USB mic ALSA card and use plughw for automatic sample rate conversion
-        card = self._find_usb_mic_alsa()
-        if card is not None:
-            device = f"plughw:{card},0"
-            logger.debug(f"Using ALSA device {device}")
-            # Disable AGC and set capture volume (12/16 optimal per mic testing)
+        # Find USB mic ALSA card (cached — doesn't change mid-session)
+        if self._cached_mic_card is None:
+            card = self._find_usb_mic_alsa()
+            if card is not None:
+                self._cached_mic_card = card
+            else:
+                self._cached_mic_card = 1  # Default fallback
+                logger.warning("USB mic not found in ALSA cards, defaulting to card 1")
+
+        device = f"plughw:{self._cached_mic_card},0"
+
+        # Configure mic settings once per session (AGC off, volume 12/16)
+        if not self._mic_configured:
+            logger.debug(f"Configuring ALSA device {device}")
             try:
-                subprocess.run(["amixer", "-c", str(card), "cset", "numid=4", "off"],
+                subprocess.run(["amixer", "-c", str(self._cached_mic_card), "cset", "numid=4", "off"],
                                capture_output=True, timeout=5)
-                subprocess.run(["amixer", "-c", str(card), "cset", "numid=3", "12"],
+                subprocess.run(["amixer", "-c", str(self._cached_mic_card), "cset", "numid=3", "12"],
                                capture_output=True, timeout=5)
+                self._mic_configured = True
             except Exception as e:
                 logger.warning(f"Could not configure mic settings: {e}")
-        else:
-            device = "plughw:1,0"
-            logger.warning("USB mic not found in ALSA cards, defaulting to plughw:1,0")
 
-        tmp_wav = "/tmp/shazam_recording.wav"
+        # Use a secure temp file (unpredictable name, auto-cleaned)
+        fd, tmp_wav = tempfile.mkstemp(suffix=".wav", prefix="shazam_")
+        os.close(fd)
 
         try:
             # Record at 44100 Hz 16-bit PCM — full quality for Shazam fingerprinting
@@ -186,19 +209,25 @@ class ShazamPi(BasePlugin):
                  "-d", str(recording_duration), tmp_wav],
                 check=True, capture_output=True, timeout=recording_duration + 5
             )
+
+            # Read the raw WAV bytes for Shazam (44.1kHz 16-bit PCM)
+            with open(tmp_wav, 'rb') as f:
+                raw_wav_bytes = f.read()
+
+            # Read into numpy and downsample to 16kHz for YAMNet
+            with wave.open(tmp_wav, 'rb') as wf:
+                raw_bytes = wf.readframes(wf.getnframes())
+                audio_44k = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32) / 32768.0
         except subprocess.TimeoutExpired:
             raise RuntimeError("Audio recording timed out")
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"arecord failed: {e.stderr.decode().strip()}")
-
-        # Read the raw WAV bytes for Shazam (44.1kHz 16-bit PCM)
-        with open(tmp_wav, 'rb') as f:
-            raw_wav_bytes = f.read()
-
-        # Read into numpy and downsample to 16kHz for YAMNet
-        with wave.open(tmp_wav, 'rb') as wf:
-            raw_bytes = wf.readframes(wf.getnframes())
-            audio_44k = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+        finally:
+            # Always clean up temp file
+            try:
+                os.unlink(tmp_wav)
+            except OSError:
+                pass
 
         target_len = int(len(audio_44k) * DOWN_SAMPLE_RATE / RAW_SAMPLE_RATE)
         from scipy.signal import resample
@@ -268,6 +297,13 @@ class ShazamPi(BasePlugin):
 
     # ========== Song Identification (Shazam) ==========
 
+    def _get_event_loop(self):
+        """Get or create a reusable asyncio event loop for Shazam calls."""
+        if self._event_loop is None or self._event_loop.is_closed():
+            self._event_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._event_loop)
+        return self._event_loop
+
     def _identify_song(self, raw_wav_bytes):
         from shazamio import Shazam
 
@@ -275,11 +311,13 @@ class ShazamPi(BasePlugin):
         if self._shazam is None:
             self._shazam = Shazam()
 
-        loop = asyncio.new_event_loop()
+        loop = self._get_event_loop()
         try:
-            asyncio.set_event_loop(loop)
             result = loop.run_until_complete(
-                self._shazam.recognize(raw_wav_bytes)
+                asyncio.wait_for(
+                    self._shazam.recognize(raw_wav_bytes),
+                    timeout=SHAZAM_API_TIMEOUT
+                )
             )
 
             if result and 'track' in result:
@@ -300,11 +338,12 @@ class ShazamPi(BasePlugin):
             else:
                 logger.warning("Shazam returned empty result")
             return None
+        except asyncio.TimeoutError:
+            logger.warning(f"Shazam API timed out after {SHAZAM_API_TIMEOUT}s")
+            return None
         except Exception as e:
             logger.error(f"Shazam identification error: {e}", exc_info=True)
             return None
-        finally:
-            loop.close()
 
     # ========== Rendering ==========
 
@@ -317,7 +356,7 @@ class ShazamPi(BasePlugin):
         album_art_url = song.get('album_art')
         if album_art_url:
             image = self.image_loader.from_url(
-                album_art_url, dimensions, timeout_ms=30000, fit_mode=fit_mode
+                album_art_url, dimensions, timeout_ms=ALBUM_ART_TIMEOUT_MS, fit_mode=fit_mode
             )
         else:
             image = None
@@ -494,6 +533,16 @@ class ShazamPi(BasePlugin):
         return None
 
     def _render_idle(self, dimensions, settings, device_config, status_note="No Music Detected"):
+        # On e-ink, skip redundant idle repaints (slow full-screen flash).
+        # Allow a refresh every EINK_IDLE_REFRESH_MINUTES so weather stays current.
+        display_type = device_config.get_config("display_type", default="auto")
+        if display_type not in ("lcd", "mock") and self._idle_displayed_at is not None:
+            elapsed = time.time() - self._idle_displayed_at
+            if elapsed < EINK_IDLE_REFRESH_MINUTES * 60:
+                logger.info(f"E-ink idle already displayed {elapsed:.0f}s ago, skipping repaint")
+                return None
+            logger.info(f"E-ink idle refresh due ({elapsed:.0f}s elapsed), repainting")
+
         width, height = dimensions
         weather = self._get_weather(settings, device_config)
 
@@ -521,6 +570,7 @@ class ShazamPi(BasePlugin):
             )
 
         logger.info("=== ShazamPi Plugin: Idle image generated ===")
+        self._idle_displayed_at = time.time()
         return canvas
 
     def _render_idle_weather(self, canvas, draw, weather, width, height,
