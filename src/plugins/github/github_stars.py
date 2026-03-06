@@ -14,9 +14,9 @@ def stars_generate_image(plugin_instance, settings, device_config):
     if device_config.get_config("orientation") == "vertical":
         dimensions = dimensions[::-1]
 
-    github_repository = username + "/" + repository
-    if not github_repository:
+    if not username or not repository:
         raise RuntimeError("GitHub repository is required.")
+    github_repository = username + "/" + repository
 
     try:
         stars = fetch_stars(github_repository)

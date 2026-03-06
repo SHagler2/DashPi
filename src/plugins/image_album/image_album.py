@@ -23,7 +23,7 @@ class ImmichProvider:
 
     def get_album_id(self, album: str) -> str:
         logger.debug(f"Fetching albums from {self.base_url}")
-        r = self.session.get(f"{self.base_url}/api/albums", headers=self.headers)
+        r = self.session.get(f"{self.base_url}/api/albums", headers=self.headers, timeout=15)
         r.raise_for_status()
         albums = r.json()
 
@@ -40,13 +40,14 @@ class ImmichProvider:
         page = 1
 
         logger.debug(f"Fetching assets from album {album_id}")
-        while page_items:
+        max_pages = 100  # Safety limit to prevent infinite pagination
+        while page_items and page <= max_pages:
             body = {
                 "albumIds": [album_id],
                 "size": 1000,
                 "page": page
             }
-            r2 = self.session.post(f"{self.base_url}/api/search/metadata", json=body, headers=self.headers)
+            r2 = self.session.post(f"{self.base_url}/api/search/metadata", json=body, headers=self.headers, timeout=15)
             r2.raise_for_status()
             assets_data = r2.json()
 

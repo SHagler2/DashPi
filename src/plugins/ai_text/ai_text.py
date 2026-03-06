@@ -40,7 +40,7 @@ class AIText(BasePlugin):
         text_prompt = settings.get('textPrompt', '')
 
         # Use provided title, or auto-generate from prompt
-        title = settings.get("title")
+        title = settings.get("title") or ""
         if not title and text_prompt:
             # Create title from prompt (truncated)
             title = text_prompt.strip()
