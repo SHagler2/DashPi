@@ -46,6 +46,11 @@ class Calendar(BasePlugin):
         if not calendar_urls:
             raise RuntimeError("At least one calendar URL is required")
 
+        # Ensure colors list matches URLs (default blue if missing)
+        if not calendar_colors or len(calendar_colors) < len(calendar_urls):
+            default_color = "#3788d8"
+            calendar_colors = (calendar_colors or []) + [default_color] * (len(calendar_urls) - len(calendar_colors or []))
+
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":
             dimensions = dimensions[::-1]
@@ -431,28 +436,34 @@ class Calendar(BasePlugin):
         parsed_events = []
 
         for calendar_url, color in zip(calendar_urls, colors):
-            cal = self.fetch_calendar(calendar_url)
-            events = recurring_ical_events.of(cal).between(start_range, end_range)
-            contrast_color = self.get_contrast_color(color)
+            try:
+                cal = self.fetch_calendar(calendar_url)
+                events = recurring_ical_events.of(cal).between(start_range, end_range)
+                contrast_color = self.get_contrast_color(color)
 
-            for event in events:
-                start, end, all_day = self.parse_data_points(event, tz)
-                parsed_event = {
-                    "title": str(event.get("summary")),
-                    "start": start,
-                    "backgroundColor": color,
-                    "textColor": contrast_color,
-                    "allDay": all_day
-                }
-                if end:
-                    parsed_event['end'] = end
+                for event in events:
+                    start, end, all_day = self.parse_data_points(event, tz)
+                    parsed_event = {
+                        "title": str(event.get("summary")),
+                        "start": start,
+                        "backgroundColor": color,
+                        "textColor": contrast_color,
+                        "allDay": all_day
+                    }
+                    if end:
+                        parsed_event['end'] = end
 
-                parsed_events.append(parsed_event)
+                    parsed_events.append(parsed_event)
+            except Exception as e:
+                logger.warning(f"Skipping calendar URL {calendar_url}: {e}")
+                continue
 
         return parsed_events
     
     def get_view_range(self, view, current_dt, settings):
-        start = datetime(current_dt.year, current_dt.month, current_dt.day)
+        # Use timezone-aware datetimes to match tz-aware event times from iCal
+        tz = current_dt.tzinfo
+        start = current_dt.replace(hour=0, minute=0, second=0, microsecond=0)
         if view == "timeGridDay":
             end = start + timedelta(days=1)
         elif view == "timeGridWeek":
@@ -460,15 +471,14 @@ class Calendar(BasePlugin):
                 week_start_day = int(settings.get("weekStartDay", 1))
                 python_week_start = (week_start_day - 1) % 7
                 offset = (current_dt.weekday() - python_week_start) % 7
-                start = current_dt - timedelta(days=offset)
-                start = datetime(start.year, start.month, start.day)
+                start = (current_dt - timedelta(days=offset)).replace(hour=0, minute=0, second=0, microsecond=0)
             end = start + timedelta(days=7)
         elif view == "dayGrid":
-            start = current_dt - timedelta(weeks=1)
+            start = (current_dt - timedelta(weeks=1)).replace(hour=0, minute=0, second=0, microsecond=0)
             end = current_dt + timedelta(weeks=int(settings.get("displayWeeks") or 4))
         elif view == "dayGridMonth":
-            start = datetime(current_dt.year, current_dt.month, 1) - timedelta(weeks=1)
-            end = datetime(current_dt.year, current_dt.month, 1) + timedelta(weeks=6)
+            start = datetime(current_dt.year, current_dt.month, 1, tzinfo=tz) - timedelta(weeks=1)
+            end = datetime(current_dt.year, current_dt.month, 1, tzinfo=tz) + timedelta(weeks=6)
         elif view == "listMonth":
             end = start + timedelta(weeks=5)
         return start, end

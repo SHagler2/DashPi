@@ -6,10 +6,17 @@ from utils.app_utils import get_font
 from utils.text_utils import get_text_dimensions, truncate_text
 from utils.layout_utils import calculate_grid
 import logging
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
+
+# Timeout for yfinance API calls (seconds)
+YFINANCE_TIMEOUT = 15
+# Cache TTL: shorter when market open, longer when closed
+CACHE_TTL_MARKET_OPEN = 60
+CACHE_TTL_MARKET_CLOSED = 3600
 
 # User-selectable font size multipliers applied to all text in the plugin
 FONT_SIZES = {
@@ -64,6 +71,12 @@ class Stocks(BasePlugin):
     volume, and day high/low. Supports configurable font sizes and auto-refresh.
     """
 
+    def __init__(self, config, **dependencies):
+        super().__init__(config, **dependencies)
+        self._stocks_cache = None
+        self._stocks_cache_time = 0
+        self._stocks_cache_tickers = None
+
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
         template_params['style_settings'] = False
@@ -110,7 +123,7 @@ class Stocks(BasePlugin):
 
         font_scale = FONT_SIZES.get(settings.get('fontSize', 'normal'), 1)
         count_scale = COUNT_SCALES.get(stock_count, 0.65)
-        last_updated = datetime.now().strftime("%I:%M %p")
+        last_updated = datetime.now(ZoneInfo("America/New_York")).strftime("%I:%M %p")
         market_open = is_market_open()
 
         return self._render_pil(dimensions, title, stocks_data, columns, rows,
@@ -308,8 +321,24 @@ class Stocks(BasePlugin):
         return image
 
     def fetch_stock_data(self, tickers):
-        """Fetch stock data for a list of ticker symbols using batch request."""
+        """Fetch stock data for a list of ticker symbols using batch request.
+
+        Results are cached with a TTL that varies by market status (shorter when
+        open, longer when closed). yfinance calls are wrapped in a thread timeout
+        to prevent hanging the refresh loop.
+        """
         import yfinance as yf
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError
+
+        # Check cache
+        now = time.monotonic()
+        cache_ttl = CACHE_TTL_MARKET_OPEN if is_market_open() else CACHE_TTL_MARKET_CLOSED
+        if (self._stocks_cache is not None
+                and self._stocks_cache_tickers == tickers
+                and now - self._stocks_cache_time < cache_ttl):
+            logger.info(f"Using cached stock data ({now - self._stocks_cache_time:.0f}s old)")
+            return self._stocks_cache
+
         stocks_data = []
 
         try:
@@ -318,7 +347,10 @@ class Stocks(BasePlugin):
 
             for symbol in tickers:
                 try:
-                    info = tickers_obj.tickers[symbol].info
+                    # Wrap .info access in a timeout to prevent hanging
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(lambda s=symbol: tickers_obj.tickers[s].info)
+                        info = future.result(timeout=YFINANCE_TIMEOUT)
 
                     # Get current price and other data
                     current_price = info.get("currentPrice") or info.get("regularMarketPrice")
@@ -350,11 +382,20 @@ class Stocks(BasePlugin):
                         "is_positive": change >= 0
                     })
 
+                except TimeoutError:
+                    logger.warning(f"Timeout fetching data for {symbol} after {YFINANCE_TIMEOUT}s")
+                    continue
                 except Exception as e:
                     logger.error(f"Error processing data for {symbol}: {str(e)}")
                     continue
 
         except Exception as e:
             logger.error(f"Error fetching stock data: {str(e)}")
+
+        # Update cache
+        if stocks_data:
+            self._stocks_cache = stocks_data
+            self._stocks_cache_time = now
+            self._stocks_cache_tickers = tickers
 
         return stocks_data
