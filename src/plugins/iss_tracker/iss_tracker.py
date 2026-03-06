@@ -16,7 +16,7 @@ from utils.http_client import get_http_session
 logger = logging.getLogger(__name__)
 
 TLE_URL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
-CREW_URL = "http://api.open-notify.org/astros.json"
+CREW_URL = "https://api.open-notify.org/astros.json"
 TLE_CACHE_MAX_AGE = 6 * 3600  # 6 hours
 EARTH_RADIUS_KM = 6371.0
 ISS_CATALOG_NUMBER = 25544

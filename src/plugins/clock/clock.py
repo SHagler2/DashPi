@@ -461,8 +461,8 @@ class Clock(BasePlugin):
             [[7,5],[7,6],[7,7],[7,8],[7,9],[7,10]], # ELEVEN
             [[8,5],[8,6],[8,7],[8,8],[8,9],[8,10]], # TWELVE
         ]
-        if minute > 33:
-            letters.extend(hours[hour])
+        if minute >= 33:
+            letters.extend(hours[hour % 12])
         else:
             letters.extend(hours[hour - 1])
 

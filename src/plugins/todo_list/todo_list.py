@@ -31,7 +31,7 @@ class TodoList(BasePlugin):
             dimensions = dimensions[::-1]
 
         lists = []
-        for title, raw_list in zip(settings['list-title[]'], settings['list[]']):
+        for title, raw_list in zip(settings.get('list-title[]', []), settings.get('list[]', [])):
             elements = [line for line in raw_list.split('\n') if line.strip()]
             lists.append({
                 'title': title,

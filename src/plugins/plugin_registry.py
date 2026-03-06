@@ -37,8 +37,8 @@ def load_plugins(plugins_config):
                 # Create an instance of the plugin class and add it to the plugin_classes dictionary
                 PLUGIN_CLASSES[plugin_id] = plugin_class(plugin)
 
-        except ImportError as e:
-            logging.error(f"Failed to import plugin module {module_name}: {e}")
+        except Exception as e:
+            logger.error(f"Failed to load plugin {plugin_id}: {e}")
 
 def get_plugin_instance(plugin_config):
     plugin_id = plugin_config.get("id")

@@ -54,7 +54,7 @@ class Newspaper(BasePlugin):
             desired_ratio = desired_width / desired_height
 
             if img_ratio < desired_ratio:
-                new_height = int((img_width * desired_width) / desired_height)
+                new_height = int(img_width / desired_ratio)
                 new_image = Image.new("RGB", (img_width, new_height), (255, 255, 255))
                 new_image.paste(image, (0, 0))
                 image = new_image
