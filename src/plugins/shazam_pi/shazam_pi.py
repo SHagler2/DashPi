@@ -107,6 +107,7 @@ class ShazamPi(BasePlugin):
                 self._consecutive_misses = 0
                 self._last_song_time = time.time()
                 self._idle_displayed_at = None
+                self._last_weather_fetch = None  # Force fresh weather on next idle
                 self._set_status("rendering", f"Found: {song['title']} by {song['artist']}")
                 return self._render_song(song, dimensions, settings)
 
@@ -126,6 +127,7 @@ class ShazamPi(BasePlugin):
                     self._consecutive_misses = 0
                     self._last_song_time = time.time()
                     self._idle_displayed_at = None
+                    self._last_weather_fetch = None  # Force fresh weather on next idle
                     self._set_status("rendering", f"Found: {song['title']} by {song['artist']}")
                     return self._render_song(song, dimensions, settings)
             else:
