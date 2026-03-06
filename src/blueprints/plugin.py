@@ -448,11 +448,14 @@ def add_ticker():
     if len(saved_tickers) >= 6:
         return jsonify({"error": "Maximum 6 tickers allowed", "tickers": saved_tickers}), 400
 
-    # Validate ticker using yfinance
+    # Validate ticker using yfinance (with timeout to prevent Flask thread hang)
     try:
         import yfinance as yf
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
         stock = yf.Ticker(ticker)
-        info = stock.info
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(lambda: stock.info)
+            info = future.result(timeout=15)
 
         # Check if we got valid data
         name = info.get("shortName") or info.get("longName")

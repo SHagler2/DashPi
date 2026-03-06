@@ -82,8 +82,11 @@ class Config:
             except Exception as e:
                 logger.error(f"Failed to write config atomically: {e}")
                 # Fallback to direct write if atomic fails
-                with open(self.config_file, 'w') as outfile:
-                    json.dump(self.config, outfile, indent=4)
+                try:
+                    with open(self.config_file, 'w') as outfile:
+                        json.dump(self.config, outfile, indent=4)
+                except Exception as fallback_err:
+                    logger.error(f"Fallback config write also failed: {fallback_err}")
 
     def get_config(self, key=None, default=None):
         """Gets the value of a specific configuration key or returns the entire config if none provided."""

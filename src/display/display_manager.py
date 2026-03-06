@@ -263,7 +263,7 @@ class DisplayManager:
             image = resize_image(image, self.device_config.get_resolution())
             if self.device_config.get_config("inverted_image"):
                 image = image.rotate(180)
-            effective_settings = self.device_config.get_config("image_settings") or {}
+            effective_settings = dict(self.device_config.get_config("image_settings") or {})
             effective_settings["brightness"] = brightness
             image = apply_image_enhancement(image, effective_settings)
 
@@ -292,8 +292,8 @@ class DisplayManager:
         Args:
             value (float): Brightness value 0.0–2.0 (0 = display off).
         """
-        self._brightness_override = value
-        logger.info(f"Brightness override set to {value}")
+        self._brightness_override = max(0.0, min(2.0, float(value)))
+        logger.info(f"Brightness override set to {self._brightness_override}")
 
     def clear_brightness_override(self):
         """Clear the temporary brightness override, reverting to schedule."""

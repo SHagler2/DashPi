@@ -521,7 +521,7 @@ class RefreshTask:
 
                 self.condition.notify_all()  # Wake the thread to process manual update
 
-            self.refresh_event.wait()
+            self.refresh_event.wait(timeout=120)
             if self.refresh_result.get("exception"):
                 raise self.refresh_result.get("exception")
         else:

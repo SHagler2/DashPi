@@ -69,13 +69,19 @@ def save_settings():
             return jsonify({"error": "Time format is required"}), 400
 
         # Build image settings — include inky_saturation for e-ink displays
+        def _clamp_float(val_str, default, lo=0.0, hi=2.0):
+            try:
+                return max(lo, min(hi, float(val_str)))
+            except (TypeError, ValueError):
+                return default
+
         image_settings = {
-            "saturation": float(form_data.get("saturation", "1.0")),
-            "sharpness": float(form_data.get("sharpness", "1.0")),
-            "contrast": float(form_data.get("contrast", "1.0"))
+            "saturation": _clamp_float(form_data.get("saturation"), 1.0),
+            "sharpness": _clamp_float(form_data.get("sharpness"), 1.0),
+            "contrast": _clamp_float(form_data.get("contrast"), 1.0),
         }
         if "inkySaturation" in form_data:
-            image_settings["inky_saturation"] = float(form_data.get("inkySaturation", "0.5"))
+            image_settings["inky_saturation"] = _clamp_float(form_data.get("inkySaturation"), 0.5)
 
         settings = {
             "device_name": form_data.get("deviceName", "").strip() or None,
@@ -88,9 +94,9 @@ def save_settings():
             "image_settings": image_settings,
             "brightness_schedule": {
                 "enabled": "brightnessScheduleEnabled" in form_data,
-                "day_brightness": float(form_data.get("dayBrightness", "1.0")),
-                "evening_brightness": float(form_data.get("eveningBrightness", "0.6")),
-                "night_brightness": float(form_data.get("nightBrightness", "0.3")),
+                "day_brightness": _clamp_float(form_data.get("dayBrightness"), 1.0),
+                "evening_brightness": _clamp_float(form_data.get("eveningBrightness"), 0.6),
+                "night_brightness": _clamp_float(form_data.get("nightBrightness"), 0.3),
                 "day_start": form_data.get("dayStart", "07:00"),
                 "evening_start": form_data.get("eveningStart", "18:00"),
                 "night_start": form_data.get("nightStart", "22:00"),
@@ -411,6 +417,11 @@ def import_config():
         zip_data.seek(0)
         with zipfile.ZipFile(zip_data, 'r') as zf:
             names = zf.namelist()
+
+            # ZIP bomb guard: check total uncompressed size (max 128MB)
+            total_uncompressed = sum(info.file_size for info in zf.infolist())
+            if total_uncompressed > 128 * 1024 * 1024:
+                return jsonify({"error": "ZIP contents too large (max 128MB uncompressed)"}), 400
 
             # Must contain device.json
             if 'device.json' not in names:

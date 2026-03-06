@@ -16,6 +16,8 @@ Usage:
 """
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import logging
 from typing import Optional
 
@@ -44,11 +46,17 @@ def get_http_session() -> requests.Session:
             'User-Agent': 'DashPi/2.0 (https://github.com/SHagler2/DashPi/)'
         })
 
-        # Configure connection pool
-        adapter = requests.adapters.HTTPAdapter(
+        # Configure connection pool with proper retry strategy
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[500, 502, 503, 504],
+            allowed_methods=["GET", "HEAD"],  # Only retry idempotent methods
+        )
+        adapter = HTTPAdapter(
             pool_connections=4,
             pool_maxsize=4,
-            max_retries=3,
+            max_retries=retry_strategy,
             pool_block=False
         )
         _HTTP_SESSION.mount('http://', adapter)

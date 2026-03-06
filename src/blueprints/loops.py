@@ -34,7 +34,7 @@ def create_loop():
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
-    data = request.json
+    data = request.json or {}
     name = data.get("name")
     start_time = data.get("start_time")
     end_time = data.get("end_time")
@@ -56,7 +56,7 @@ def update_loop():
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
-    data = request.json
+    data = request.json or {}
     old_name = data.get("old_name")
     new_name = data.get("new_name")
     start_time = data.get("start_time")
@@ -75,7 +75,7 @@ def delete_loop():
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
-    data = request.json
+    data = request.json or {}
     loop_name = data.get("loop_name")
 
     if not loop_manager.get_loop(loop_name):
@@ -92,7 +92,7 @@ def add_plugin_to_loop():
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
-    data = request.json
+    data = request.json or {}
     loop_name = data.get("loop_name")
     plugin_id = data.get("plugin_id")
     refresh_interval = data.get("refresh_interval_seconds")
@@ -126,7 +126,7 @@ def remove_plugin_from_loop():
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
-    data = request.json
+    data = request.json or {}
     loop_name = data.get("loop_name")
     plugin_id = data.get("plugin_id")
 
@@ -147,7 +147,7 @@ def reorder_plugins():
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
-    data = request.json
+    data = request.json or {}
     loop_name = data.get("loop_name")
     plugin_ids = data.get("plugin_ids")
 
@@ -166,7 +166,7 @@ def update_rotation_interval():
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
-    data = request.json
+    data = request.json or {}
     interval = data.get("interval")
     unit = data.get("unit")
 
@@ -190,7 +190,7 @@ def update_plugin_settings():
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
-    data = request.json
+    data = request.json or {}
     loop_name = data.get("loop_name")
     plugin_id = data.get("plugin_id")
     plugin_settings = data.get("plugin_settings", {})
@@ -225,7 +225,7 @@ def toggle_loop_randomize():
     device_config = current_app.config['DEVICE_CONFIG']
     loop_manager = device_config.get_loop_manager()
 
-    data = request.json
+    data = request.json or {}
     loop_name = data.get("loop_name")
 
     loop = loop_manager.get_loop(loop_name)
@@ -246,7 +246,7 @@ def toggle_loop_randomize():
 @loops_bp.route('/search_city', methods=['POST'])
 def search_city():
     """Search for cities using geocoding API"""
-    data = request.json
+    data = request.json or {}
     city_name = data.get("city_name", "").strip()
 
     if not city_name:
@@ -301,7 +301,7 @@ def refresh_plugin_now():
     loop_manager = device_config.get_loop_manager()
     refresh_task = current_app.config['REFRESH_TASK']
 
-    data = request.json
+    data = request.json or {}
     loop_name = data.get("loop_name")
     plugin_id = data.get("plugin_id")
 
