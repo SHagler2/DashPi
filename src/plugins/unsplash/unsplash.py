@@ -50,11 +50,11 @@ class Unsplash(BasePlugin):
         }
 
         if search_query:
-            url = f"https://api.unsplash.com/search/photos"
+            url = "https://api.unsplash.com/search/photos"
             params['query'] = search_query
             logger.debug(f"Using search endpoint: {url}")
         else:
-            url = f"https://api.unsplash.com/photos/random"
+            url = "https://api.unsplash.com/photos/random"
             logger.debug(f"Using random photo endpoint: {url}")
 
         if collections:
@@ -67,7 +67,7 @@ class Unsplash(BasePlugin):
         try:
             logger.debug("Fetching image from Unsplash API...")
             session = get_http_session()
-            response = session.get(url, params=params)
+            response = session.get(url, params=params, timeout=15)
             response.raise_for_status()
             data = response.json()
 
@@ -79,14 +79,17 @@ class Unsplash(BasePlugin):
                 logger.info(f"Found {len(results)} images matching search query")
                 # Use selected image size (with automatic downgrade for low-RAM devices)
                 selected_photo = random.choice(results)
-                image_url = selected_photo["urls"][image_size]
+                image_url = selected_photo["urls"].get(image_size) or selected_photo["urls"].get("regular")
                 photo_data = selected_photo
                 logger.debug(f"Selected random image from {len(results)} results")
             else:
                 # Use selected image size (with automatic downgrade for low-RAM devices)
-                image_url = data["urls"][image_size]
+                image_url = data["urls"].get(image_size) or data["urls"].get("regular")
                 photo_data = data
                 logger.debug("Retrieved random image URL")
+
+            if not image_url:
+                raise RuntimeError("No image URL found in Unsplash API response.")
 
             # Extract photo metadata
             description = photo_data.get("description") or photo_data.get("alt_description") or ""
@@ -95,12 +98,12 @@ class Unsplash(BasePlugin):
             if user_data:
                 photographer = user_data.get("name", "")
 
-        except Exception as e:
-            logger.error(f"Error fetching image from Unsplash API: {e}")
-            raise RuntimeError("Failed to fetch image from Unsplash API, please check logs.")
         except (KeyError, IndexError) as e:
             logger.error(f"Error parsing Unsplash API response: {e}")
             raise RuntimeError("Failed to parse Unsplash API response, please check logs.")
+        except Exception as e:
+            logger.error(f"Error fetching image from Unsplash API: {e}")
+            raise RuntimeError("Failed to fetch image from Unsplash API, please check logs.")
 
 
         dimensions = device_config.get_resolution()
@@ -169,15 +172,9 @@ class Unsplash(BasePlugin):
             fill=(0, 0, 0, 180)
         )
 
-        # Black outline for contrast
-        outline_width = 2
-        for adj_x in range(-outline_width, outline_width + 1):
-            for adj_y in range(-outline_width, outline_width + 1):
-                if adj_x != 0 or adj_y != 0:
-                    draw.text((text_x + adj_x, text_y + adj_y), overlay_text, font=font, fill=(0, 0, 0, 255))
-
-        # White text
-        draw.text((text_x, text_y), overlay_text, font=font, fill=(255, 255, 255, 255))
+        # White text with black outline for contrast
+        draw.text((text_x, text_y), overlay_text, font=font, fill=(255, 255, 255, 255),
+                  stroke_width=2, stroke_fill=(0, 0, 0, 255))
 
         logger.info(f"Added photo overlay: {overlay_text}")
         return img_with_overlay

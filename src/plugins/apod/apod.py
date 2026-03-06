@@ -11,8 +11,11 @@ from io import BytesIO
 from utils.app_utils import get_font
 from utils.http_client import get_http_session
 import logging
+import re
 from random import randint
 from datetime import datetime, timedelta
+
+API_TIMEOUT = 15  # Seconds before giving up on NASA API metadata request
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +70,7 @@ class Apod(BasePlugin):
 
             logger.debug("Requesting NASA APOD API...")
             session = get_http_session()
-            response = session.get("https://api.nasa.gov/planetary/apod", params=params)
+            response = session.get("https://api.nasa.gov/planetary/apod", params=params, timeout=API_TIMEOUT)
 
             if response.status_code != 200:
                 logger.error(f"NASA API error (status {response.status_code}): {response.text}")
@@ -112,7 +115,6 @@ class Apod(BasePlugin):
         title = data.get("title", "")
         if title:
             # Clean up any HTML if present
-            import re
             title = re.sub('<[^<]+?>', '', title)
             title = re.sub(r'&[a-zA-Z]+;', '', title)
             title = ' '.join(title.split()).strip()
@@ -163,13 +165,7 @@ class Apod(BasePlugin):
         )
 
         # Draw white text with black outline for extra contrast
-        outline_width = 2
-        for adj_x in range(-outline_width, outline_width + 1):
-            for adj_y in range(-outline_width, outline_width + 1):
-                if adj_x != 0 or adj_y != 0:
-                    draw.text((text_x + adj_x, text_y + adj_y), title, font=font, fill=(0, 0, 0, 255))
-
-        # Draw white text
-        draw.text((text_x, text_y), title, font=font, fill=(255, 255, 255, 255))
+        draw.text((text_x, text_y), title, font=font, fill=(255, 255, 255, 255),
+                  stroke_width=2, stroke_fill=(0, 0, 0, 255))
 
         return img_with_overlay

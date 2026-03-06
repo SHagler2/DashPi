@@ -24,8 +24,11 @@ Flow:
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 from io import BytesIO
+from utils.app_utils import get_font
 from utils.http_client import get_http_session
 import logging
+import re
+from html import unescape
 from random import randint
 from datetime import datetime, timedelta, date
 from typing import Dict, Any
@@ -61,6 +64,7 @@ class Wpotd(BasePlugin):
         # Retry logic for random mode - try up to 5 different dates if one fails
         max_attempts = 5 if is_random_mode else 1
         last_error = None
+        datetofetch = None
 
         for attempt in range(max_attempts):
             try:
@@ -102,7 +106,7 @@ class Wpotd(BasePlugin):
             except Exception as e:
                 last_error = e
                 if is_random_mode and attempt < max_attempts - 1:
-                    logger.warning(f"Failed to load WPOTD for {datetofetch}: {e}. Trying another random date...")
+                    logger.warning(f"Failed to load WPOTD for {datetofetch or 'unknown date'}: {e}. Trying another random date...")
                     continue
                 else:
                     break
@@ -137,13 +141,13 @@ class Wpotd(BasePlugin):
 
             if resize and dimensions:
                 # Use adaptive loader for memory-efficient processing
-                return self.image_loader.from_url(url, dimensions, timeout_ms=10000, headers=self.HEADERS, fit_mode=fit_mode)
+                return self.image_loader.from_url(url, dimensions, timeout_ms=40000, headers=self.HEADERS, fit_mode=fit_mode)
             else:
                 # Original behavior: download without resizing
                 session = get_http_session()
-                response = session.get(url, headers=self.HEADERS, timeout=10)
-            response.raise_for_status()
-            return Image.open(BytesIO(response.content))
+                response = session.get(url, headers=self.HEADERS, timeout=30)
+                response.raise_for_status()
+                return Image.open(BytesIO(response.content))
 
         except UnidentifiedImageError as e:
             logger.error(f"Unsupported image format at {url}: {str(e)}")
@@ -205,9 +209,6 @@ class Wpotd(BasePlugin):
 
             # Remove all HTML tags and clean up
             if title:
-                import re
-                from html import unescape
-
                 # Remove HTML tags
                 title = re.sub('<[^<]+?>', '', title)
                 # Decode HTML entities
@@ -248,7 +249,7 @@ class Wpotd(BasePlugin):
         # Try to use a nice font, fall back to default if not available
         try:
             font_size = max(16, int(height * 0.018))  # 1.8% of image height
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+            font = get_font("Jost", font_size, "bold")
         except Exception:
             font = ImageFont.load_default()
             logger.warning("Could not load custom font, using default")
@@ -274,13 +275,7 @@ class Wpotd(BasePlugin):
         )
 
         # Draw white text with black outline for extra contrast
-        outline_width = 2
-        for adj_x in range(-outline_width, outline_width + 1):
-            for adj_y in range(-outline_width, outline_width + 1):
-                if adj_x != 0 or adj_y != 0:
-                    draw.text((text_x + adj_x, text_y + adj_y), title, font=font, fill=(0, 0, 0, 255))
-
-        # Draw white text
-        draw.text((text_x, text_y), title, font=font, fill=(255, 255, 255, 255))
+        draw.text((text_x, text_y), title, font=font, fill=(255, 255, 255, 255),
+                  stroke_width=2, stroke_fill=(0, 0, 0, 255))
 
         return img_with_overlay

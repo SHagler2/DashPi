@@ -6,6 +6,7 @@ Art Institute of Chicago. No API keys required.
 
 from plugins.base_plugin.base_plugin import BasePlugin
 from PIL import Image, ImageDraw, ImageFont
+from utils.app_utils import get_font
 from utils.http_client import get_http_session
 import logging
 import random
@@ -131,8 +132,12 @@ class ArtMuseum(BasePlugin):
             }, timeout=30)
             resp.raise_for_status()
             data = resp.json()
-            self._met_ids = data.get("objectIDs", [])
-            logger.info(f"Cached {len(self._met_ids)} Met object IDs")
+            ids = data.get("objectIDs", [])
+            if ids:
+                self._met_ids = ids
+                logger.info(f"Cached {len(self._met_ids)} Met object IDs")
+            else:
+                logger.warning("Met Museum API returned empty object ID list")
 
         if not self._met_ids:
             raise RuntimeError("No artworks found in Met Museum API.")
@@ -234,20 +239,17 @@ class ArtMuseum(BasePlugin):
         width, height = image.size
         padding = max(10, int(height * 0.01))
 
-        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        sub_font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-
         # Title font
         title_size = max(16, int(height * 0.025))
         try:
-            title_font = ImageFont.truetype(font_path, title_size)
+            title_font = get_font("Jost", title_size, "bold")
         except Exception:
             title_font = ImageFont.load_default()
 
         # Subtitle font (smaller)
         sub_size = max(12, int(height * 0.018))
         try:
-            sub_font = ImageFont.truetype(sub_font_path, sub_size)
+            sub_font = get_font("Jost", sub_size)
         except Exception:
             sub_font = ImageFont.load_default()
 
@@ -288,13 +290,9 @@ class ArtMuseum(BasePlugin):
         title_x = (width - title_w) // 2
         title_y = bar_top + padding
 
-        # Outline for contrast
-        for dx in range(-2, 3):
-            for dy in range(-2, 3):
-                if dx != 0 or dy != 0:
-                    draw.text((title_x + dx, title_y + dy), display_title,
-                              font=title_font, fill=(0, 0, 0, 255))
-        draw.text((title_x, title_y), display_title, font=title_font, fill=(255, 255, 255, 255))
+        # Title with outline for contrast
+        draw.text((title_x, title_y), display_title, font=title_font,
+                  fill=(255, 255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0, 255))
 
         # Draw subtitle centered below title
         if subtitle and display_sub:
@@ -303,11 +301,7 @@ class ArtMuseum(BasePlugin):
             sub_x = (width - sub_w) // 2
             sub_y = title_y + title_h + 4
 
-            for dx in range(-1, 2):
-                for dy in range(-1, 2):
-                    if dx != 0 or dy != 0:
-                        draw.text((sub_x + dx, sub_y + dy), display_sub,
-                                  font=sub_font, fill=(0, 0, 0, 255))
-            draw.text((sub_x, sub_y), display_sub, font=sub_font, fill=(200, 200, 200, 255))
+            draw.text((sub_x, sub_y), display_sub, font=sub_font,
+                      fill=(200, 200, 200, 255), stroke_width=1, stroke_fill=(0, 0, 0, 255))
 
         return image
