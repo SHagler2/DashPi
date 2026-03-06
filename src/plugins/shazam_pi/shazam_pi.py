@@ -143,7 +143,7 @@ class ShazamPi(BasePlugin):
         self._shazam_fail_count = 0
         time_since_song = time.time() - self._last_song_time if self._last_song_time else float('inf')
 
-        if self._last_song and (self._consecutive_misses < 3 or time_since_song < 120):
+        if self._last_song and self._consecutive_misses < 3 and time_since_song < 120:
             logger.info(f"No music detected, keeping last song (miss #{self._consecutive_misses}, {time_since_song:.0f}s since last song)")
             self._set_status("idle", f"No music (miss #{self._consecutive_misses}, keeping last song)")
             return None  # Skip display update — keep whatever is currently shown
