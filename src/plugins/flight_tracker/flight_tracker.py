@@ -36,6 +36,7 @@ EARTH_RADIUS_NM = 3440.065
 MAX_TRAIL_POINTS = 20  # Max positions per aircraft trail
 STALE_GENERATIONS = 2  # Prune after this many missed API fetches
 MAX_EXTRAPOLATION_SEC = 120  # Stop extrapolating after 2 min without API data
+API_TIMEOUT = 8  # Seconds before giving up on aircraft API
 
 
 def _aircraft_id(ac):
@@ -96,10 +97,10 @@ class FlightTracker(BasePlugin):
             return self._render_error(dimensions, "No location configured",
                                       "Set a location in plugin settings or configure the Weather plugin.")
 
-        # Parse settings
-        radius_nm = _parse_int(settings.get("radius"), 100)
+        # Parse settings (clamp to valid ranges)
+        radius_nm = max(1, min(250, _parse_int(settings.get("radius"), 100)))
         units = settings.get("units", "aviation")
-        zoom = _parse_int(settings.get("mapZoom"), 8)
+        zoom = max(6, min(18, _parse_int(settings.get("mapZoom"), 8)))
         hide_ground = settings.get("hideGround") in ("on", "true", True, "on")
         show_tracks = settings.get("showTracks") not in ("false", False)
         source = settings.get("dataSource", "auto")
@@ -436,11 +437,31 @@ class FlightTracker(BasePlugin):
 
 # ─────────────────── Data Fetching ───────────────────
 
+def _fetch_from_source(session, name, url_template, lat, lon, radius_nm):
+    """Fetch and parse aircraft from a single API source. Returns (name, list) or raises."""
+    url = url_template.format(lat=lat, lon=lon, nm=radius_nm, radius=radius_nm)
+    logger.info(f"Fetching aircraft from {name}: {url}")
+    resp = session.get(url, timeout=API_TIMEOUT)
+    resp.raise_for_status()
+    data = resp.json()
+
+    aircraft_list = data.get("ac") or []
+    result = [p for ac in aircraft_list if (p := _parse_aircraft(ac, lat, lon))]
+    logger.info(f"Got {len(result)} aircraft from {name}")
+    return result
+
+
 def _fetch_aircraft(lat, lon, radius_nm, source="auto"):
-    """Fetch aircraft data from ADS-B API with fallback."""
+    """Fetch aircraft data from ADS-B API.
+
+    In auto mode, queries both APIs in parallel and returns the first
+    successful response.  When a specific source is selected, only that
+    API is tried.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     session = get_http_session()
 
-    apis = []
     if source == "adsbfi":
         apis = [("adsb.fi", ADSBFI_URL)]
     elif source == "airplaneslive":
@@ -448,29 +469,28 @@ def _fetch_aircraft(lat, lon, radius_nm, source="auto"):
     else:
         apis = [("adsb.fi", ADSBFI_URL), ("airplanes.live", AIRPLANESLIVE_URL)]
 
-    for name, url_template in apis:
+    # Single source — simple call
+    if len(apis) == 1:
+        name, url_template = apis[0]
         try:
-            url = url_template.format(lat=lat, lon=lon, nm=radius_nm, radius=radius_nm)
-            logger.info(f"Fetching aircraft from {name}: {url}")
-            resp = session.get(url, timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
-
-            aircraft_list = data.get("ac", [])
-            if aircraft_list is None:
-                aircraft_list = []
-
-            result = []
-            for ac in aircraft_list:
-                parsed = _parse_aircraft(ac, lat, lon)
-                if parsed:
-                    result.append(parsed)
-
-            logger.info(f"Got {len(result)} aircraft from {name}")
-            return result
+            return _fetch_from_source(session, name, url_template, lat, lon, radius_nm)
         except Exception as e:
             logger.warning(f"Failed to fetch from {name}: {e}")
-            continue
+            logger.error("All flight data sources failed")
+            return None
+
+    # Auto mode — parallel fetch, take first success
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {
+            executor.submit(_fetch_from_source, session, name, tmpl, lat, lon, radius_nm): name
+            for name, tmpl in apis
+        }
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                return future.result()
+            except Exception as e:
+                logger.warning(f"Failed to fetch from {name}: {e}")
 
     logger.error("All flight data sources failed")
     return None
