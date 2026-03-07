@@ -38,6 +38,9 @@ STALE_GENERATIONS = 2  # Prune after this many missed API fetches
 MAX_EXTRAPOLATION_SEC = 120  # Stop extrapolating after 2 min without API data
 API_TIMEOUT = 8  # Seconds before giving up on aircraft API
 
+# Emergency squawk codes and their display labels
+EMERGENCY_SQUAWKS = {"7500": "HIJACK", "7600": "RADIO", "7700": "EMERG"}
+
 
 def _aircraft_id(ac):
     """Return a stable identifier for trail/extrapolation keying."""
@@ -151,7 +154,9 @@ class FlightTracker(BasePlugin):
         # Filter and sort (emergency aircraft always first)
         if hide_ground:
             aircraft = [a for a in aircraft if not a.get("on_ground", False)]
-        aircraft.sort(key=lambda a: (not _is_emergency(a), a.get("distance_nm", 9999)))
+        for ac in aircraft:
+            ac["_emergency"] = _is_emergency(ac)
+        aircraft.sort(key=lambda a: (not a["_emergency"], a.get("distance_nm", 9999)))
         aircraft = aircraft[:MAX_AIRCRAFT_DISPLAY]
 
         logger.info(f"Rendering {len(aircraft)} aircraft within {radius_nm}nm")
@@ -404,7 +409,7 @@ class FlightTracker(BasePlugin):
             x = x_base
 
             ac = aircraft[i]
-            is_emerg = _is_emergency(ac)
+            is_emerg = ac.get("_emergency", False)
 
             # Colored vertical rate indicator first
             _draw_vert_indicator(draw, ac, x, y, small_size, font)
@@ -415,8 +420,7 @@ class FlightTracker(BasePlugin):
             ac_type = ac.get("aircraft_type", "")
             if is_emerg:
                 squawk = ac.get("squawk", "")
-                emerg_labels = {"7500": "HIJACK", "7600": "RADIO", "7700": "EMERG"}
-                id_label = f"{callsign} {emerg_labels.get(squawk, 'EMERG')}"
+                id_label = f"{callsign} {EMERGENCY_SQUAWKS.get(squawk, 'EMERG')}"
             elif ac_type:
                 id_label = f"{callsign} | {ac_type}"
             else:
@@ -703,12 +707,12 @@ def _is_emergency(ac):
     """Check if aircraft is squawking an emergency code."""
     if ac.get("emergency"):
         return True
-    return ac.get("squawk") in ("7500", "7600", "7700")
+    return ac.get("squawk") in EMERGENCY_SQUAWKS
 
 
 def _get_aircraft_color(ac):
     """Get marker color based on emergency status or vertical rate."""
-    if _is_emergency(ac):
+    if ac.get("_emergency"):
         return (255, 50, 50)  # Emergency - red
     vert_rate = ac.get("vert_rate")
     if vert_rate is not None:
@@ -814,7 +818,7 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
         alt_font = get_font("Jost", 14)
         label_x = int(px + size + 5)
         label_y = int(py - 8)
-        is_emerg = _is_emergency(ac)
+        is_emerg = ac.get("_emergency", False)
 
         tw, th = get_text_dimensions(draw, callsign, label_font)
 
@@ -824,8 +828,7 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
         alt_tw, alt_th = 0, 0
         if is_emerg:
             squawk = ac.get("squawk", "")
-            emerg_labels = {"7500": "HIJACK", "7600": "RADIO", "7700": "EMERG"}
-            alt_text = emerg_labels.get(squawk, "EMERG")
+            alt_text = EMERGENCY_SQUAWKS.get(squawk, "EMERG")
         elif alt == "ground":
             alt_text = "GND"
         elif isinstance(alt, (int, float)):
