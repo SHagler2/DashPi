@@ -380,17 +380,18 @@ class AIImage(BasePlugin):
         logger.info("Getting random image prompt from OpenAI...")
 
         system_content = (
-            "You are a creative assistant generating extremely random and unique image prompts. "
-            "Avoid common themes. Focus on unexpected, unconventional, and bizarre combinations "
-            "of art style, medium, subjects, time periods, and moods. No repetition. Prompts "
-            "should be 20 words or less and specify random artist, movie, tv show or time period "
-            "for the theme. Do not provide any headers or repeat the request, just provide the "
-            "updated prompt in your response."
+            "Generate a single image prompt (20 words max). Each prompt must use a DIFFERENT "
+            "visual style randomly chosen from: photorealistic photography, watercolor painting, "
+            "pencil sketch, oil painting, cartoon/comic, pixel art, vector illustration, "
+            "charcoal drawing, anime, retro poster, infrared photography, ink wash, pastel, "
+            "3D render, woodcut print, collage, or stained glass.\n"
+            "Subjects should span: people, animals, landscapes, cityscapes, food, sports, "
+            "historical scenes, sci-fi, fantasy, everyday moments, architecture, underwater, "
+            "space, weather, vehicles, and more.\n"
+            "Do NOT default to surrealism or abstract art. Most prompts should depict "
+            "recognizable scenes and subjects. Just output the prompt, nothing else."
         )
-        user_content = (
-            "Give me a completely random image prompt, something unexpected and creative! "
-            "Let's see what your AI mind can cook up!"
-        )
+        user_content = "Generate a random image prompt."
         if from_prompt and from_prompt.strip() and is_news:
             system_content = (
                 "You are a creative editorial illustrator. Given a news headline, generate "
@@ -405,23 +406,16 @@ class AIImage(BasePlugin):
             )
         elif from_prompt and from_prompt.strip():
             system_content = (
-                "You are a creative assistant specializing in generating highly descriptive "
-                "and unique prompts for creating images. When given a short or simple image "
-                "description, your job is to rewrite it into a more detailed, imaginative, "
-                "and descriptive version that captures the essence of the original while "
-                "making it unique and vivid. Avoid adding irrelevant details but feel free "
-                "to include creative and visual enhancements. Avoid common themes. Focus on "
-                "unexpected, unconventional, and bizarre combinations of art style, medium, "
-                "subjects, time periods, and moods. Do not provide any headers or repeat the "
-                "request, just provide your updated prompt in the response. Prompts "
-                "should be 20 words or less and specify random artist, movie, tv show or time "
-                "period for the theme."
+                "Rewrite the given image description into a more vivid, detailed version "
+                "(20 words max). Keep the original subject but reimagine it in a randomly "
+                "chosen visual style: photorealistic, watercolor, oil painting, pencil sketch, "
+                "cartoon, pixel art, anime, retro poster, charcoal, ink wash, 3D render, etc. "
+                "Add specific details like lighting, mood, time of day, or setting. "
+                "Do NOT default to surrealism. Just output the rewritten prompt, nothing else."
             )
             user_content = (
                 f"Original prompt: \"{from_prompt}\"\n"
-                "Rewrite it to make it more detailed, imaginative, and unique while staying "
-                "true to the original idea. Include vivid imagery and descriptive details. "
-                "Avoid changing the subject of the prompt."
+                "Rewrite with more detail and a random visual style."
             )
 
         response = ai_client.chat.completions.create(
@@ -468,19 +462,24 @@ class AIImage(BasePlugin):
         elif from_prompt and from_prompt.strip():
             prompt_request = (
                 f"Take this image description: \"{from_prompt}\"\n"
-                "Rewrite it to make it more detailed, imaginative, and unique while staying "
-                "true to the original idea. Include vivid imagery and descriptive details. "
-                "Focus on unexpected, unconventional, and bizarre combinations of art style, "
-                "medium, subjects, time periods, and moods. Keep it 20 words or less. "
-                "Just provide the prompt, no explanation."
+                "Rewrite it with more vivid detail (20 words max). Keep the original subject "
+                "but reimagine it in a randomly chosen visual style: photorealistic, watercolor, "
+                "oil painting, pencil sketch, cartoon, pixel art, anime, retro poster, charcoal, "
+                "ink wash, 3D render, etc. Add specific details like lighting, mood, or setting. "
+                "Do NOT default to surrealism. Just provide the prompt, no explanation."
             )
         else:
             prompt_request = (
-                "Generate a completely random and unique image prompt. Focus on unexpected, "
-                "unconventional, and bizarre combinations of art style, medium, subjects, "
-                "time periods, and moods. Pick from a WIDE range of obscure and well-known "
-                "artists, genres, cultures, and eras — do NOT default to surrealism or Dali. "
-                "Keep it 20 words or less. Just provide the prompt, no explanation."
+                "Generate a single image prompt (20 words max). Randomly pick a visual style "
+                "from: photorealistic photo, watercolor, pencil sketch, oil painting, cartoon, "
+                "pixel art, vector art, charcoal, anime, retro poster, infrared photo, ink wash, "
+                "pastel, 3D render, woodcut, collage, stained glass, or crayon drawing.\n"
+                "Randomly pick a subject from: people, animals, landscapes, cityscapes, food, "
+                "sports, historical scenes, sci-fi, fantasy, everyday moments, architecture, "
+                "underwater, space, weather, vehicles, portraits, still life, or wildlife.\n"
+                "Do NOT default to surrealism, abstract, or Dali. Most prompts should depict "
+                "recognizable real-world or fictional scenes. Vary wildly each time.\n"
+                "Just output the prompt, nothing else."
             )
 
         response = client.models.generate_content(
