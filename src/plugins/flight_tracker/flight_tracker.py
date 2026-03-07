@@ -148,10 +148,10 @@ class FlightTracker(BasePlugin):
             # Inject accumulated trails
             aircraft = self._inject_trails(aircraft)
 
-        # Filter and sort
+        # Filter and sort (emergency aircraft always first)
         if hide_ground:
             aircraft = [a for a in aircraft if not a.get("on_ground", False)]
-        aircraft.sort(key=lambda a: a.get("distance_nm", 9999))
+        aircraft.sort(key=lambda a: (not _is_emergency(a), a.get("distance_nm", 9999)))
         aircraft = aircraft[:MAX_AIRCRAFT_DISPLAY]
 
         logger.info(f"Rendering {len(aircraft)} aircraft within {radius_nm}nm")
@@ -404,6 +404,7 @@ class FlightTracker(BasePlugin):
             x = x_base
 
             ac = aircraft[i]
+            is_emerg = _is_emergency(ac)
 
             # Colored vertical rate indicator first
             _draw_vert_indicator(draw, ac, x, y, small_size, font)
@@ -412,12 +413,17 @@ class FlightTracker(BasePlugin):
             # "ID | Type" label (e.g., "AAL2228 | A319")
             callsign = ac.get("callsign", "???").strip() or "???"
             ac_type = ac.get("aircraft_type", "")
-            if ac_type:
+            if is_emerg:
+                squawk = ac.get("squawk", "")
+                emerg_labels = {"7500": "HIJACK", "7600": "RADIO", "7700": "EMERG"}
+                id_label = f"{callsign} {emerg_labels.get(squawk, 'EMERG')}"
+            elif ac_type:
                 id_label = f"{callsign} | {ac_type}"
             else:
                 id_label = callsign
             id_text = truncate_text(draw, id_label, font, id_w - indicator_w - 4)
-            draw.text((x, y), id_text, fill=(255, 255, 255), font=font)
+            label_color = (255, 80, 80) if is_emerg else (255, 255, 255)
+            draw.text((x, y), id_text, fill=label_color, font=font)
             x = x_base + id_w
 
             # Altitude
@@ -539,6 +545,8 @@ def _parse_aircraft(ac, user_lat, user_lon):
     ac_type = ac.get("t", "")  # aircraft type designator
     registration = ac.get("r", "")
     vert_rate = ac.get("baro_rate") or ac.get("geom_rate")  # ft/min
+    squawk = ac.get("squawk", "")
+    emergency = ac.get("emergency", "none")
 
     distance_nm = _haversine_nm(user_lat, user_lon, ac_lat, ac_lon)
 
@@ -555,6 +563,8 @@ def _parse_aircraft(ac, user_lat, user_lon):
         "on_ground": on_ground,
         "distance_nm": distance_nm,
         "vert_rate": _parse_float(vert_rate, None),
+        "squawk": squawk,
+        "emergency": emergency != "none" and emergency,
         "trail": [],
     }
 
@@ -689,8 +699,17 @@ def _draw_vert_indicator(draw, ac, x, y, font_size, font):
         draw.line([(cx - sz, cy), (cx + sz, cy)], fill=color, width=2)
 
 
+def _is_emergency(ac):
+    """Check if aircraft is squawking an emergency code."""
+    if ac.get("emergency"):
+        return True
+    return ac.get("squawk") in ("7500", "7600", "7700")
+
+
 def _get_aircraft_color(ac):
-    """Get marker color based on vertical rate."""
+    """Get marker color based on emergency status or vertical rate."""
+    if _is_emergency(ac):
+        return (255, 50, 50)  # Emergency - red
     vert_rate = ac.get("vert_rate")
     if vert_rate is not None:
         if vert_rate > 300:
@@ -795,14 +814,19 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
         alt_font = get_font("Jost", 14)
         label_x = int(px + size + 5)
         label_y = int(py - 8)
+        is_emerg = _is_emergency(ac)
 
         tw, th = get_text_dimensions(draw, callsign, label_font)
 
-        # Build altitude line
+        # Build altitude line (or emergency squawk)
         alt = ac.get("altitude")
         alt_text = None
         alt_tw, alt_th = 0, 0
-        if alt == "ground":
+        if is_emerg:
+            squawk = ac.get("squawk", "")
+            emerg_labels = {"7500": "HIJACK", "7600": "RADIO", "7700": "EMERG"}
+            alt_text = emerg_labels.get(squawk, "EMERG")
+        elif alt == "ground":
             alt_text = "GND"
         elif isinstance(alt, (int, float)):
             alt_text = _format_altitude(int(alt), units)
@@ -812,13 +836,15 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
         box_w = max(tw, alt_tw)
         box_h = th + (alt_th + 2 if alt_text else 0)
         pad = 3
+        box_fill = (80, 0, 0, 200) if is_emerg else ((0, 0, 0, 160) if hasattr(draw, '_image') else (20, 25, 35))
         draw.rectangle(
             [(label_x - pad, label_y - pad), (label_x + box_w + pad, label_y + box_h + pad)],
-            fill=(0, 0, 0, 160) if hasattr(draw, '_image') else (20, 25, 35)
+            fill=box_fill
         )
         draw.text((label_x, label_y), callsign, fill=(255, 255, 255), font=label_font)
         if alt_text:
-            draw.text((label_x, label_y + th + 2), alt_text, fill=(180, 200, 255), font=alt_font)
+            alt_color = (255, 80, 80) if is_emerg else (180, 200, 255)
+            draw.text((label_x, label_y + th + 2), alt_text, fill=alt_color, font=alt_font)
 
 
 def _draw_center_marker(draw, w, h):
