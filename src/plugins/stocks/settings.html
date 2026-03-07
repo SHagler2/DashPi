@@ -18,7 +18,7 @@
     <div class="form-group">
         <label for="tickers" class="form-label">Override Tickers (optional):</label>
         <input type="text" id="tickers" name="tickers" placeholder="Leave empty to use saved tickers" class="form-input">
-        <small class="form-help-text">Enter comma-separated symbols to temporarily override saved tickers</small>
+        <small class="form-help-text">Enter comma-separated symbols to temporarily override saved tickers (max 6)</small>
     </div>
 
     <div class="form-group nowrap">
@@ -48,6 +48,16 @@
             <span style="color: var(--text-secondary, #888);">minutes (0 = disabled)</span>
         </div>
         <small class="form-help-text">While stocks is displayed, refresh prices at this interval. Works in loop or standalone.</small>
+    </div>
+
+    <div class="form-group">
+        <label for="reduceWhenClosed" class="form-label">Show Less When Market Closed:</label>
+        <div class="toggle-container">
+            <input type="hidden" name="reduceWhenClosed" value="false">
+            <input type="checkbox" id="reduceWhenClosed" name="reduceWhenClosed" class="toggle-checkbox" value="true">
+            <label for="reduceWhenClosed" class="toggle-label"></label>
+        </div>
+        <small class="form-help-text">In random loops, reduce how often stocks appears when the market is closed (evenings, weekends).</small>
     </div>
 </div>
 
@@ -165,9 +175,15 @@
 
     function renderSavedTickers() {
         const container = document.getElementById('savedTickersList');
+        const addRow = document.querySelector('.ticker-add-row');
         if (savedTickers.length === 0) {
             container.innerHTML = '<div class="no-tickers">No tickers saved yet. Add some below!</div>';
+            if (addRow) addRow.style.display = 'flex';
             return;
+        }
+        // Hide add row when at max capacity
+        if (addRow) {
+            addRow.style.display = savedTickers.length >= 6 ? 'none' : 'flex';
         }
         container.innerHTML = savedTickers.map((ticker, index) => {
             const symbol = getTickerSymbol(ticker);
@@ -362,7 +378,8 @@
             autoRefresh: document.getElementById('autoRefresh').value || '0',
             fontSize: document.getElementById('fontSize').value || 'normal',
             title: document.getElementById('title').value || '',
-            darkMode: document.getElementById('darkMode').checked ? 'on' : 'off'
+            darkMode: document.getElementById('darkMode').checked ? 'on' : 'off',
+            reduceWhenClosed: document.getElementById('reduceWhenClosed').checked ? 'true' : 'false'
         };
         try {
             await fetch('/plugin/stocks/settings', {
@@ -380,6 +397,7 @@
     document.getElementById('fontSize')?.addEventListener('change', saveStocksSettings);
     document.getElementById('title')?.addEventListener('blur', saveStocksSettings);
     document.getElementById('darkMode')?.addEventListener('change', saveStocksSettings);
+    document.getElementById('reduceWhenClosed')?.addEventListener('change', saveStocksSettings);
 
     document.addEventListener('DOMContentLoaded', async () => {
         loadSavedTickers();
@@ -391,6 +409,7 @@
         let autoRefresh = savedSettings.autoRefresh || "0";
         let title = savedSettings.title || "";
         let darkMode = savedSettings.darkMode === 'on' || savedSettings.darkMode === true;
+        let reduceWhenClosed = savedSettings.reduceWhenClosed === 'true';
 
         // Override with loop plugin settings if editing from loop
         if (typeof loadPluginSettings !== 'undefined' && loadPluginSettings) {
@@ -401,11 +420,15 @@
             if (pluginSettings.darkMode !== undefined) {
                 darkMode = pluginSettings.darkMode === 'on' || pluginSettings.darkMode === true;
             }
+            if (pluginSettings.reduceWhenClosed !== undefined) {
+                reduceWhenClosed = pluginSettings.reduceWhenClosed === 'true';
+            }
         }
 
         document.getElementById('title').value = title;
         document.getElementById('fontSize').value = fontSize;
         document.getElementById('autoRefresh').value = autoRefresh;
         document.getElementById('darkMode').checked = darkMode;
+        document.getElementById('reduceWhenClosed').checked = reduceWhenClosed;
     });
 </script>

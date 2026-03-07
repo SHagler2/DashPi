@@ -40,6 +40,23 @@ class BasePlugin:
     def generate_image(self, settings, device_config):
         raise NotImplementedError("generate_image must be implemented by subclasses")
 
+    @staticmethod
+    def get_loop_weight(settings):
+        """Return a weight multiplier for random loop selection.
+
+        Plugins can override this to dynamically adjust how often they appear
+        in random rotation. For example, a stock plugin might return a lower
+        weight when the market is closed so other plugins get more display time.
+
+        Args:
+            settings: The plugin's settings dict from the loop configuration.
+
+        Returns:
+            float: Weight multiplier (default 1.0). Lower values mean less frequent
+                   selection; 0.0 would effectively skip the plugin.
+        """
+        return 1.0
+
     def cleanup(self, settings):
         """Optional cleanup method that plugins can override to delete associated resources.
 

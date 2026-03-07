@@ -245,11 +245,17 @@ class Loop:
 
         self.plugin_order = new_order
 
-    def get_next_plugin(self):
+    def get_next_plugin(self, weights=None):
         """Returns the next plugin reference in rotation.
 
         If randomize is enabled, selects a random plugin (avoiding the current one if possible).
+        When weights are provided, uses weighted random selection so some plugins appear
+        more or less often (e.g., stocks showing less when market is closed).
         Otherwise, cycles through plugins sequentially.
+
+        Args:
+            weights: Optional list of float weights, one per plugin in plugin_order.
+                     Only used in random mode. Higher weight = more likely to be selected.
 
         Also pre-computes the following plugin so it can be displayed in the UI.
         """
@@ -260,19 +266,26 @@ class Loop:
         if self.next_plugin_index is not None:
             self.current_plugin_index = self.next_plugin_index
         elif self.randomize:
-            # First time in random mode
-            self.current_plugin_index = random.randint(0, len(self.plugin_order) - 1)
+            # First time in random mode — use weighted selection if available
+            if weights:
+                self.current_plugin_index = random.choices(range(len(self.plugin_order)), weights=weights, k=1)[0]
+            else:
+                self.current_plugin_index = random.randint(0, len(self.plugin_order) - 1)
         else:
             # First time in sequential mode
             self.current_plugin_index = 0 if self.current_plugin_index is None else (self.current_plugin_index + 1) % len(self.plugin_order)
 
         # Pre-compute the NEXT plugin for UI display
-        self._compute_next_plugin_index()
+        self._compute_next_plugin_index(weights)
 
         return self.plugin_order[self.current_plugin_index]
 
-    def _compute_next_plugin_index(self):
-        """Pre-compute the next plugin index for UI display."""
+    def _compute_next_plugin_index(self, weights=None):
+        """Pre-compute the next plugin index for UI display.
+
+        Args:
+            weights: Optional list of float weights for weighted random selection.
+        """
         if not self.plugin_order:
             self.next_plugin_index = None
             return
@@ -283,7 +296,11 @@ class Loop:
                 self.next_plugin_index = 0
             else:
                 available_indices = [i for i in range(len(self.plugin_order)) if i != self.current_plugin_index]
-                self.next_plugin_index = random.choice(available_indices)
+                if weights:
+                    available_weights = [weights[i] for i in available_indices]
+                    self.next_plugin_index = random.choices(available_indices, weights=available_weights, k=1)[0]
+                else:
+                    self.next_plugin_index = random.choice(available_indices)
         else:
             # Sequential - next in order
             if self.current_plugin_index is None:
@@ -363,13 +380,15 @@ class PluginReference:
         refresh_interval_seconds (int): How often to refresh this plugin's data.
         plugin_settings (dict): Optional settings for the plugin. If None/empty, plugin uses defaults.
         latest_refresh_time (str): ISO timestamp of last data refresh.
+        weight (float): Base weight for random loop selection (default 1.0).
     """
 
-    def __init__(self, plugin_id, refresh_interval_seconds, plugin_settings=None, latest_refresh_time=None):
+    def __init__(self, plugin_id, refresh_interval_seconds, plugin_settings=None, latest_refresh_time=None, weight=1.0):
         self.plugin_id = plugin_id
         self.refresh_interval_seconds = refresh_interval_seconds
         self.plugin_settings = plugin_settings or {}
         self.latest_refresh_time = latest_refresh_time
+        self.weight = weight
 
     def should_refresh(self, current_time):
         """Check if plugin data needs refresh based on interval."""
@@ -386,12 +405,15 @@ class PluginReference:
         return None
 
     def to_dict(self):
-        return {
+        d = {
             "plugin_id": self.plugin_id,
             "refresh_interval_seconds": self.refresh_interval_seconds,
             "plugin_settings": self.plugin_settings,
             "latest_refresh_time": self.latest_refresh_time
         }
+        if self.weight != 1.0:
+            d["weight"] = self.weight
+        return d
 
     @classmethod
     def from_dict(cls, data):
@@ -399,5 +421,6 @@ class PluginReference:
             plugin_id=data["plugin_id"],
             refresh_interval_seconds=data["refresh_interval_seconds"],
             plugin_settings=data.get("plugin_settings", {}),
-            latest_refresh_time=data.get("latest_refresh_time")
+            latest_refresh_time=data.get("latest_refresh_time"),
+            weight=data.get("weight", 1.0)
         )

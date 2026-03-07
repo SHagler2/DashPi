@@ -16,7 +16,7 @@ import logging
 import psutil
 import pytz
 from datetime import datetime, timezone
-from plugins.plugin_registry import get_plugin_instance
+from plugins.plugin_registry import get_plugin_instance, PLUGIN_CLASSES
 from utils.image_utils import compute_image_hash
 from model import RefreshInfo, LoopManager
 from PIL import Image
@@ -791,6 +791,30 @@ class RefreshTask:
         }
         self.device_config.update_value("auto_refresh_tracking", tracking, write=False)  # Don't write immediately, will be batched
 
+    def _compute_loop_weights(self, loop):
+        """Compute effective weights for each plugin in a loop's rotation.
+
+        Combines the plugin reference's base weight with any dynamic weight
+        from the plugin class (e.g., stocks reducing weight when market is closed).
+
+        Returns:
+            list of floats, one per plugin in loop.plugin_order, or None if
+            the loop isn't in random mode (weights only matter for random selection).
+        """
+        if not loop.randomize:
+            return None
+
+        weights = []
+        for ref in loop.plugin_order:
+            w = ref.weight
+            plugin_instance = PLUGIN_CLASSES.get(ref.plugin_id)
+            if plugin_instance and hasattr(plugin_instance, 'get_loop_weight'):
+                w *= plugin_instance.get_loop_weight(ref.plugin_settings)
+            weights.append(max(w, 0.01))  # Floor at 0.01 to avoid zero-weight errors
+
+        logger.debug(f"Loop weights: {list(zip([r.plugin_id for r in loop.plugin_order], weights))}")
+        return weights
+
     def _determine_next_plugin_loop_mode(self, loop_manager, current_dt, override=None):
         """Determines the next plugin to refresh in loop mode based on the active loop and rotation."""
         loop = loop_manager.determine_active_loop(current_dt, override=override)
@@ -804,9 +828,11 @@ class RefreshTask:
             logger.info(f"Active loop '{loop.name}' has no plugins.")
             return None, None
 
+        # Compute weights for random selection (returns None for sequential mode)
+        weights = self._compute_loop_weights(loop)
+
         # In loop mode, rotation happens automatically after sleep interval
-        # Just get the next plugin in sequence
-        plugin_ref = loop.get_next_plugin()
+        plugin_ref = loop.get_next_plugin(weights=weights)
         logger.info(f"Determined next plugin. | active_loop: {loop.name} | plugin_id: {plugin_ref.plugin_id}")
 
         return loop, plugin_ref

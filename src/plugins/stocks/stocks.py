@@ -71,6 +71,13 @@ class Stocks(BasePlugin):
     volume, and day high/low. Supports configurable font sizes and auto-refresh.
     """
 
+    @staticmethod
+    def get_loop_weight(settings):
+        """Reduce selection weight when market is closed, if user enabled the option."""
+        if settings.get('reduceWhenClosed') == 'true' and not is_market_open():
+            return 0.2
+        return 1.0
+
     def __init__(self, config, **dependencies):
         super().__init__(config, **dependencies)
         self._stocks_cache = None
@@ -128,10 +135,10 @@ class Stocks(BasePlugin):
 
         return self._render_pil(dimensions, title, stocks_data, columns, rows,
                                 last_updated, auto_refresh_mins,
-                                font_scale * count_scale, settings, market_open)
+                                font_scale * count_scale, font_scale, settings, market_open)
 
     def _render_pil(self, dimensions, title, stocks, columns, rows,
-                    last_updated, auto_refresh_mins, scale, settings,
+                    last_updated, auto_refresh_mins, scale, footer_scale, settings,
                     market_open=True):
         """Render stock cards in a grid layout as a PIL Image.
 
@@ -147,7 +154,9 @@ class Stocks(BasePlugin):
             rows: Number of grid rows.
             last_updated: Formatted timestamp string for the footer.
             auto_refresh_mins: Refresh interval in minutes (0 = manual).
-            scale: Combined font_size * count_scale multiplier.
+            scale: Combined font_size * count_scale multiplier for card content.
+            footer_scale: Font size multiplier for footer (without count_scale,
+                          so the footer stays readable regardless of stock count).
             settings: Plugin settings dict (colors, etc.).
 
         Returns:
@@ -179,7 +188,7 @@ class Stocks(BasePlugin):
         price_size = int(min(height * 0.065, width * 0.065) * scale)
         change_size = int(min(height * 0.05, width * 0.05) * scale)
         detail_size = int(min(height * 0.035, width * 0.035) * scale)
-        footer_size = int(min(height * 0.035, width * 0.035) * scale)
+        footer_size = int(min(height * 0.035, width * 0.035) * footer_scale)
 
         title_font = get_font("Jost", title_size, "bold")
         symbol_font = get_font("Jost", symbol_size, "bold")
