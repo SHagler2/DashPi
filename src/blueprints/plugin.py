@@ -47,15 +47,15 @@ def plugin_page(plugin_id):
             template_params["loop_refresh_interval"] = existing_refresh_interval
 
             # If in edit mode, merge loop settings with last-used settings.
-            # Last-used settings (from most recent render) are authoritative
-            # for file lists; loop settings are authoritative for preferences.
+            # Last-used settings provide operational data (file lists, etc.);
+            # loop settings override with the user's saved preferences.
             if edit_mode:
                 last_used = device_config.get_config(
                     f"plugin_last_settings_{plugin_id}", default={}
                 )
                 if last_used or existing_settings:
-                    merged = dict(existing_settings) if existing_settings else {}
-                    merged.update(last_used or {})
+                    merged = dict(last_used) if last_used else {}
+                    merged.update(existing_settings or {})
                     template_params["plugin_settings"] = merged
             elif not edit_mode:
                 # Try to inherit settings so users don't re-enter preferences.
