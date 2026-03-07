@@ -2,7 +2,7 @@
 
 from flask import Blueprint, request, jsonify, current_app, render_template, Response, send_file
 from datetime import datetime, timedelta
-from werkzeug.utils import secure_filename
+from utils.app_utils import sanitize_filename
 import os
 import subprocess
 import pytz
@@ -494,7 +494,7 @@ def import_config():
                 saved_dir = os.path.join(base_dir, 'src', 'static', 'images', 'saved')
                 os.makedirs(saved_dir, exist_ok=True)
                 for img_name in image_files:
-                    fname = secure_filename(os.path.basename(img_name))
+                    fname = sanitize_filename(img_name)
                     if fname:
                         with open(os.path.join(saved_dir, fname), 'wb') as f:
                             f.write(zf.read(img_name))

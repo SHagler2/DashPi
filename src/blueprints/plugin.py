@@ -1,9 +1,8 @@
 """Plugin blueprint — plugin settings pages, image upload/delete, and update endpoints."""
 
 from flask import Blueprint, request, jsonify, current_app, render_template, send_from_directory
-from werkzeug.utils import secure_filename
 from plugins.plugin_registry import get_plugin_instance
-from utils.app_utils import resolve_path, handle_request_files, parse_form
+from utils.app_utils import resolve_path, handle_request_files, parse_form, sanitize_filename
 from refresh_task import ManualRefresh
 import json
 import os
@@ -124,7 +123,7 @@ def upload_image():
         if extension not in allowed_extensions:
             return jsonify({"error": f"File type .{extension} not allowed"}), 400
 
-        file_name = secure_filename(file.filename)
+        file_name = sanitize_filename(file.filename)
         file_save_dir = resolve_path(os.path.join("static", "images", "saved"))
         os.makedirs(file_save_dir, exist_ok=True)
         file_path = os.path.join(file_save_dir, file_name)

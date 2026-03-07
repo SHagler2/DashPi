@@ -53,6 +53,22 @@ FONTS = {
     "jost-semibold": "Jost-SemiBold.ttf"
 }
 
+def sanitize_filename(filename):
+    """Sanitize a filename while preserving spaces, parens, and other harmless characters.
+
+    Blocks path traversal and null bytes but keeps the original appearance
+    unlike werkzeug's secure_filename() which strips spaces and special chars.
+    """
+    # Strip directory components
+    filename = os.path.basename(filename)
+    # Remove null bytes
+    filename = filename.replace('\x00', '')
+    # Strip leading/trailing whitespace and dots (prevents hidden files / Windows issues)
+    filename = filename.strip().strip('.')
+    # Collapse path separators that might survive basename on edge cases
+    filename = filename.replace('/', '_').replace('\\', '_')
+    return filename or 'unnamed'
+
 def resolve_path(file_path):
     """Resolve a relative path against the src directory."""
     src_dir = os.getenv("SRC_DIR")
