@@ -35,19 +35,23 @@
 
         let uploadedFiles = {};
 
-        // Convert FormData to a plain object, collecting multi-value keys (e.g. imageFiles[]) into arrays
+        // Convert FormData to a plain object, collecting multi-value keys (e.g. imageFiles[]) into arrays.
+        // For scalar keys, last value wins — this matches browser form behavior and correctly
+        // handles the hidden+checkbox pattern (hidden="false" then checkbox="true").
         function formDataToSettings(formData) {
             const settings = {};
             formData.forEach((value, key) => {
                 if (key === 'plugin_id') return;
-                if (key in settings) {
-                    if (!Array.isArray(settings[key])) {
-                        settings[key] = [settings[key]];
+                if (key.endsWith('[]')) {
+                    // Array keys: accumulate all values
+                    if (key in settings) {
+                        settings[key].push(value);
+                    } else {
+                        settings[key] = [value];
                     }
-                    settings[key].push(value);
                 } else {
-                    // Keys ending with [] are always arrays (even with one value)
-                    settings[key] = key.endsWith('[]') ? [value] : value;
+                    // Scalar keys: last value wins
+                    settings[key] = value;
                 }
             });
             return settings;
