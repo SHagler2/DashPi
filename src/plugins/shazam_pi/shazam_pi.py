@@ -31,10 +31,33 @@ RAW_SAMPLE_RATE = 44100
 DOWN_SAMPLE_RATE = 16000
 AUDIO_GAIN = 1.0
 WEATHER_CACHE_MINUTES = 30
-EINK_IDLE_REFRESH_MINUTES = 30  # How often to repaint idle screen on e-ink
+EINK_IDLE_REFRESH_MINUTES = 15  # How often to repaint idle screen on e-ink
 SHAZAM_API_TIMEOUT = 15        # Seconds before giving up on Shazam API
 ALBUM_ART_TIMEOUT_MS = 8000    # Milliseconds before giving up on album art download
 STATUS_FILE = os.path.join(PLUGIN_DIR, "status.json")
+
+_HOUR_WORDS = [
+    "twelve", "one", "two", "three", "four", "five",
+    "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+]
+
+
+def _fuzzy_time():
+    """Return an approximate time string like 'It's about quarter past three'."""
+    now = datetime.datetime.now()
+    hour = now.hour % 12
+    minute = now.minute
+
+    if minute < 8:
+        return f"It's about {_HOUR_WORDS[hour]} o'clock"
+    elif minute < 23:
+        return f"It's about quarter past {_HOUR_WORDS[hour]}"
+    elif minute < 38:
+        return f"It's about half past {_HOUR_WORDS[hour]}"
+    elif minute < 53:
+        return f"It's about quarter to {_HOUR_WORDS[hour + 1]}"
+    else:
+        return f"It's about {_HOUR_WORDS[hour + 1]} o'clock"
 
 
 class ShazamPi(BasePlugin):
@@ -587,10 +610,9 @@ class ShazamPi(BasePlugin):
                              status_note="\u266a  Listening for music"):
         """Render idle screen with weather data: icon left, text right, centered."""
 
-        # Current time at top
-        now = datetime.datetime.now()
-        time_str = now.strftime("%-I:%M %p")
-        time_size = max(32, int(height * 0.09))
+        # Fuzzy time at top
+        time_str = _fuzzy_time()
+        time_size = max(20, int(height * 0.055))
         time_font = get_font("Jost", time_size, "normal") or ImageFont.load_default()
         time_bbox = draw.textbbox((0, 0), time_str, font=time_font)
         time_w = time_bbox[2] - time_bbox[0]
@@ -699,11 +721,10 @@ class ShazamPi(BasePlugin):
                                 status_note="\u266a  Listening for music"):
         """Render idle screen when no weather data is available."""
 
-        # Current time at top
+        # Fuzzy time at top
         color_secondary = (204, 204, 204)
-        now = datetime.datetime.now()
-        time_str = now.strftime("%-I:%M %p")
-        time_size = max(32, int(height * 0.09))
+        time_str = _fuzzy_time()
+        time_size = max(20, int(height * 0.055))
         time_font = get_font("Jost", time_size, "normal") or ImageFont.load_default()
         time_bbox = draw.textbbox((0, 0), time_str, font=time_font)
         time_w = time_bbox[2] - time_bbox[0]
