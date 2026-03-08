@@ -96,18 +96,12 @@
 </div>
 
 <div class="form-group">
-    <label for="weatherApiKey" class="form-label">OpenWeatherMap API Key (optional)</label>
-    <input type="text" id="weatherApiKey" name="weatherApiKey" class="form-input"
-           placeholder="Auto-detected from Weather plugin if blank" />
-    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
-        Leave blank to use the Weather plugin's API key and location
-    </small>
-</div>
-
-<div class="form-group">
     <label for="geoCoordinates" class="form-label">Geo Coordinates (lat, lon)</label>
     <input type="text" id="geoCoordinates" name="geoCoordinates" class="form-input"
            placeholder="Auto-detected from Weather plugin if blank" />
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
+        Leave blank to borrow location from Weather plugin. Uses Open-Meteo (free, no API key).
+    </small>
 </div>
 
 <div class="form-group">
@@ -132,7 +126,6 @@
         const $showLetterboxLabel = document.getElementById('showLetterboxLabel');
         const $letterboxLabel = document.getElementById('letterboxLabel');
         const $letterboxLabelGroup = document.getElementById('letterboxLabelGroup');
-        const $weatherApiKey = document.getElementById('weatherApiKey');
         const $geoCoordinates = document.getElementById('geoCoordinates');
         const $units = document.getElementById('units');
 
@@ -158,7 +151,6 @@
             $showSongInfo.checked = pluginSettings.showSongInfo === 'on' || pluginSettings.showSongInfo === true || !('showSongInfo' in pluginSettings);
             $showLetterboxLabel.checked = pluginSettings.showLetterboxLabel === 'on' || pluginSettings.showLetterboxLabel === true;
             $letterboxLabel.value = pluginSettings.letterboxLabel || '';
-            $weatherApiKey.value = pluginSettings.weatherApiKey || '';
             $geoCoordinates.value = pluginSettings.geoCoordinates || '';
             $units.value = pluginSettings.units || 'imperial';
         } else {
@@ -171,7 +163,6 @@
             $showSongInfo.checked = true;
             $showLetterboxLabel.checked = false;
             $letterboxLabel.value = '';
-            $weatherApiKey.value = '';
             $geoCoordinates.value = '';
             $units.value = 'imperial';
         }

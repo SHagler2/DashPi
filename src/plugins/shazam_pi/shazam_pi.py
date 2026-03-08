@@ -693,8 +693,41 @@ class ShazamPi(BasePlugin):
 
     # ========== Weather ==========
 
+    # WMO weather code to icon code mapping (matches Weather plugin's Open-Meteo icons)
+    _WMO_TO_ICON = {
+        0: "01",   # Clear sky
+        1: "022",  # Mainly clear
+        2: "02",   # Partly cloudy
+        3: "04",   # Overcast
+        45: "50",  # Fog
+        48: "48",  # Icy fog
+        51: "51", 53: "53", 55: "09",  # Drizzle
+        56: "56", 57: "57",            # Freezing drizzle
+        61: "51", 63: "53", 65: "09",  # Rain
+        66: "56", 67: "57",            # Freezing rain
+        71: "71", 73: "73", 75: "13",  # Snow
+        77: "77",                       # Snow grains
+        80: "51", 81: "53", 82: "09",  # Showers
+        85: "71", 86: "13",            # Snow showers
+        95: "11", 96: "11", 99: "11",  # Thunderstorm
+    }
+
+    # WMO weather code to description mapping
+    _WMO_DESCRIPTIONS = {
+        0: "Clear Sky", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
+        45: "Foggy", 48: "Icy Fog",
+        51: "Light Drizzle", 53: "Moderate Drizzle", 55: "Heavy Drizzle",
+        56: "Light Freezing Drizzle", 57: "Freezing Drizzle",
+        61: "Light Rain", 63: "Moderate Rain", 65: "Heavy Rain",
+        66: "Light Freezing Rain", 67: "Freezing Rain",
+        71: "Light Snow", 73: "Moderate Snow", 75: "Heavy Snow", 77: "Snow Grains",
+        80: "Light Showers", 81: "Moderate Showers", 82: "Heavy Showers",
+        85: "Light Snow Showers", 86: "Heavy Snow Showers",
+        95: "Thunderstorm", 96: "Thunderstorm with Hail", 99: "Thunderstorm with Heavy Hail",
+    }
+
     def _find_weather_settings(self, device_config):
-        """Search loop config for a weather plugin instance and borrow its settings."""
+        """Search loop config for a weather plugin instance and borrow its location settings."""
         try:
             for loop in device_config.loop_manager.loops:
                 for plugin_ref in loop.plugin_order:
@@ -707,14 +740,17 @@ class ShazamPi(BasePlugin):
                             return {
                                 "geoCoordinates": f"{lat}, {lon}",
                                 "units": ws.get("units", "imperial"),
-                                "weatherProvider": ws.get("weatherProvider", "OpenWeatherMap"),
                             }
         except Exception as e:
             logger.debug(f"Could not read weather plugin settings: {e}")
         return None
 
     def _get_weather(self, settings, device_config):
-        api_key = settings.get("weatherApiKey", "").strip()
+        """Fetch current weather + daily high/low from Open-Meteo (free, no API key).
+
+        Uses Open-Meteo's current weather and daily forecast endpoints to get
+        accurate daily high/low temperatures (not OWM's observation-range values).
+        """
         coords = settings.get("geoCoordinates", "").strip()
 
         # If no local weather config, try borrowing from weather plugin
@@ -722,12 +758,9 @@ class ShazamPi(BasePlugin):
             borrowed = self._find_weather_settings(device_config)
             if borrowed:
                 coords = borrowed["geoCoordinates"]
-                if not api_key:
-                    # Try loading API key from env (weather plugin stores it there)
-                    api_key = device_config.load_env_key("OPEN_WEATHER_MAP_SECRET") or ""
                 settings = {**settings, "units": borrowed.get("units", settings.get("units", "imperial"))}
 
-        if not api_key or not coords:
+        if not coords:
             return self._last_weather
 
         # Use cache if fresh enough
@@ -739,9 +772,16 @@ class ShazamPi(BasePlugin):
         units = settings.get("units", "imperial")
         try:
             lat, lon = [x.strip() for x in coords.split(',')]
+
+            # Open-Meteo: current temp/feels-like/weather-code + today's daily high/low
+            temp_unit_param = "fahrenheit" if units == "imperial" else "celsius"
             url = (
-                f"https://api.openweathermap.org/data/2.5/weather"
-                f"?lat={lat}&lon={lon}&units={units}&appid={api_key}"
+                f"https://api.open-meteo.com/v1/forecast"
+                f"?latitude={lat}&longitude={lon}"
+                f"&current=temperature_2m,apparent_temperature,weather_code,is_day"
+                f"&daily=temperature_2m_max,temperature_2m_min"
+                f"&temperature_unit={temp_unit_param}"
+                f"&forecast_days=1&timezone=auto"
             )
 
             from utils.http_client import get_http_session
@@ -750,24 +790,38 @@ class ShazamPi(BasePlugin):
             response.raise_for_status()
             data = response.json()
 
-            temp_unit = {'metric': '\u00b0C', 'imperial': '\u00b0F'}.get(units, 'K')
-            temperature = str(round(data['main']['temp'])) + temp_unit
-            feels_like = str(round(data['main']['feels_like'])) + temp_unit
-            temp_high = str(round(data['main']['temp_max'])) + temp_unit
-            temp_low = str(round(data['main']['temp_min'])) + temp_unit
-            condition = data['weather'][0]['description']
+            current = data.get("current", {})
+            daily = data.get("daily", {})
 
-            icon_code = data['weather'][0].get('icon', '01d')
+            temp_symbol = '\u00b0F' if units == "imperial" else '\u00b0C'
+            temperature = str(round(current.get("temperature_2m", 0))) + temp_symbol
+            feels_like = str(round(current.get("apparent_temperature", 0))) + temp_symbol
+
+            # Daily high/low from forecast (accurate, not OWM observation range)
+            highs = daily.get("temperature_2m_max", [])
+            lows = daily.get("temperature_2m_min", [])
+            temp_high = str(round(highs[0])) + temp_symbol if highs else temperature
+            temp_low = str(round(lows[0])) + temp_symbol if lows else temperature
+
+            # Map WMO weather code to icon and description
+            weather_code = current.get("weather_code", 0)
+            is_day = current.get("is_day", 1)
+            icon_stem = self._WMO_TO_ICON.get(weather_code, "01")
+            icon_code = icon_stem + ("d" if is_day else "n")
+            # Only certain icons have night variants in the icon set
+            if not is_day and icon_stem not in ("01", "022", "02"):
+                icon_code = icon_stem + "d"  # Fall back to day version
+
+            condition = self._WMO_DESCRIPTIONS.get(weather_code, "Unknown")
 
             self._last_weather = {
                 'temperature': temperature,
                 'feels_like': feels_like,
                 'temp_high': temp_high,
                 'temp_low': temp_low,
-                'description': condition.title(),
+                'description': condition,
                 'icon_code': icon_code,
-                # Keep legacy fields for compatibility
-                'weather_sub_description': f"Feels like {feels_like}. {condition}".title(),
+                'weather_sub_description': f"Feels like {feels_like}. {condition}",
             }
             self._last_weather_fetch = datetime.datetime.now()
             return self._last_weather
