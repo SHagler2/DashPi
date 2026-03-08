@@ -8,7 +8,8 @@ import threading
 import time as time_module
 from datetime import datetime, timezone, timedelta
 
-from PIL import Image, ImageDraw, ImageFont
+import gc
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 from plugins.base_plugin.base_plugin import BasePlugin
 from utils.app_utils import get_font, resolve_path
 from utils.http_client import get_http_session
@@ -28,6 +29,7 @@ POSTPASS_DURATION = 5  # minutes after pass
 # Cache refresh intervals (seconds)
 PASS_REFRESH_INTERVAL = 300    # 5 minutes
 CREW_REFRESH_INTERVAL = 1800   # 30 minutes
+CREW_RETRY_INTERVAL = 300      # 5 minutes (when API is down)
 TRACK_REFRESH_INTERVAL = 30    # 30 seconds
 GEOCODE_MOVE_THRESHOLD = 0.5   # degrees before re-geocoding
 VIEWPORT_MOVE_THRESHOLD = 1.0  # degrees before re-cropping map
@@ -104,36 +106,48 @@ class ISSTracker(BasePlugin):
         return self._landmarks
 
     def _get_iss_marker(self, map_dimension):
-        """Load and scale the ISS marker image, cached after first load."""
-        if self._iss_marker is None:
+        """Load, scale, and tint the ISS marker image. Cached by target size."""
+        target = max(40, int(map_dimension * 0.15))
+
+        # Return cached version if target size hasn't changed
+        if (self._iss_marker is not None and self._iss_marker is not False
+                and hasattr(self, '_iss_marker_target') and self._iss_marker_target == target):
+            return self._iss_marker
+
+        # Load raw marker on first call
+        if not hasattr(self, '_iss_marker_raw'):
+            self._iss_marker_raw = None
             marker_path = os.path.join(self.get_plugin_dir(), "resources", "iss_marker.png")
             try:
-                self._iss_marker = Image.open(marker_path).convert("RGBA")
+                self._iss_marker_raw = Image.open(marker_path).convert("RGBA")
                 logger.info("ISS marker image loaded")
             except Exception:
                 logger.warning("ISS marker image not found")
-                self._iss_marker = False
-        marker = self._iss_marker if self._iss_marker is not False else None
-        if marker:
-            # Scale to ~15% of map dimension
-            target = max(40, int(map_dimension * 0.15))
-            ratio = target / max(marker.width, marker.height)
-            scaled = marker.resize(
-                (int(marker.width * ratio), int(marker.height * ratio)),
-                Image.LANCZOS,
-            )
-            # Tint to red for contrast against ocean blue and land green
-            import numpy as np
-            arr = np.array(scaled, dtype=np.float32)
-            lum = 0.299 * arr[:,:,0] + 0.587 * arr[:,:,1] + 0.114 * arr[:,:,2]
-            lum = lum / 255.0
-            arr[:,:,0] = lum * 255  # R channel
-            arr[:,:,1] = lum * 50   # G channel
-            arr[:,:,2] = lum * 30   # B channel
-            # Keep original alpha
-            tinted = Image.fromarray(arr.astype(np.uint8), "RGBA")
-            return tinted
-        return None
+
+        if self._iss_marker_raw is None:
+            self._iss_marker = False
+            return None
+
+        # Scale and tint (only when target size changes)
+        import numpy as np
+        raw = self._iss_marker_raw
+        ratio = target / max(raw.width, raw.height)
+        scaled = raw.resize(
+            (int(raw.width * ratio), int(raw.height * ratio)),
+            Image.LANCZOS,
+        )
+        # Tint to red for contrast against ocean blue and land green
+        arr = np.array(scaled, dtype=np.float32)
+        lum = 0.299 * arr[:,:,0] + 0.587 * arr[:,:,1] + 0.114 * arr[:,:,2]
+        lum = lum / 255.0
+        arr[:,:,0] = lum * 255  # R channel
+        arr[:,:,1] = lum * 50   # G channel
+        arr[:,:,2] = lum * 30   # B channel
+        tinted = Image.fromarray(arr.astype(np.uint8), "RGBA")
+        self._iss_marker = tinted
+        self._iss_marker_target = target
+        logger.info(f"ISS marker scaled and tinted to {target}px")
+        return tinted
 
     def _get_pass_arc(self, tle_lines, pass_data, obs_lat, obs_lon):
         """Get pass arc, using cache if available for this pass."""
@@ -199,12 +213,13 @@ class ISSTracker(BasePlugin):
             all_passes = self._cached_passes or []
             passes = [p for p in all_passes if p.get("set_utc", now_utc) > now_utc]
 
-            # TIER 3: Crew count — refresh every 30 minutes
-            if self._cached_crew_count == 0 or (now_mono - self._last_crew_fetch_time) >= CREW_REFRESH_INTERVAL:
+            # TIER 3: Crew count — refresh every 30 minutes (5 min retry on failure)
+            crew_interval = CREW_REFRESH_INTERVAL if self._cached_crew_count > 0 else CREW_RETRY_INTERVAL
+            if (now_mono - self._last_crew_fetch_time) >= crew_interval:
                 count = _get_crew_count()
+                self._last_crew_fetch_time = now_mono  # stamp on success AND failure
                 if count > 0:
                     self._cached_crew_count = count
-                    self._last_crew_fetch_time = now_mono
             crew_count = self._cached_crew_count
 
             # TIER 4: Reverse geocode — only when ISS moves significantly
@@ -254,6 +269,8 @@ class ISSTracker(BasePlugin):
                 now_utc, timezone_name, time_format,
             )
 
+        # Force garbage collection to prevent memory buildup on rapid auto-refresh
+        gc.collect()
         return img
 
     # ───────── Nadir View ─────────
@@ -281,12 +298,13 @@ class ISSTracker(BasePlugin):
         world = self._get_world_map()
         map_img = self._crop_map_viewport(world, iss_lat, iss_lon, w, map_h)
 
-        img = Image.new("RGBA", dimensions, (15, 20, 30, 255))
-        img.paste(map_img, (0, 0))
-
         # Dim the map slightly to reduce glare and improve marker visibility
-        dim_overlay = Image.new("RGBA", (w, map_h), (0, 0, 0, 70))
-        img.alpha_composite(dim_overlay, (0, 0))
+        # Use brightness reduction instead of RGBA overlay to save memory
+        dimmed = ImageEnhance.Brightness(map_img).enhance(0.72)
+
+        img = Image.new("RGB", dimensions, (15, 20, 30))
+        img.paste(dimmed, (0, 0))
+        del dimmed
 
         draw = ImageDraw.Draw(img)
 
@@ -311,7 +329,7 @@ class ISSTracker(BasePlugin):
             timezone_name, time_format, now_utc, obs_city,
         )
 
-        return img.convert("RGB")
+        return img
 
     def _crop_map_viewport(self, world, lat, lon, vw, vh):
         """Crop viewport from pre-loaded world map with caching."""
@@ -1164,7 +1182,7 @@ def _get_crew_count():
     """Get current ISS crew count from Open Notify API."""
     try:
         session = get_http_session()
-        response = session.get(CREW_URL, timeout=10)
+        response = session.get(CREW_URL, timeout=5)
         response.raise_for_status()
         data = response.json()
         return sum(1 for p in data.get("people", []) if p.get("craft") == "ISS")
