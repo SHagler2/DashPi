@@ -15,7 +15,7 @@ import os
 import tempfile
 import time
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from plugins.base_plugin.base_plugin import BasePlugin
 from utils.app_utils import get_font
@@ -534,7 +534,7 @@ class ShazamPi(BasePlugin):
                     logger.debug(f"Failed to load weather icon {path}: {e}")
         return None
 
-    def _render_idle(self, dimensions, settings, device_config, status_note="No Music Detected"):
+    def _render_idle(self, dimensions, settings, device_config, status_note="\u266a  Listening for music"):
         # On e-ink, skip redundant idle repaints (slow full-screen flash).
         # Allow a refresh every EINK_IDLE_REFRESH_MINUTES so weather stays current.
         display_type = device_config.get_config("display_type", default="auto")
@@ -548,9 +548,16 @@ class ShazamPi(BasePlugin):
         width, height = dimensions
         weather = self._get_weather(settings, device_config)
 
-        # Dark background
-        bg_color = (26, 26, 26)
-        canvas = Image.new('RGB', dimensions, bg_color)
+        # Subtle top-to-bottom gradient background (slight blue shift at top)
+        gradient = Image.new('RGB', (1, height))
+        for y in range(height):
+            t = y / max(height - 1, 1)
+            r = int(30 + (18 - 30) * t)
+            g = int(30 + (18 - 30) * t)
+            b = int(38 + (20 - 38) * t)
+            gradient.putpixel((0, y), (r, g, b))
+        canvas = gradient.resize((width, height), Image.NEAREST)
+        del gradient
         draw = ImageDraw.Draw(canvas)
 
         # Color palette
@@ -577,15 +584,26 @@ class ShazamPi(BasePlugin):
 
     def _render_idle_weather(self, canvas, draw, weather, width, height,
                              color_temp, color_secondary, color_white, color_subtle, get_font,
-                             status_note="No Music Detected"):
+                             status_note="\u266a  Listening for music"):
         """Render idle screen with weather data: icon left, text right, centered."""
+
+        # Current time at top
+        now = datetime.datetime.now()
+        time_str = now.strftime("%-I:%M %p")
+        time_size = max(32, int(height * 0.09))
+        time_font = get_font("Jost", time_size, "normal") or ImageFont.load_default()
+        time_bbox = draw.textbbox((0, 0), time_str, font=time_font)
+        time_w = time_bbox[2] - time_bbox[0]
+        draw.text(((width - time_w) // 2, int(height * 0.06)), time_str,
+                  font=time_font, fill=color_secondary)
+
         icon_size = min(200, int(height * 0.42))
         icon_img = self._load_weather_icon(weather.get('icon_code', '01d'), icon_size)
 
         # Font sizes
         temp_size = max(48, int(height * 0.12))
         detail_size = max(22, int(height * 0.05))
-        note_size = max(14, int(height * 0.032))
+        note_size = max(14, int(height * 0.038))
 
         temp_font = get_font("Jost", temp_size, "bold") or ImageFont.load_default()
         detail_font = get_font("Jost", detail_size, "normal") or ImageFont.load_default()
@@ -607,7 +625,7 @@ class ShazamPi(BasePlugin):
         content_h = max(text_block_h, icon_actual)
 
         # Vertical center for the content block (shifted up slightly)
-        content_y = (height - content_h) // 2 - int(height * 0.04)
+        content_y = (height - content_h) // 2 - int(height * 0.02)
 
         # Horizontal layout: icon on left, text on right, both centered as a group
         gap_between = int(width * 0.03)
@@ -624,9 +642,21 @@ class ShazamPi(BasePlugin):
         total_content_w = icon_w + gap_between + max_text_w
         content_x = (width - total_content_w) // 2
 
-        # Draw weather icon (vertically centered within content block)
+        # Draw weather icon with ambient glow
         if icon_img:
             icon_y = content_y + (content_h - icon_actual) // 2
+
+            # Soft orange glow behind icon
+            glow_size = int(icon_size * 1.6)
+            glow_layer = Image.new('RGBA', (glow_size, glow_size), (0, 0, 0, 0))
+            glow_offset = (glow_size - icon_size) // 2
+            glow_color_img = Image.new('RGBA', icon_img.size, (241, 122, 36, 35))
+            glow_layer.paste(glow_color_img, (glow_offset, glow_offset), mask=icon_img.split()[3])
+            glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(radius=icon_size // 4))
+            canvas.paste(glow_layer, (content_x - glow_offset, icon_y - glow_offset), glow_layer)
+            del glow_color_img, glow_layer
+
+            # Icon on top of glow
             canvas.paste(icon_img, (content_x, icon_y), icon_img)
 
         # Draw text block (vertically centered within content block)
@@ -648,47 +678,69 @@ class ShazamPi(BasePlugin):
         # Description
         draw.text((text_x, text_y), desc_text, font=detail_font, fill=color_white)
 
+        # Thin accent separator
+        line_y = height - int(height * 0.13)
+        line_w = int(width * 0.4)
+        line_x = (width - line_w) // 2
+        line_thickness = max(1, int(width * 0.003))
+        draw.line([(line_x, line_y), (line_x + line_w, line_y)],
+                  fill=color_subtle, width=line_thickness)
+
         # Status note at bottom center
-        note = status_note
-        note_bbox = draw.textbbox((0, 0), note, font=note_font)
+        note_bbox = draw.textbbox((0, 0), status_note, font=note_font)
         note_w = note_bbox[2] - note_bbox[0]
         draw.text(
             ((width - note_w) // 2, height - int(height * 0.08)),
-            note, font=note_font, fill=color_subtle
+            status_note, font=note_font, fill=color_subtle
         )
 
     def _render_idle_no_weather(self, canvas, draw, width, height,
                                 color_white, color_subtle, get_font,
-                                status_note="No Music Detected"):
+                                status_note="\u266a  Listening for music"):
         """Render idle screen when no weather data is available."""
+
+        # Current time at top
+        color_secondary = (204, 204, 204)
+        now = datetime.datetime.now()
+        time_str = now.strftime("%-I:%M %p")
+        time_size = max(32, int(height * 0.09))
+        time_font = get_font("Jost", time_size, "normal") or ImageFont.load_default()
+        time_bbox = draw.textbbox((0, 0), time_str, font=time_font)
+        time_w = time_bbox[2] - time_bbox[0]
+        draw.text(((width - time_w) // 2, int(height * 0.06)), time_str,
+                  font=time_font, fill=color_secondary)
+
         main_size = max(36, int(height * 0.08))
-        sub_size = max(20, int(height * 0.04))
+        note_size = max(14, int(height * 0.038))
 
         main_font = get_font("Jost", main_size, "bold") or ImageFont.load_default()
-        sub_font = get_font("Jost", sub_size, "normal") or ImageFont.load_default()
+        note_font = get_font("Jost", note_size, "normal") or ImageFont.load_default()
 
         main_text = "Listening..."
-        sub_text = status_note
 
         main_bbox = draw.textbbox((0, 0), main_text, font=main_font)
         main_w = main_bbox[2] - main_bbox[0]
-        main_h = int(main_size * 1.15)
 
-        sub_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
-        sub_w = sub_bbox[2] - sub_bbox[0]
-        sub_h = int(sub_size * 1.15)
-
-        gap = int(height * 0.02)
-        total_h = main_h + gap + sub_h
-        start_y = (height - total_h) // 2 - int(height * 0.04)
-
+        # Center the "Listening..." text
         draw.text(
-            ((width - main_w) // 2, start_y),
+            ((width - main_w) // 2, (height // 2) - int(height * 0.04)),
             main_text, font=main_font, fill=color_white
         )
+
+        # Thin accent separator
+        line_y = height - int(height * 0.13)
+        line_w = int(width * 0.4)
+        line_x = (width - line_w) // 2
+        line_thickness = max(1, int(width * 0.003))
+        draw.line([(line_x, line_y), (line_x + line_w, line_y)],
+                  fill=color_subtle, width=line_thickness)
+
+        # Status note at bottom center
+        note_bbox = draw.textbbox((0, 0), status_note, font=note_font)
+        note_w = note_bbox[2] - note_bbox[0]
         draw.text(
-            ((width - sub_w) // 2, start_y + main_h + gap),
-            sub_text, font=sub_font, fill=color_subtle
+            ((width - note_w) // 2, height - int(height * 0.08)),
+            status_note, font=note_font, fill=color_subtle
         )
 
     # ========== Weather ==========
