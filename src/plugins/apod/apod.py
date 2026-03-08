@@ -90,9 +90,11 @@ class Apod(BasePlugin):
             logger.error(f"Failed to find an APOD image after {max_retries} attempts")
             raise RuntimeError(f"Could not find an APOD image after {max_retries} attempts.")
 
-        image_url = data.get("hdurl") or data.get("url")
+        # Prefer standard URL (typically ~1024px) over HD URL (often 4000px+).
+        # HD images can be 15+ megapixels, risking OOM on Pi Zero (416MB RAM).
+        image_url = data.get("url") or data.get("hdurl")
         logger.info(f"APOD image URL: {image_url}")
-        logger.debug(f"Using {'HD URL' if data.get('hdurl') else 'standard URL'}")
+        logger.debug(f"Using {'standard URL' if data.get('url') else 'HD URL (no standard available)'}")
 
         # Get target dimensions
         dimensions = device_config.get_resolution()

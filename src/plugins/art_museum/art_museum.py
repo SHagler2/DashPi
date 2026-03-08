@@ -150,9 +150,11 @@ class ArtMuseum(BasePlugin):
                 resp.raise_for_status()
                 obj = resp.json()
 
-                image_url = obj.get("primaryImage", "")
+                # Prefer small image (web-sized) over full primary (can be 4000px+).
+                # Full-res images risk OOM on Pi Zero (416MB RAM).
+                image_url = obj.get("primaryImageSmall") or obj.get("primaryImage", "")
                 if not image_url:
-                    logger.debug(f"Met object {obj_id} has no primaryImage, retrying...")
+                    logger.debug(f"Met object {obj_id} has no image, retrying...")
                     continue
 
                 classification = obj.get("classification", "")
