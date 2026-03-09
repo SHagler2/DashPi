@@ -25,6 +25,12 @@ All display types share the same plugin ecosystem, web UI, and configuration —
 
 For documentation on building custom plugins, see [Building Plugins](./docs/building_plugins.md).
 
+## Screenshots
+
+| Web UI (LCD) | Web UI (E-Ink) |
+|---|---|
+| ![LCD Dashboard](docs/images/dashpi_webui_lcd.jpg) | ![E-Ink Dashboard](docs/images/dashpi_webui_eink.jpg) |
+
 ## Hardware
 
 - Raspberry Pi (4 | 3 | Zero 2 W)
