@@ -332,7 +332,11 @@ class DisplayManager:
         night_start = schedule.get("night_start", "22:00")
 
         tz_str = self.device_config.get_config("timezone", default="UTC")
-        current_time = datetime.now(pytz.timezone(tz_str)).strftime("%H:%M")
+        try:
+            current_time = datetime.now(pytz.timezone(tz_str)).strftime("%H:%M")
+        except Exception:
+            logger.warning(f"Invalid timezone '{tz_str}', falling back to UTC for brightness schedule")
+            current_time = datetime.now(pytz.utc).strftime("%H:%M")
 
         times = [day_start, evening_start, night_start]
         if times == sorted(times):

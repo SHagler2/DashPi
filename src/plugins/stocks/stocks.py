@@ -131,7 +131,11 @@ class Stocks(BasePlugin):
         font_scale = FONT_SIZES.get(settings.get('fontSize', 'normal'), 1)
         count_scale = COUNT_SCALES.get(stock_count, 0.65)
         tz_str = device_config.get_config("timezone", default="UTC")
-        last_updated = datetime.now(ZoneInfo(tz_str)).strftime("%I:%M %p")
+        try:
+            last_updated = datetime.now(ZoneInfo(tz_str)).strftime("%I:%M %p")
+        except Exception:
+            logger.warning(f"Invalid timezone '{tz_str}', falling back to UTC")
+            last_updated = datetime.now(ZoneInfo("UTC")).strftime("%I:%M %p")
         market_open = is_market_open()
 
         return self._render_pil(dimensions, title, stocks_data, columns, rows,
