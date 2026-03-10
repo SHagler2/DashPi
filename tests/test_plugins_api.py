@@ -168,7 +168,7 @@ class TestStocks:
             "is_positive": True,
         }]
         img = plugin._render_pil((800, 480), "Stocks", stocks_data, 1, 1,
-                                  "12:00 PM", 5, 1.0, {})
+                                  "12:00 PM", 5, 1.0, 1.0, {})
         assert_valid_image(img, (800, 480))
 
     def test_render_pil_dark_mode(self, plugin):
@@ -186,7 +186,7 @@ class TestStocks:
             "is_positive": False,
         }]
         img = plugin._render_pil((800, 480), "Stocks", stocks_data, 1, 1,
-                                  "12:00 PM", 0, 1.0, {"darkMode": "on"})
+                                  "12:00 PM", 0, 1.0, 1.0, {"darkMode": "on"})
         assert_valid_image(img, (800, 480))
 
     def test_format_large_number(self):

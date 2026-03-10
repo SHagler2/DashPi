@@ -49,5 +49,8 @@
         "refresh_type": null,
         "plugin_id": null
     },
-    "device_name": "Mac-Studio"
+    "device_name": "Mac-Studio",
+    "plugin_last_settings_image_upload": {
+        "imageFiles[]": []
+    }
 }

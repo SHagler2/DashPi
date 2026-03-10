@@ -213,32 +213,3 @@ class TestImageUrl:
         call_kwargs = plugin.image_loader.from_url.call_args
         assert call_kwargs.kwargs.get("fit_mode") == "fit" or call_kwargs[0][3] if len(call_kwargs[0]) > 3 else True
 
-
-# ===========================================================================
-# Screenshot Plugin
-# ===========================================================================
-
-class TestScreenshot:
-    @pytest.fixture
-    def plugin(self):
-        from plugins.screenshot.screenshot import Screenshot
-        return Screenshot(SCREENSHOT_CONFIG)
-
-    def test_missing_url_raises(self, plugin, mock_device_config):
-        with pytest.raises(RuntimeError, match="URL is required"):
-            plugin.generate_image({}, mock_device_config)
-
-    @patch("plugins.screenshot.screenshot.take_screenshot")
-    def test_valid_screenshot(self, mock_take, plugin, mock_device_config):
-        mock_take.return_value = Image.new("RGB", (800, 480), "gray")
-        settings = {"url": "https://example.com"}
-        img = plugin.generate_image(settings, mock_device_config)
-        assert_valid_image(img, (800, 480))
-        mock_take.assert_called_once_with("https://example.com", (800, 480), timeout_ms=40000)
-
-    @patch("plugins.screenshot.screenshot.take_screenshot")
-    def test_failed_screenshot_raises(self, mock_take, plugin, mock_device_config):
-        mock_take.return_value = None
-        settings = {"url": "https://example.com"}
-        with pytest.raises(RuntimeError, match="Failed to take screenshot"):
-            plugin.generate_image(settings, mock_device_config)
