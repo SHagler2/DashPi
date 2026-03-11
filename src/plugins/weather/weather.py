@@ -682,6 +682,8 @@ class Weather(BasePlugin):
             {"event": a.get("event", ""), "sender": a.get("sender_name", "")}
             for a in alerts_raw if a.get("event")
         ]
+        for a in alerts_raw:
+            logger.info(f"Weather alert: event='{a.get('event')}' sender='{a.get('sender_name')}' description='{a.get('description', '')[:300]}'")
         return data
 
     def parse_open_meteo_data(self, weather_data, aqi_data, tz, units, time_format, lat):
