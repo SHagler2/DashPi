@@ -635,6 +635,8 @@ class Weather(BasePlugin):
         draw = ImageDraw.Draw(image)
         font = get_font("Jost", max(int(height * 0.032), 12), "bold")
         text = f"\u26a0 {event_name.upper()}"
+        if alert.get("until_str"):
+            text += f"  \u2022  UNTIL {alert['until_str'].upper()}"
         tw, th = get_text_dimensions(draw, text, font)
         draw.text(((width - tw) // 2, banner_y + (banner_h - th) // 2), text, font=font, fill=(255, 255, 255))
 
@@ -678,12 +680,20 @@ class Weather(BasePlugin):
         data['hourly_forecast'] = self.parse_hourly(weather_data.get('hourly') or [], tz, time_format, units, daily_forecast)
 
         alerts_raw = weather_data.get("alerts", [])
-        data['alerts'] = [
-            {"event": a.get("event", ""), "sender": a.get("sender_name", "")}
-            for a in alerts_raw if a.get("event")
-        ]
+        parsed_alerts = []
         for a in alerts_raw:
-            logger.info(f"Weather alert: event='{a.get('event')}' sender='{a.get('sender_name')}' description='{a.get('description', '')[:300]}'")
+            if not a.get("event"):
+                continue
+            alert = {"event": a.get("event", ""), "sender": a.get("sender_name", "")}
+            end_ts = a.get("end")
+            if end_ts:
+                try:
+                    end_dt = datetime.fromtimestamp(end_ts, tz=timezone.utc).astimezone(tz)
+                    alert["until_str"] = self.format_time(end_dt, time_format)
+                except Exception:
+                    pass
+            parsed_alerts.append(alert)
+        data['alerts'] = parsed_alerts
         return data
 
     def parse_open_meteo_data(self, weather_data, aqi_data, tz, units, time_format, lat):
