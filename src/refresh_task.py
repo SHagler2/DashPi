@@ -124,389 +124,389 @@ class RefreshTask:
     def _run(self):
         """Background task that manages the periodic refresh of the display.
 
-        This function runs in a loop, sleeping for a configured duration (`plugin_cycle_interval_seconds`) or until
-        manually triggered via `manual_update()`. Determines the next plugin to refresh based on active playlists and
-        updates the display accordingly.
-
-        Workflow:
-        1. Waits for the configured sleep duration or until notified of a manual update.
-        2. Checks if a manual update has been requested:
-        - If so, refreshes the specified plugin immediately.
-        3. Otherwise, determines the next plugin to refresh based on the active playlist and generates an image.
-        4. Compares the image hash with the last displayed image hash.
-        - If the image has changed, updates the display.
-        - If the image is the same, skips the refresh.
-        5. Updates the refresh metadata in the device configuration.
-        6. Repeats the process until `stop()` is called.
-
-        Handles any exceptions that occur during the refresh process and ensures the refresh event is set 
-        to indicate completion.
-
-        Exceptions:
-        - Captures and logs any unexpected errors during execution to prevent the thread from exiting.
+        Orchestrates the refresh loop: computes sleep time, waits, checks WiFi,
+        determines the next action, and executes it. Each logical section is
+        extracted into a helper method for testability.
         """
         while True:
             try:
                 with self.condition:
-                    # Get sleep time from loop manager
                     loop_manager = self.device_config.get_loop_manager()
-                    sleep_time = loop_manager.rotation_interval_seconds
+                    sleep_time, use_auto_refresh, auto_refresh_seconds = self._compute_sleep_time(loop_manager)
 
-                    # Check if current plugin has auto-refresh - use shorter interval if so
-                    # When a plugin is pinned, use the pinned plugin's auto-refresh settings
-                    # (not the tracked settings which could be stale from a previous plugin)
-                    loop_override_early = self.device_config.get_loop_override()
-                    if loop_override_early and loop_override_early.get("type") == "plugin":
-                        pinned_id = loop_override_early.get("plugin_id")
-                        pinned_settings = self.device_config.get_config(
-                            f"plugin_last_settings_{pinned_id}", default={}
-                        )
-                        pinned_ar = pinned_settings.get("autoRefresh")
-                        if pinned_ar:
-                            try:
-                                auto_refresh_seconds = round(float(pinned_ar) * 60)
-                            except (ValueError, TypeError):
-                                auto_refresh_seconds = self._get_auto_refresh_seconds()
-                        else:
-                            auto_refresh_seconds = self._get_auto_refresh_seconds()
-                    else:
-                        auto_refresh_seconds = self._get_auto_refresh_seconds()
-
-                    use_auto_refresh = False
-                    if auto_refresh_seconds:
-                        if auto_refresh_seconds < sleep_time:
-                            sleep_time = auto_refresh_seconds
-                            use_auto_refresh = True
-                            logger.info(f"Auto-refresh configured: {auto_refresh_seconds}s, using as sleep interval")
-                        else:
-                            use_auto_refresh = True  # Still want auto-refresh, but loop interval is shorter
-                            logger.info(f"Auto-refresh configured: {auto_refresh_seconds}s, but loop interval {sleep_time}s is shorter")
-
-                    # When display is blanked (brightness 0), reduce refresh frequency
-                    # to save resources — nobody is looking at the screen
-                    BLANKED_INTERVAL = 300  # 5 minutes
-                    is_blanked = getattr(self.display_manager, '_display_blanked', False)
-                    if is_blanked and sleep_time < BLANKED_INTERVAL:
-                        logger.info(f"Display blanked, extending sleep from {sleep_time}s to {BLANKED_INTERVAL}s")
-                        sleep_time = BLANKED_INTERVAL
-
-                    # On first run after boot, use a short delay so the display updates quickly
-                    if self.first_run:
-                        sleep_time = 3
-                        logger.info("First run after boot, using 3s startup delay")
-
-                    # If a manual update was queued while we were processing, skip the wait
                     if self.manual_update_request:
                         logger.info("Manual update already queued, skipping wait")
                     else:
-                        # Update status with next change countdown (skip for very short intervals like continuous Shazam)
                         if sleep_time >= 15:
-                            loop_enabled = self.device_config.get_config("loop_enabled", default=True)
-                            loop_interval = loop_manager.rotation_interval_seconds
-                            is_refresh = use_auto_refresh and auto_refresh_seconds and auto_refresh_seconds < loop_interval
-
-                            # Compute remaining time until next loop rotation
-                            loop_remaining = None
-                            if loop_enabled:
-                                if self.last_loop_rotation_time:
-                                    current_dt = self._get_current_datetime()
-                                    elapsed = (current_dt - self.last_loop_rotation_time).total_seconds()
-                                    loop_remaining = max(0, int(loop_interval - elapsed))
-                                else:
-                                    loop_remaining = int(loop_interval)
-
-                            # Build contextual detail text (used by plugin.html and loops.html which show detail directly)
-                            blanked_prefix = "Display off · " if is_blanked else ""
-                            time_str = self._format_duration(sleep_time)
-                            if loop_enabled and is_refresh and loop_remaining is not None:
-                                loop_str = self._format_duration(loop_remaining)
-                                detail = f"{blanked_prefix}Refresh in {time_str} · Next plugin in {loop_str}"
-                            elif loop_enabled:
-                                detail = f"{blanked_prefix}Next plugin in {time_str}"
-                            else:
-                                detail = f"{blanked_prefix}Next refresh in {time_str}"
-
-                            self._set_global_status("idle", detail,
-                                                    countdown_seconds=int(sleep_time),
-                                                    loop_rotation_seconds=loop_remaining,
-                                                    is_auto_refresh=is_refresh,
-                                                    loop_enabled=loop_enabled)
-
-                        # Wait for sleep_time or until notified
+                            self._update_idle_status(sleep_time, use_auto_refresh, auto_refresh_seconds, loop_manager)
                         self.condition.wait(timeout=sleep_time)
+
                     self.first_run = False
                     self.refresh_result = {}
                     self.refresh_event.clear()
 
-                    # Exit if `stop()` is called
                     if not self.running:
                         break
 
-                    # Check WiFi connectivity — skip plugin generation if in AP mode
                     if self.wifi_manager and not self.manual_update_request:
-                        from utils.wifi_manager import STATE_AP_MODE, STATE_CONNECTED
-                        if self.wifi_manager.state == STATE_AP_MODE:
-                            logger.debug("In AP mode, skipping plugin refresh")
-                            self.refresh_event.set()
-                            continue
-                        # Retry connectivity check to avoid false positives from
-                        # momentary drops (e.g. right after WiFi provisioning)
-                        wifi_ok = False
-                        for attempt in range(3):
-                            if self.wifi_manager.check_connectivity():
-                                wifi_ok = True
-                                break
-                            if attempt < 2:
-                                logger.debug("Connectivity check failed (attempt %d/3), retrying...", attempt + 1)
-                                time.sleep(5)
-                        if not wifi_ok:
-                            if self.wifi_manager.state != STATE_AP_MODE:
-                                logger.warning("WiFi lost after 3 checks, entering AP mode")
-                                device_name = self.device_config.get_config(
-                                    "device_name", default="DashPi"
-                                )
-                                self.wifi_manager.start_ap_mode(device_name)
-                                try:
-                                    from utils.wifi_display import generate_wifi_setup_image
-                                    ap_ssid = self.wifi_manager.get_ap_ssid(device_name)
-                                    portal_url = f"http://{self.wifi_manager.get_hotspot_ip()}/wifi"
-                                    img = generate_wifi_setup_image(
-                                        self.device_config.get_resolution(),
-                                        ap_ssid, portal_url,
-                                        password=self.wifi_manager.get_ap_password()
-                                    )
-                                    self.display_manager.display_image(img)
-                                except Exception as e:
-                                    logger.error("Failed to show WiFi setup image: %s", e)
-                                self._set_global_status("idle", "WiFi Setup — waiting for configuration")
+                        if not self._check_wifi_connectivity():
                             self.refresh_event.set()
                             continue
 
                     latest_refresh = self.device_config.get_refresh_info()
                     current_dt = self._get_current_datetime()
 
-                    refresh_action = None
-                    if self.manual_update_request:
-                        # handle immediate update request
-                        logger.info("Manual update requested")
-                        refresh_action = self.manual_update_request
-                        self.manual_update_request = ()
-                        pname = self._get_display_name(refresh_action.get_plugin_id())
-                        self._set_global_status("refreshing", f"Updating {pname}...", pname, refresh_action.get_plugin_id())
-                    else:
-
-                        if self.device_config.get_config("log_system_stats"):
-                            self.log_system_stats()
-
-                        # Check if loop rotation is enabled
-                        loop_enabled = self.device_config.get_config("loop_enabled", default=True)
-
-                        # Check for override (pin plugin or override loop)
-                        loop_override = self.device_config.get_loop_override()
-                        plugin_pin_active = loop_override and loop_override.get("type") == "plugin"
-
-                        # Check if loop rotation is overdue (takes priority over auto-refresh)
-                        loop_rotation_due = False
-                        if loop_enabled and not plugin_pin_active:
-                            loop_manager = self.device_config.get_loop_manager()
-                            rotation_interval = loop_manager.rotation_interval_seconds
-                            if self.last_loop_rotation_time:
-                                elapsed_since_rotation = (current_dt - self.last_loop_rotation_time).total_seconds()
-                                loop_rotation_due = elapsed_since_rotation >= rotation_interval
-                            else:
-                                # No rotation tracked yet - first run, do rotation
-                                loop_rotation_due = True
-
-                        # If a plugin is pinned and we're showing the wrong one, switch immediately
-                        if plugin_pin_active and latest_refresh and latest_refresh.plugin_id != loop_override.get("plugin_id"):
-                            pinned_id = loop_override.get("plugin_id")
-                            logger.info(f"Switching to pinned plugin: {pinned_id}")
-                            plugin_settings = self.device_config.get_config(
-                                f"plugin_last_settings_{pinned_id}", default={}
-                            )
-                            refresh_action = AutoRefresh(pinned_id, plugin_settings)
-                            pname = self._get_display_name(pinned_id)
-                            self._set_global_status("refreshing", f"Pinned: {pname}...", pname, pinned_id)
-                        elif loop_rotation_due:
-                            # Loop rotation takes priority over auto-refresh
-                            logger.info(f"Running interval refresh check. | current_time: {current_dt.strftime('%Y-%m-%d %H:%M:%S')}")
-
-                            loop_manager = self.device_config.get_loop_manager()
-                            loop, plugin_ref = self._determine_next_plugin_loop_mode(loop_manager, current_dt, override=loop_override)
-                            if plugin_ref:
-                                refresh_action = LoopRefresh(loop, plugin_ref)
-                                pname = self._get_display_name(plugin_ref.plugin_id)
-                                self._set_global_status("refreshing", f"Loading {pname}...", pname, plugin_ref.plugin_id)
-                        elif use_auto_refresh and self._should_auto_refresh(current_dt):
-                            # Auto-refresh current plugin (only if loop rotation isn't due)
-                            # When a plugin is pinned, always auto-refresh the PINNED plugin
-                            # (not whatever was last tracked in auto_refresh_plugin_settings)
-                            if plugin_pin_active:
-                                ar_plugin_id = loop_override.get("plugin_id")
-                                ar_settings = self.device_config.get_config(
-                                    f"plugin_last_settings_{ar_plugin_id}", default=self.auto_refresh_plugin_settings
-                                )
-                            else:
-                                ar_plugin_id = latest_refresh.plugin_id
-                                ar_settings = self.auto_refresh_plugin_settings
-                            logger.info(f"Auto-refreshing current plugin: {ar_plugin_id}")
-                            refresh_action = AutoRefresh(ar_plugin_id, ar_settings)
-                            pname = self._get_display_name(ar_plugin_id)
-                            self._set_global_status("refreshing", f"Auto-refreshing {pname}...", pname, ar_plugin_id)
-                        elif not loop_enabled or plugin_pin_active:
-                            # Loop is disabled or plugin is pinned — run in standalone mode
-                            # On first boot cycle, force an immediate render
-                            first_boot_plugin_id = None
-                            if not self._displayed_this_boot:
-                                # If plugin is pinned, use the pinned plugin
-                                if plugin_pin_active:
-                                    first_boot_plugin_id = loop_override.get("plugin_id")
-                                # Try latest_refresh first, then fall back to finding any plugin
-                                elif latest_refresh and latest_refresh.plugin_id:
-                                    first_boot_plugin_id = latest_refresh.plugin_id
-                                else:
-                                    # No known last plugin - find any configured plugin to display
-                                    first_boot_plugin_id = self._find_any_plugin_id()
-                                    if first_boot_plugin_id:
-                                        logger.info(f"No last plugin known, falling back to: {first_boot_plugin_id}")
-
-                            if first_boot_plugin_id:
-                                logger.info(f"First display after boot, rendering: {first_boot_plugin_id}")
-                                plugin_settings = self.auto_refresh_plugin_settings or {}
-                                # If falling back to a discovered plugin, load its last-used settings
-                                if not (latest_refresh and latest_refresh.plugin_id):
-                                    plugin_settings = self.device_config.get_config(
-                                        f"plugin_last_settings_{first_boot_plugin_id}", default={}
-                                    )
-                                refresh_action = AutoRefresh(first_boot_plugin_id, plugin_settings)
-                                pname = self._get_display_name(first_boot_plugin_id)
-                                self._set_global_status("refreshing", f"Loading {pname}...", pname, first_boot_plugin_id)
-                            elif use_auto_refresh:
-                                elapsed = (current_dt - self.last_display_time).total_seconds() if self.last_display_time else 0
-                                logger.info(f"Loop disabled, auto-refresh waiting (elapsed: {elapsed:.0f}s / {self._get_auto_refresh_seconds()}s)")
-                                continue
-                            else:
-                                logger.info("Loop rotation is disabled, no action needed")
-                                self._stop_splash_if_needed()
-                                continue
+                    refresh_action = self._determine_refresh_action(
+                        current_dt, latest_refresh, loop_manager, use_auto_refresh, auto_refresh_seconds
+                    )
 
                     if not refresh_action:
-                        # No refresh action determined — ensure splash is still cleaned up
                         self._stop_splash_if_needed()
                         continue
 
-                    if refresh_action:
-                        plugin_config = self.device_config.get_plugin(refresh_action.get_plugin_id())
-                        if plugin_config is None:
-                            logger.error(f"Plugin config not found for '{refresh_action.get_plugin_id()}'.")
-                            self._set_global_status("error", f"Plugin not found: {refresh_action.get_plugin_id()}")
-                            continue
-                        plugin = get_plugin_instance(plugin_config)
-                        plugin_name = plugin_config.get("display_name", refresh_action.get_plugin_id())
-                        plugin_id = refresh_action.get_plugin_id()
-
-                        self._set_global_status("generating", f"Generating {plugin_name}...", plugin_name, plugin_id)
-                        image = refresh_action.execute(plugin, self.device_config, current_dt)
-
-                        # Persist plugin settings back (plugins may modify settings, e.g. reconciliation)
-                        plugin_settings_after = getattr(refresh_action, 'plugin_settings', None)
-                        if plugin_settings_after:
-                            self.device_config.update_value(
-                                f"plugin_last_settings_{plugin_id}", dict(plugin_settings_after), write=False
-                            )
-                        elif hasattr(refresh_action, 'plugin_reference'):
-                            # LoopRefresh: sync plugin_last_settings from loop's authoritative settings
-                            ref_settings = refresh_action.plugin_reference.plugin_settings
-                            if ref_settings:
-                                self.device_config.update_value(
-                                    f"plugin_last_settings_{plugin_id}", dict(ref_settings), write=False
-                                )
-
-                        # Plugin returned None — skip display update (e.g., Shazam grace period)
-                        if image is None:
-                            logger.info(f"Plugin returned None, skipping display update. | plugin_id: {plugin_id}")
-                            self._set_global_status("displayed", f"No update needed: {plugin_name}", plugin_name, plugin_id)
-                            continue
-
-                        # Apply style settings (frames + margins) if configured
-                        ps = getattr(refresh_action, 'plugin_settings', None)
-                        if ps is None and hasattr(refresh_action, 'plugin_reference'):
-                            ps = getattr(refresh_action.plugin_reference, 'plugin_settings', None)
-                        if ps:
-                            image = self._apply_style_settings(image, ps)
-
-                        # Add plugin icon overlay if enabled
-                        if self.device_config.get_config("show_plugin_icon", default=False):
-                            image = self._add_plugin_icon_overlay(image, plugin_id)
-
-                        self._set_global_status("processing", f"Processing {plugin_name}...", plugin_name, plugin_id)
-                        image_hash = compute_image_hash(image)
-
-                        refresh_info = refresh_action.get_refresh_info()
-                        refresh_info.update({"refresh_time": current_dt.isoformat(), "image_hash": image_hash})
-                        # Manual updates and first boot always force display refresh; auto/loop skip if unchanged
-                        is_manual = isinstance(refresh_action, ManualRefresh)
-                        if is_manual or not self._displayed_this_boot or image_hash != latest_refresh.image_hash:
-                            self._set_global_status("displaying", f"Sending to display: {plugin_name}...", plugin_name, plugin_id)
-                            logger.info(f"Updating display. | refresh_info: {refresh_info}")
-                            # Kill splash BEFORE writing to fb0 to prevent race condition
-                            # (splash writes every 0.5s and could overwrite our image)
-                            self._stop_splash_if_needed()
-                            self.display_manager.display_image(image, image_settings=plugin.config.get("image_settings", []))
-                            # Simple log for easy scanning of display history
-                            logger.info(f"DISPLAYED: {plugin_name}")
-                            self._displayed_this_boot = True
-                            self._set_global_status("displayed", f"Displayed: {plugin_name}", plugin_name, plugin_id)
-                        else:
-                            logger.info(f"Image already displayed, skipping refresh. | refresh_info: {refresh_info}")
-                            self._set_global_status("idle", f"No change: {plugin_name}", plugin_name, plugin_id)
-
-                        # update latest refresh data in the device config (in-memory only)
-                        self.device_config.refresh_info = RefreshInfo(**refresh_info)
-
-                        # Track loop rotation time (distinct from auto-refresh time)
-                        # This ensures the countdown timer reflects actual loop rotations,
-                        # not auto-refresh cycles that shouldn't reset it.
-                        if isinstance(refresh_action, LoopRefresh):
-                            self.last_loop_rotation_time = current_dt
-
-                        # Track plugin settings for auto-refresh
-                        plugin_settings = getattr(refresh_action, 'plugin_settings', None)
-                        if plugin_settings is None and hasattr(refresh_action, 'plugin_reference'):
-                            plugin_settings = dict(refresh_action.plugin_reference.plugin_settings or {})
-                            # If loop plugin has a refresh interval but no explicit autoRefresh,
-                            # use the loop's per-plugin refresh interval as auto-refresh.
-                            # This ensures plugins like ShazamPi that need continuous refresh
-                            # keep refreshing while displayed.
-                            if not plugin_settings.get('autoRefresh'):
-                                ref = refresh_action.plugin_reference
-                                if ref.refresh_interval_seconds and ref.refresh_interval_seconds < loop_manager.rotation_interval_seconds:
-                                    interval_minutes = ref.refresh_interval_seconds / 60
-                                    if interval_minutes > 0:
-                                        plugin_settings['autoRefresh'] = str(interval_minutes)
-                                        logger.info(f"Deriving autoRefresh={interval_minutes}min from loop refresh_interval for {ref.plugin_id}")
-                        self._update_auto_refresh_tracking(plugin_settings, current_dt)
-
-                        # Batch config writes to reduce SD card wear
-                        # Only write periodically, not on every refresh
-                        self.refresh_counter += 1
-                        if self.refresh_counter >= self.config_write_interval:
-                            logger.debug(f"Writing config to disk (batched after {self.refresh_counter} refreshes)")
-                            self.device_config.write_config()
-                            self.refresh_counter = 0
-
-                        # Clean up memory after successful refresh to prevent accumulation
-                        gc.collect()
+                    self._execute_refresh_action(refresh_action, current_dt, latest_refresh, loop_manager)
+                    gc.collect()
 
             except Exception as e:
                 logger.exception('Exception during refresh')
-                self.refresh_result["exception"] = e  # Capture exception
+                self.refresh_result["exception"] = e
                 self._set_global_status("error", f"Error: {e}")
-                # Trigger garbage collection to clean up any partially-loaded resources
-                # from failed image generation (PIL Images, HTTP connections, etc.)
                 gc.collect()
             finally:
                 self.refresh_event.set()
+
+    def _compute_sleep_time(self, loop_manager):
+        """Compute how long to sleep before the next refresh cycle.
+
+        Considers the loop rotation interval, per-plugin auto-refresh settings,
+        display blanked state, and first-run flag.
+
+        Returns:
+            tuple: (sleep_time_seconds, use_auto_refresh, auto_refresh_seconds)
+        """
+        sleep_time = loop_manager.rotation_interval_seconds
+
+        # Pinned plugin uses its own auto-refresh settings
+        loop_override = self.device_config.get_loop_override()
+        if loop_override and loop_override.get("type") == "plugin":
+            pinned_id = loop_override.get("plugin_id")
+            pinned_settings = self.device_config.get_config(
+                f"plugin_last_settings_{pinned_id}", default={}
+            )
+            pinned_ar = pinned_settings.get("autoRefresh")
+            if pinned_ar:
+                try:
+                    auto_refresh_seconds = round(float(pinned_ar) * 60)
+                except (ValueError, TypeError):
+                    auto_refresh_seconds = self._get_auto_refresh_seconds()
+            else:
+                auto_refresh_seconds = self._get_auto_refresh_seconds()
+        else:
+            auto_refresh_seconds = self._get_auto_refresh_seconds()
+
+        use_auto_refresh = False
+        if auto_refresh_seconds:
+            if auto_refresh_seconds < sleep_time:
+                sleep_time = auto_refresh_seconds
+                use_auto_refresh = True
+                logger.info(f"Auto-refresh configured: {auto_refresh_seconds}s, using as sleep interval")
+            else:
+                use_auto_refresh = True
+                logger.info(f"Auto-refresh configured: {auto_refresh_seconds}s, but loop interval {sleep_time}s is shorter")
+
+        # Reduce refresh frequency when display is blanked — nobody is watching
+        BLANKED_INTERVAL = 300
+        is_blanked = getattr(self.display_manager, '_display_blanked', False)
+        if is_blanked and sleep_time < BLANKED_INTERVAL:
+            logger.info(f"Display blanked, extending sleep from {sleep_time}s to {BLANKED_INTERVAL}s")
+            sleep_time = BLANKED_INTERVAL
+
+        if self.first_run:
+            sleep_time = 3
+            logger.info("First run after boot, using 3s startup delay")
+
+        return sleep_time, use_auto_refresh, auto_refresh_seconds
+
+    def _update_idle_status(self, sleep_time, use_auto_refresh, auto_refresh_seconds, loop_manager):
+        """Update global status with idle countdown information.
+
+        Called before the condition wait so the web UI shows accurate timing.
+        Skipped for very short intervals (< 15s) like continuous Shazam refresh.
+        """
+        loop_enabled = self.device_config.get_config("loop_enabled", default=True)
+        loop_interval = loop_manager.rotation_interval_seconds
+        is_refresh = use_auto_refresh and auto_refresh_seconds and auto_refresh_seconds < loop_interval
+
+        loop_remaining = None
+        if loop_enabled:
+            if self.last_loop_rotation_time:
+                current_dt = self._get_current_datetime()
+                elapsed = (current_dt - self.last_loop_rotation_time).total_seconds()
+                loop_remaining = max(0, int(loop_interval - elapsed))
+            else:
+                loop_remaining = int(loop_interval)
+
+        is_blanked = getattr(self.display_manager, '_display_blanked', False)
+        blanked_prefix = "Display off · " if is_blanked else ""
+        time_str = self._format_duration(sleep_time)
+        if loop_enabled and is_refresh and loop_remaining is not None:
+            loop_str = self._format_duration(loop_remaining)
+            detail = f"{blanked_prefix}Refresh in {time_str} · Next plugin in {loop_str}"
+        elif loop_enabled:
+            detail = f"{blanked_prefix}Next plugin in {time_str}"
+        else:
+            detail = f"{blanked_prefix}Next refresh in {time_str}"
+
+        self._set_global_status("idle", detail,
+                                countdown_seconds=int(sleep_time),
+                                loop_rotation_seconds=loop_remaining,
+                                is_auto_refresh=is_refresh,
+                                loop_enabled=loop_enabled)
+
+    def _check_wifi_connectivity(self):
+        """Check WiFi state and attempt reconnection if needed.
+
+        Returns:
+            bool: True if the refresh cycle should proceed, False if it should
+                  be skipped (AP mode active or WiFi lost and AP mode started).
+        """
+        from utils.wifi_manager import STATE_AP_MODE
+        if self.wifi_manager.state == STATE_AP_MODE:
+            logger.debug("In AP mode, skipping plugin refresh")
+            return False
+
+        wifi_ok = False
+        for attempt in range(3):
+            if self.wifi_manager.check_connectivity():
+                wifi_ok = True
+                break
+            if attempt < 2:
+                logger.debug("Connectivity check failed (attempt %d/3), retrying...", attempt + 1)
+                time.sleep(5)
+
+        if not wifi_ok:
+            if self.wifi_manager.state != STATE_AP_MODE:
+                logger.warning("WiFi lost after 3 checks, entering AP mode")
+                device_name = self.device_config.get_config("device_name", default="DashPi")
+                self.wifi_manager.start_ap_mode(device_name)
+                try:
+                    from utils.wifi_display import generate_wifi_setup_image
+                    ap_ssid = self.wifi_manager.get_ap_ssid(device_name)
+                    portal_url = f"http://{self.wifi_manager.get_hotspot_ip()}/wifi"
+                    img = generate_wifi_setup_image(
+                        self.device_config.get_resolution(),
+                        ap_ssid, portal_url,
+                        password=self.wifi_manager.get_ap_password()
+                    )
+                    self.display_manager.display_image(img)
+                except Exception as e:
+                    logger.error("Failed to show WiFi setup image: %s", e)
+                self._set_global_status("idle", "WiFi Setup — waiting for configuration")
+            return False
+
+        return True
+
+    def _determine_refresh_action(self, current_dt, latest_refresh, loop_manager,
+                                   use_auto_refresh, auto_refresh_seconds):
+        """Decide what refresh action to take this cycle.
+
+        Priority order:
+        1. Manual update request
+        2. Pinned plugin switch (if wrong plugin is displayed)
+        3. Loop rotation (if interval elapsed)
+        4. Auto-refresh (if configured and due)
+        5. First-boot render (loop disabled or plugin pinned)
+        6. None (nothing to do this cycle)
+
+        Returns:
+            RefreshAction or None
+        """
+        if self.manual_update_request:
+            logger.info("Manual update requested")
+            refresh_action = self.manual_update_request
+            self.manual_update_request = ()
+            pname = self._get_display_name(refresh_action.get_plugin_id())
+            self._set_global_status("refreshing", f"Updating {pname}...", pname, refresh_action.get_plugin_id())
+            return refresh_action
+
+        if self.device_config.get_config("log_system_stats"):
+            self.log_system_stats()
+
+        loop_enabled = self.device_config.get_config("loop_enabled", default=True)
+        loop_override = self.device_config.get_loop_override()
+        plugin_pin_active = loop_override and loop_override.get("type") == "plugin"
+
+        loop_rotation_due = False
+        if loop_enabled and not plugin_pin_active:
+            rotation_interval = loop_manager.rotation_interval_seconds
+            if self.last_loop_rotation_time:
+                elapsed_since_rotation = (current_dt - self.last_loop_rotation_time).total_seconds()
+                loop_rotation_due = elapsed_since_rotation >= rotation_interval
+            else:
+                loop_rotation_due = True  # No rotation tracked yet — first run
+
+        if plugin_pin_active and latest_refresh and latest_refresh.plugin_id != loop_override.get("plugin_id"):
+            pinned_id = loop_override.get("plugin_id")
+            logger.info(f"Switching to pinned plugin: {pinned_id}")
+            plugin_settings = self.device_config.get_config(
+                f"plugin_last_settings_{pinned_id}", default={}
+            )
+            refresh_action = AutoRefresh(pinned_id, plugin_settings)
+            pname = self._get_display_name(pinned_id)
+            self._set_global_status("refreshing", f"Pinned: {pname}...", pname, pinned_id)
+            return refresh_action
+
+        elif loop_rotation_due:
+            logger.info(f"Running interval refresh check. | current_time: {current_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+            loop, plugin_ref = self._determine_next_plugin_loop_mode(loop_manager, current_dt, override=loop_override)
+            if plugin_ref:
+                refresh_action = LoopRefresh(loop, plugin_ref)
+                pname = self._get_display_name(plugin_ref.plugin_id)
+                self._set_global_status("refreshing", f"Loading {pname}...", pname, plugin_ref.plugin_id)
+                return refresh_action
+
+        elif use_auto_refresh and self._should_auto_refresh(current_dt):
+            # Auto-refresh the pinned plugin if one is active, otherwise use last-tracked plugin
+            if plugin_pin_active:
+                ar_plugin_id = loop_override.get("plugin_id")
+                ar_settings = self.device_config.get_config(
+                    f"plugin_last_settings_{ar_plugin_id}", default=self.auto_refresh_plugin_settings
+                )
+            else:
+                ar_plugin_id = latest_refresh.plugin_id
+                ar_settings = self.auto_refresh_plugin_settings
+            logger.info(f"Auto-refreshing current plugin: {ar_plugin_id}")
+            refresh_action = AutoRefresh(ar_plugin_id, ar_settings)
+            pname = self._get_display_name(ar_plugin_id)
+            self._set_global_status("refreshing", f"Auto-refreshing {pname}...", pname, ar_plugin_id)
+            return refresh_action
+
+        elif not loop_enabled or plugin_pin_active:
+            # Standalone / pinned mode — render on first boot, then wait for auto-refresh
+            first_boot_plugin_id = None
+            if not self._displayed_this_boot:
+                if plugin_pin_active:
+                    first_boot_plugin_id = loop_override.get("plugin_id")
+                elif latest_refresh and latest_refresh.plugin_id:
+                    first_boot_plugin_id = latest_refresh.plugin_id
+                else:
+                    first_boot_plugin_id = self._find_any_plugin_id()
+                    if first_boot_plugin_id:
+                        logger.info(f"No last plugin known, falling back to: {first_boot_plugin_id}")
+
+            if first_boot_plugin_id:
+                logger.info(f"First display after boot, rendering: {first_boot_plugin_id}")
+                plugin_settings = self.auto_refresh_plugin_settings or {}
+                if not (latest_refresh and latest_refresh.plugin_id):
+                    plugin_settings = self.device_config.get_config(
+                        f"plugin_last_settings_{first_boot_plugin_id}", default={}
+                    )
+                refresh_action = AutoRefresh(first_boot_plugin_id, plugin_settings)
+                pname = self._get_display_name(first_boot_plugin_id)
+                self._set_global_status("refreshing", f"Loading {pname}...", pname, first_boot_plugin_id)
+                return refresh_action
+            elif use_auto_refresh:
+                elapsed = (current_dt - self.last_display_time).total_seconds() if self.last_display_time else 0
+                logger.info(f"Loop disabled, auto-refresh waiting (elapsed: {elapsed:.0f}s / {self._get_auto_refresh_seconds()}s)")
+            else:
+                logger.info("Loop rotation is disabled, no action needed")
+                self._stop_splash_if_needed()
+
+        return None
+
+    def _execute_refresh_action(self, refresh_action, current_dt, latest_refresh, loop_manager):
+        """Execute a refresh action: generate image, apply styles, send to display.
+
+        Updates refresh tracking state and batches periodic config writes.
+        """
+        plugin_config = self.device_config.get_plugin(refresh_action.get_plugin_id())
+        if plugin_config is None:
+            logger.error(f"Plugin config not found for '{refresh_action.get_plugin_id()}'.")
+            self._set_global_status("error", f"Plugin not found: {refresh_action.get_plugin_id()}")
+            return
+
+        plugin = get_plugin_instance(plugin_config)
+        plugin_name = plugin_config.get("display_name", refresh_action.get_plugin_id())
+        plugin_id = refresh_action.get_plugin_id()
+
+        self._set_global_status("generating", f"Generating {plugin_name}...", plugin_name, plugin_id)
+        image = refresh_action.execute(plugin, self.device_config, current_dt)
+
+        # Persist plugin settings back (plugins may reconcile/modify settings)
+        plugin_settings_after = getattr(refresh_action, 'plugin_settings', None)
+        if plugin_settings_after:
+            self.device_config.update_value(
+                f"plugin_last_settings_{plugin_id}", dict(plugin_settings_after), write=False
+            )
+        elif hasattr(refresh_action, 'plugin_reference'):
+            ref_settings = refresh_action.plugin_reference.plugin_settings
+            if ref_settings:
+                self.device_config.update_value(
+                    f"plugin_last_settings_{plugin_id}", dict(ref_settings), write=False
+                )
+
+        # Plugin returned None — skip display (e.g. ShazamPi grace period)
+        if image is None:
+            logger.info(f"Plugin returned None, skipping display update. | plugin_id: {plugin_id}")
+            self._set_global_status("displayed", f"No update needed: {plugin_name}", plugin_name, plugin_id)
+            return
+
+        # Apply style settings (frames + margins) if configured
+        ps = getattr(refresh_action, 'plugin_settings', None)
+        if ps is None and hasattr(refresh_action, 'plugin_reference'):
+            ps = getattr(refresh_action.plugin_reference, 'plugin_settings', None)
+        if ps:
+            image = self._apply_style_settings(image, ps)
+
+        if self.device_config.get_config("show_plugin_icon", default=False):
+            image = self._add_plugin_icon_overlay(image, plugin_id)
+
+        self._set_global_status("processing", f"Processing {plugin_name}...", plugin_name, plugin_id)
+        image_hash = compute_image_hash(image)
+
+        refresh_info = refresh_action.get_refresh_info()
+        refresh_info.update({"refresh_time": current_dt.isoformat(), "image_hash": image_hash})
+
+        is_manual = isinstance(refresh_action, ManualRefresh)
+        if is_manual or not self._displayed_this_boot or image_hash != latest_refresh.image_hash:
+            self._set_global_status("displaying", f"Sending to display: {plugin_name}...", plugin_name, plugin_id)
+            logger.info(f"Updating display. | refresh_info: {refresh_info}")
+            # Kill splash BEFORE writing to fb0 to prevent race condition
+            self._stop_splash_if_needed()
+            self.display_manager.display_image(image, image_settings=plugin.config.get("image_settings", []))
+            logger.info(f"DISPLAYED: {plugin_name}")
+            self._displayed_this_boot = True
+            self._set_global_status("displayed", f"Displayed: {plugin_name}", plugin_name, plugin_id)
+        else:
+            logger.info(f"Image already displayed, skipping refresh. | refresh_info: {refresh_info}")
+            self._set_global_status("idle", f"No change: {plugin_name}", plugin_name, plugin_id)
+
+        self.device_config.refresh_info = RefreshInfo(**refresh_info)
+
+        if isinstance(refresh_action, LoopRefresh):
+            self.last_loop_rotation_time = current_dt
+
+        # Track plugin settings for auto-refresh
+        plugin_settings = getattr(refresh_action, 'plugin_settings', None)
+        if plugin_settings is None and hasattr(refresh_action, 'plugin_reference'):
+            plugin_settings = dict(refresh_action.plugin_reference.plugin_settings or {})
+            # Derive autoRefresh from loop's per-plugin refresh_interval if not explicit
+            # (ensures ShazamPi-style continuous refresh keeps working while displayed)
+            if not plugin_settings.get('autoRefresh'):
+                ref = refresh_action.plugin_reference
+                if ref.refresh_interval_seconds and ref.refresh_interval_seconds < loop_manager.rotation_interval_seconds:
+                    interval_minutes = ref.refresh_interval_seconds / 60
+                    if interval_minutes > 0:
+                        plugin_settings['autoRefresh'] = str(interval_minutes)
+                        logger.info(f"Deriving autoRefresh={interval_minutes}min from loop refresh_interval for {ref.plugin_id}")
+        self._update_auto_refresh_tracking(plugin_settings, current_dt)
+
+        # Batch config writes to reduce SD card wear
+        self.refresh_counter += 1
+        if self.refresh_counter >= self.config_write_interval:
+            logger.debug(f"Writing config to disk (batched after {self.refresh_counter} refreshes)")
+            self.device_config.write_config()
+            self.refresh_counter = 0
 
     def manual_update(self, refresh_action):
         """Manually triggers an update for the specified plugin id and plugin settings by notifying the background process.

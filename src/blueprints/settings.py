@@ -471,12 +471,15 @@ def import_config():
                 shutil.copy2(config_path, backup_path)
                 logger.info(f"Backed up config to {backup_path}")
 
-            # Apply device.json — update in-memory config AND rebuild model objects
-            # (write_config serializes from loop_manager, so we must reload it
-            # or the old in-memory state overwrites the imported loops)
-            device_config.update_config(config_data)
+            # Apply device.json — update in-memory config AND rebuild model objects.
+            # Order matters: write_config serializes from loop_manager.to_dict(), so we
+            # must rebuild loop_manager from the imported data BEFORE calling write_config.
+            # Calling update_config() here would be wrong: it triggers write_config
+            # internally, which first overwrites loop_config with the old loop_manager.
+            device_config.config.update(config_data)
             if 'loop_config' in config_data:
                 device_config.loop_manager = device_config.load_loop_manager()
+            device_config.write_config()
             logger.info("Imported device.json")
 
             # Apply .env if present

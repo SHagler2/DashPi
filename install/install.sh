@@ -60,6 +60,7 @@ show_loader() {
     spinstr=${temp}${spinstr%"${temp}"}
     sleep ${delay}
   done
+  wait "${pid}"  # capture exit status of the backgrounded process (not the last sleep)
   if [[ $? -eq 0 ]]; then
     printf "\r$1 [\e[32m\xE2\x9C\x94\e[0m]\n"
   else

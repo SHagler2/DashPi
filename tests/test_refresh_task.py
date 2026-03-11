@@ -3,6 +3,9 @@
 Coverage:
   - ManualRefresh / AutoRefresh / LoopRefresh action class unit tests
   - End-to-end smoke test: manual_update → Clock plugin → display_manager.display_image()
+  - _compute_sleep_time: sleep interval, auto-refresh, blanked-display, first-run
+  - _determine_refresh_action: manual priority, loop rotation, auto-refresh, standalone
+  - _execute_refresh_action: plugin-not-found error, plugin-returns-None, display called
 """
 
 import os
@@ -237,3 +240,228 @@ class TestRefreshTaskCriticalPath:
             mock_display.display_image.assert_not_called()
         finally:
             task.stop()
+
+
+# ---------------------------------------------------------------------------
+# _compute_sleep_time unit tests
+# ---------------------------------------------------------------------------
+
+class TestComputeSleepTime:
+    def _make_task(self, task_config, mock_display):
+        task = RefreshTask(task_config, mock_display)
+        task._set_global_status = MagicMock()
+        task._stop_splash_if_needed = MagicMock()
+        return task
+
+    def test_returns_loop_interval_by_default(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display)
+        task.first_run = False
+        loop_mgr = task_config.get_loop_manager()
+        loop_mgr.rotation_interval_seconds = 300
+        task_config.get_loop_override.return_value = None
+
+        sleep_time, use_auto, ar_secs = task._compute_sleep_time(loop_mgr)
+
+        assert sleep_time == 300
+        assert use_auto is False
+        assert ar_secs is None
+
+    def test_first_run_always_uses_3s(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display)
+        task.first_run = True
+        loop_mgr = task_config.get_loop_manager()
+        loop_mgr.rotation_interval_seconds = 300
+        task_config.get_loop_override.return_value = None
+
+        sleep_time, _, _ = task._compute_sleep_time(loop_mgr)
+        assert sleep_time == 3
+
+    def test_blanked_display_extends_to_300s(self, task_config, mock_display):
+        mock_display._display_blanked = True
+        task = self._make_task(task_config, mock_display)
+        task.first_run = False
+        loop_mgr = task_config.get_loop_manager()
+        loop_mgr.rotation_interval_seconds = 60
+        task_config.get_loop_override.return_value = None
+
+        sleep_time, _, _ = task._compute_sleep_time(loop_mgr)
+        assert sleep_time == 300
+
+    def test_auto_refresh_shorter_than_loop_sets_flag(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display)
+        task.first_run = False
+        task.auto_refresh_plugin_settings = {"autoRefresh": "1"}  # 1 minute = 60s
+        task.last_display_time = datetime.now(timezone.utc)
+        loop_mgr = task_config.get_loop_manager()
+        loop_mgr.rotation_interval_seconds = 300
+        task_config.get_loop_override.return_value = None
+
+        sleep_time, use_auto, ar_secs = task._compute_sleep_time(loop_mgr)
+        assert use_auto is True
+        assert ar_secs == 60
+        assert sleep_time == 60  # shorter than loop interval
+
+
+# ---------------------------------------------------------------------------
+# _determine_refresh_action unit tests
+# ---------------------------------------------------------------------------
+
+class TestDetermineRefreshAction:
+    def _make_task(self, task_config, mock_display):
+        task = RefreshTask(task_config, mock_display)
+        task._set_global_status = MagicMock()
+        task._stop_splash_if_needed = MagicMock()
+        return task
+
+    def _base_config_side(self, key=None, default=None):
+        vals = {
+            "loop_enabled": True,
+            "log_system_stats": False,
+            "orientation": "horizontal",
+            "timezone": "UTC",
+            "display_type": "mock",
+            "auto_refresh_tracking": {},
+        }
+        if key is None:
+            return dict(vals)
+        return vals.get(key, default)
+
+    def test_manual_update_takes_priority(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display)
+        task_config.get_config.side_effect = self._base_config_side
+
+        action = ManualRefresh("clock", {})
+        task.manual_update_request = action
+
+        loop_mgr = task_config.get_loop_manager()
+        loop_mgr.rotation_interval_seconds = 300
+        latest_refresh = task_config.get_refresh_info()
+        current_dt = datetime.now(timezone.utc)
+
+        result = task._determine_refresh_action(current_dt, latest_refresh, loop_mgr, False, None)
+
+        assert result is action
+        assert task.manual_update_request == ()
+
+    def test_loop_rotation_due_on_first_run(self, task_config, mock_display):
+        """With no last rotation time, loop rotation should be due on the first call."""
+        task = self._make_task(task_config, mock_display)
+        task_config.get_config.side_effect = self._base_config_side
+        task.manual_update_request = ()
+        task.last_loop_rotation_time = None
+
+        loop_mgr = task_config.get_loop_manager()
+        loop_mgr.rotation_interval_seconds = 300
+        task_config.get_loop_override.return_value = None
+
+        # Wire loop manager to return a plugin ref
+        plugin_ref = MagicMock()
+        plugin_ref.plugin_id = "clock"
+        loop = MagicMock()
+        loop_mgr.determine_active_loop.return_value = loop
+        with patch.object(task, '_determine_next_plugin_loop_mode', return_value=(loop, plugin_ref)):
+            current_dt = datetime.now(timezone.utc)
+            latest_refresh = task_config.get_refresh_info()
+            result = task._determine_refresh_action(current_dt, latest_refresh, loop_mgr, False, None)
+
+        assert isinstance(result, LoopRefresh)
+
+    def test_returns_none_when_loop_disabled_and_already_displayed(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display)
+        task_config.get_loop_override.return_value = None
+        task.manual_update_request = ()
+        task._displayed_this_boot = True
+
+        def cfg_no_loop(key=None, default=None):
+            vals = {"loop_enabled": False, "log_system_stats": False}
+            if key is None:
+                return dict(vals)
+            return vals.get(key, default)
+
+        task_config.get_config.side_effect = cfg_no_loop
+
+        loop_mgr = task_config.get_loop_manager()
+        loop_mgr.rotation_interval_seconds = 300
+        latest_refresh = task_config.get_refresh_info()
+        current_dt = datetime.now(timezone.utc)
+
+        result = task._determine_refresh_action(current_dt, latest_refresh, loop_mgr, False, None)
+        assert result is None
+
+    def test_manual_clears_request_from_queue(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display)
+        task_config.get_config.side_effect = self._base_config_side
+
+        action = ManualRefresh("weather", {"units": "imperial"})
+        task.manual_update_request = action
+
+        loop_mgr = task_config.get_loop_manager()
+        result = task._determine_refresh_action(
+            datetime.now(timezone.utc), task_config.get_refresh_info(), loop_mgr, False, None
+        )
+
+        assert result is action
+        assert task.manual_update_request == ()  # cleared
+
+
+# ---------------------------------------------------------------------------
+# _execute_refresh_action unit tests
+# ---------------------------------------------------------------------------
+
+class TestExecuteRefreshAction:
+    def _make_task(self, task_config, mock_display):
+        task = RefreshTask(task_config, mock_display)
+        task._set_global_status = MagicMock()
+        task._stop_splash_if_needed = MagicMock()
+        return task
+
+    def test_plugin_not_found_sets_error_status(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display)
+        task_config.get_plugin.return_value = None
+
+        loop_mgr = task_config.get_loop_manager()
+        action = ManualRefresh("missing_plugin", {})
+        task._execute_refresh_action(action, datetime.now(timezone.utc),
+                                     task_config.get_refresh_info(), loop_mgr)
+
+        mock_display.display_image.assert_not_called()
+        task._set_global_status.assert_called_with("error", "Plugin not found: missing_plugin")
+
+    def test_plugin_returns_none_skips_display(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display)
+
+        plugin_cfg = {"id": "clock", "display_name": "Clock", "class": "Clock", "image_settings": []}
+        task_config.get_plugin.return_value = plugin_cfg
+
+        mock_plugin = MagicMock()
+        mock_plugin.config = {"image_settings": []}
+        mock_plugin.generate_image.return_value = None  # simulate grace-period skip
+
+        loop_mgr = task_config.get_loop_manager()
+        action = ManualRefresh("clock", {})
+
+        with patch("refresh_task.get_plugin_instance", return_value=mock_plugin):
+            task._execute_refresh_action(action, datetime.now(timezone.utc),
+                                         task_config.get_refresh_info(), loop_mgr)
+
+        mock_display.display_image.assert_not_called()
+
+    def test_successful_render_calls_display_image(self, task_config, mock_display):
+        from plugins.plugin_registry import load_plugins, PLUGIN_CLASSES
+
+        plugin_cfg = {"id": "clock", "display_name": "Clock", "class": "Clock", "image_settings": []}
+        if "clock" not in PLUGIN_CLASSES:
+            load_plugins([plugin_cfg])
+        task_config.get_plugin.side_effect = lambda pid: plugin_cfg if pid == "clock" else None
+
+        task = self._make_task(task_config, mock_display)
+        loop_mgr = task_config.get_loop_manager()
+        action = ManualRefresh("clock", {"face": "digital", "showTitle": "false"})
+
+        task._execute_refresh_action(action, datetime.now(timezone.utc),
+                                     task_config.get_refresh_info(), loop_mgr)
+
+        mock_display.display_image.assert_called_once()
+        img_arg = mock_display.display_image.call_args[0][0]
+        from PIL import Image as PILImage
+        assert isinstance(img_arg, PILImage.Image)
