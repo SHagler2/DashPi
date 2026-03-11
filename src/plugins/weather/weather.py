@@ -407,6 +407,9 @@ class Weather(BasePlugin):
                                 forecast_font, forecast_temp_font, small_font,
                                 text_color, data.get("units", "metric"), show_moon)
 
+        if data.get("alerts"):
+            self._draw_alert_banner(image, data["alerts"], width, height)
+
         return image
 
     def _draw_data_points(self, draw, image, data_points, x, y, w, h,
@@ -591,6 +594,50 @@ class Weather(BasePlugin):
                 draw.text((moon_x + moon_size + 6, iy + 2), f"{moon_pct} %",
                           font=small_font, fill=text_color)
 
+    def _draw_alert_banner(self, image, alerts, width, height):
+        """Overlay a colored alert banner at the bottom of the image.
+
+        Picks the highest-severity alert and draws a semi-transparent bar
+        with white text. Color-coded by severity:
+          red    — Warning / Emergency
+          orange — Watch
+          amber  — Advisory / Statement
+        """
+        def _severity(event):
+            name = event.lower()
+            if "warning" in name or "emergency" in name:
+                return 0
+            if "watch" in name:
+                return 1
+            if "advisory" in name or "statement" in name:
+                return 2
+            return 3
+
+        alert = min(alerts, key=lambda a: _severity(a["event"]))
+        event_name = alert["event"]
+        name_lower = event_name.lower()
+
+        if "warning" in name_lower or "emergency" in name_lower:
+            banner_color = (180, 30, 30, 215)
+        elif "watch" in name_lower:
+            banner_color = (200, 100, 0, 215)
+        elif "advisory" in name_lower or "statement" in name_lower:
+            banner_color = (160, 130, 0, 215)
+        else:
+            banner_color = (150, 80, 0, 215)
+
+        banner_h = int(height * 0.07)
+        banner_y = height - banner_h
+
+        overlay = Image.new("RGBA", (width, banner_h), banner_color)
+        image.paste(overlay, (0, banner_y), overlay)
+
+        draw = ImageDraw.Draw(image)
+        font = get_font("Jost", max(int(height * 0.032), 12), "bold")
+        text = f"\u26a0 {event_name.upper()}"
+        tw, th = get_text_dimensions(draw, text, font)
+        draw.text(((width - tw) // 2, banner_y + (banner_h - th) // 2), text, font=font, fill=(255, 255, 255))
+
     def parse_weather_data(self, weather_data, aqi_data, tz, units, time_format, lat):
         """Parse OpenWeatherMap One Call v3 response into a normalized template dict.
 
@@ -629,6 +676,12 @@ class Weather(BasePlugin):
         data['data_points'] = self.parse_data_points(weather_data, aqi_data, tz, units, time_format)
 
         data['hourly_forecast'] = self.parse_hourly(weather_data.get('hourly') or [], tz, time_format, units, daily_forecast)
+
+        alerts_raw = weather_data.get("alerts", [])
+        data['alerts'] = [
+            {"event": a.get("event", ""), "sender": a.get("sender_name", "")}
+            for a in alerts_raw if a.get("event")
+        ]
         return data
 
     def parse_open_meteo_data(self, weather_data, aqi_data, tz, units, time_format, lat):
@@ -658,8 +711,9 @@ class Weather(BasePlugin):
 
         data['forecast'] = self.parse_open_meteo_forecast(weather_data.get('daily', {}), units, tz, is_day, lat)
         data['data_points'] = self.parse_open_meteo_data_points(weather_data, aqi_data, units, tz, time_format)
-        
+
         data['hourly_forecast'] = self.parse_open_meteo_hourly(weather_data.get('hourly', {}), units, tz, time_format, daily.get('sunrise', []), daily.get('sunset', []))
+        data['alerts'] = []  # Open-Meteo does not provide weather alerts
         return data
 
     def map_weather_code_to_icon(self, weather_code, is_day):
