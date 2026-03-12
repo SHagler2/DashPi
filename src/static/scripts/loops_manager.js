@@ -208,6 +208,38 @@ window.onclick = function(event) {
 
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', () => {
+    // Edit loop buttons
+    document.querySelectorAll('.edit-loop-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            openEditLoopModal(this.dataset.loopName, this.dataset.startTime, this.dataset.endTime);
+        });
+    });
+
+    // Delete loop buttons
+    document.querySelectorAll('.delete-loop-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            deleteLoop(this.dataset.loopName);
+        });
+    });
+
+    // Activate/Deactivate loop buttons
+    document.querySelectorAll('.activate-loop-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (this.dataset.isOverride === 'true') {
+                clearOverride();
+            } else {
+                activateLoopOverride(this.dataset.loopName);
+            }
+        });
+    });
+
+    // Toggle Randomize buttons
+    document.querySelectorAll('.toggle-randomize-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            toggleRandomize(this.dataset.loopName);
+        });
+    });
+
     // Edit plugin buttons navigate to full settings page
     document.querySelectorAll('.edit-plugin-btn').forEach(btn => {
         btn.addEventListener('click', function() {
