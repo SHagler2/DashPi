@@ -144,6 +144,7 @@ class ISSTracker(BasePlugin):
         arr[:,:,1] = lum * 50   # G channel
         arr[:,:,2] = lum * 30   # B channel
         tinted = Image.fromarray(arr.astype(np.uint8), "RGBA")
+        del arr
         self._iss_marker = tinted
         self._iss_marker_target = target
         logger.info(f"ISS marker scaled and tinted to {target}px")

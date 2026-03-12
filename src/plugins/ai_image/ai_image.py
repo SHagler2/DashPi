@@ -106,7 +106,7 @@ class AIImage(BasePlugin):
 
     def _add_title_overlay(self, image: Image.Image, title: str) -> Image.Image:
         """Add title text overlay at the bottom of the image using full width."""
-        img_with_overlay = image.copy()
+        img_with_overlay = image.convert("RGBA") if image.mode != "RGBA" else image
         draw = ImageDraw.Draw(img_with_overlay, 'RGBA')
 
         width, height = img_with_overlay.size
@@ -289,6 +289,11 @@ class AIImage(BasePlugin):
             else:
                 aspect_ratio = "9:16"
 
+            # Target display resolution — resize immediately after decode to cap peak memory
+            display_dims = device_config.get_resolution()
+            if orientation == "vertical":
+                display_dims = display_dims[::-1]
+
             if image_model in GEMINI_NATIVE_MODELS:
                 # Native Gemini image generation
                 response = client.models.generate_content(
@@ -303,7 +308,10 @@ class AIImage(BasePlugin):
                 )
                 for part in response.parts:
                     if part.inline_data is not None:
-                        img = Image.open(BytesIO(part.inline_data.data))
+                        buf = BytesIO(part.inline_data.data)
+                        img = Image.open(buf).copy()
+                        buf.close()
+                        img = img.resize(display_dims, Image.LANCZOS)
                         return img, text_prompt
                 raise RuntimeError("Gemini returned no image in response")
             else:
@@ -319,7 +327,10 @@ class AIImage(BasePlugin):
 
                 if result.generated_images:
                     img_data = result.generated_images[0].image
-                    img = Image.open(BytesIO(img_data.image_bytes))
+                    buf = BytesIO(img_data.image_bytes)
+                    img = Image.open(buf).copy()
+                    buf.close()
+                    img = img.resize(display_dims, Image.LANCZOS)
                     return img, text_prompt
                 else:
                     raise RuntimeError("Gemini returned no images")
@@ -368,11 +379,14 @@ class AIImage(BasePlugin):
             image_url = response.data[0].url
             session = get_http_session()
             response = session.get(image_url, timeout=30)
-            img = Image.open(BytesIO(response.content))
+            buf = BytesIO(response.content)
+            img = Image.open(buf).copy()
+            buf.close()
         elif model == "gpt-image-1":
             image_base64 = response.data[0].b64_json
-            image_bytes = base64.b64decode(image_base64)
-            img = Image.open(BytesIO(image_bytes))
+            buf = BytesIO(base64.b64decode(image_base64))
+            img = Image.open(buf).copy()
+            buf.close()
         return img
 
     def _fetch_openai_prompt(self, ai_client, from_prompt=None, is_news=False):

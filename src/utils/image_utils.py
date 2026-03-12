@@ -15,7 +15,9 @@ def get_image(image_url):
     response = session.get(image_url, timeout=30)
     img = None
     if 200 <= response.status_code < 300 or response.status_code == 304:
-        img = Image.open(BytesIO(response.content))
+        buf = BytesIO(response.content)
+        img = Image.open(buf).copy()
+        buf.close()
     else:
         logger.error(f"Received non-200 response from {image_url}: status_code: {response.status_code}")
     return img

@@ -621,7 +621,9 @@ def _generate_map_composite(lat, lon, zoom, cache_dir, cache_path):
                 resp = session.get(url, timeout=10)
                 resp.raise_for_status()
                 from io import BytesIO
-                tile = Image.open(BytesIO(resp.content)).convert("RGB")
+                buf = BytesIO(resp.content)
+                tile = Image.open(buf).copy().convert("RGB")
+                buf.close()
 
                 px = (dx + grid_radius) * TILE_SIZE
                 py = (dy + grid_radius) * TILE_SIZE

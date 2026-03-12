@@ -255,7 +255,8 @@ class DisplayManager:
             else:
                 return  # E-ink: no backlight control
 
-            image = Image.open(image_path)
+            with Image.open(image_path) as tmp:
+                image = tmp.copy()
             if image.mode not in ('RGB', 'L'):
                 image = image.convert('RGB')
 

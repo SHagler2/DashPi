@@ -329,7 +329,11 @@ class AdaptiveImageLoader:
                     response.close()
                     raise requests.exceptions.Timeout(
                         f"Download exceeded {timeout_secs:.0f}s time limit")
-            img = Image.open(BytesIO(b''.join(chunks)))
+            img_bytes = b''.join(chunks)
+            del chunks
+            buf = BytesIO(img_bytes)
+            del img_bytes
+            img = Image.open(buf)
             original_size = img.size
             original_pixels = original_size[0] * original_size[1]
             megapixels = original_pixels / 1_000_000
@@ -342,6 +346,9 @@ class AdaptiveImageLoader:
                 img.load()
                 logger.warning(f"Large image ({megapixels:.1f}MP), draft decoded to {img.size[0]}x{img.size[1]}")
                 gc.collect()
+            else:
+                img.load()
+            buf.close()
 
             if resize:
                 img = self._process_and_resize(img, dimensions, original_size, fit_mode)

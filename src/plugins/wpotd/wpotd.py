@@ -147,7 +147,10 @@ class Wpotd(BasePlugin):
                 session = get_http_session()
                 response = session.get(url, headers=self.HEADERS, timeout=30)
                 response.raise_for_status()
-                return Image.open(BytesIO(response.content))
+                buf = BytesIO(response.content)
+                img = Image.open(buf).copy()
+                buf.close()
+                return img
 
         except UnidentifiedImageError as e:
             logger.error(f"Unsupported image format at {url}: {str(e)}")
