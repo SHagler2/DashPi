@@ -23,7 +23,7 @@ jobs:
         run: sudo apt-get install -y libopenjp2-7 libtiff6 libatlas-base-dev
 
       - name: Install Python dependencies
-        run: pip install --no-cache-dir -r install/requirements.txt
+        run: pip install --no-cache-dir -r install/requirements.txt pytest
 
       - name: Run tests
         run: pytest --tb=short -q
