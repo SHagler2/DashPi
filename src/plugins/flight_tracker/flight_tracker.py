@@ -724,14 +724,11 @@ def _get_aircraft_category(ac):
     """Classify aircraft into one of: helicopter, airliner, business_jet, ga."""
     if _is_helicopter(ac):
         return "helicopter"
+    import re
     ac_type = (ac.get("aircraft_type") or "").upper()
-    if not ac_type:
-        # No type data — guess from callsign: 3 letters + digits = likely commercial
-        import re
-        callsign = (ac.get("callsign") or "").strip()
-        if re.match(r'^[A-Z]{3}\d', callsign):
-            return "airliner"
-        return "ga"
+    callsign = (ac.get("callsign") or "").strip()
+    is_commercial = bool(re.match(r'^[A-Z]{3}\d', callsign))
+
     airliner_prefixes = (
         "B71", "B72", "B73", "B74", "B75", "B76", "B77", "B78",  # Boeing
         "A30", "A31", "A32", "A33", "A34", "A35", "A38",           # Airbus
@@ -760,6 +757,9 @@ def _get_aircraft_category(ac):
     )
     if any(ac_type.startswith(p) for p in bizjet_prefixes):
         return "business_jet"
+    # Unrecognized type — fall back to callsign heuristic
+    if is_commercial:
+        return "airliner"
     return "ga"
 
 
