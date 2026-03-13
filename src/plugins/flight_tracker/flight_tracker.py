@@ -178,9 +178,10 @@ class FlightTracker(BasePlugin):
             for ac in aircraft:
                 _draw_aircraft_trail(draw, ac, lat, lon, zoom, w, map_h)
 
-        # Plot aircraft markers
+        # Plot aircraft markers — closest first; track placed labels to avoid overlaps
+        placed_labels = []
         for ac in aircraft:
-            _draw_aircraft_marker(draw, ac, lat, lon, zoom, w, map_h, units)
+            _draw_aircraft_marker(draw, ac, lat, lon, zoom, w, map_h, units, placed_labels)
 
         # Draw info strip
         self._draw_info_strip(draw, w, h, info_h, map_h, aircraft, units, radius_nm, lat, lon)
@@ -781,7 +782,7 @@ def _draw_aircraft_trail(draw, ac, center_lat, center_lon, zoom, vw, vh):
                 draw.line([(sx, sy), (ex, ey)], fill=pass_color, width=pass_width)
 
 
-def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units="imperial"):
+def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units="imperial", placed_labels=None):
     """Draw a rotated aircraft marker — airplane silhouette or helicopter diamond."""
     px, py = _latlon_to_pixel(ac["lat"], ac["lon"], center_lat, center_lon, zoom, vw, vh)
 
@@ -895,6 +896,19 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
             alt_tw, alt_th = get_text_dimensions(draw, alt_text, alt_font)
 
         pad = 3
+        total_h = th + (alt_th + 2 if alt_text else 0)
+        combined_w = max(tw, alt_tw) + pad * 2
+        label_rect = (label_x - pad, label_y - pad, label_x + combined_w, label_y + total_h + pad)
+
+        # Skip label if it overlaps a closer aircraft's label (emergencies always shown)
+        def _overlaps(r1, r2):
+            return not (r1[2] < r2[0] or r1[0] > r2[2] or r1[3] < r2[1] or r1[1] > r2[3])
+
+        if placed_labels is not None and not is_emerg:
+            if any(_overlaps(label_rect, r) for r in placed_labels):
+                return
+            placed_labels.append(label_rect)
+
         box_fill = (80, 0, 0, 200) if is_emerg else ((0, 0, 0, 160) if hasattr(draw, '_image') else (20, 25, 35))
         # Draw per-line backgrounds so each fits its own text width
         draw.rectangle(
