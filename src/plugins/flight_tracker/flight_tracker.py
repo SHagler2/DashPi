@@ -798,13 +798,26 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
         angle = 0
 
     if _is_helicopter(ac):
-        # Diamond with a short tail to distinguish from fixed-wing
-        raw_points = [
-            (0, -size),          # nose (top)
-            (size * 0.55, 0),    # right
-            (0, size * 0.6),     # bottom of diamond
-            (-size * 0.55, 0),   # left
-        ]
+        # Circle (fuselage) with two crossed rotor arms, rotated to heading
+        rotor = size * 1.1
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+
+        def rot(rx, ry):
+            return (px + rx * cos_a - ry * sin_a, py + rx * sin_a + ry * cos_a)
+
+        # Rotor arms (two lines through center, 90° apart)
+        r1s, r1e = rot(0, -rotor), rot(0, rotor)
+        r2s, r2e = rot(-rotor, 0), rot(rotor, 0)
+        draw.line([r1s, r1e], fill=(0, 0, 0), width=4)
+        draw.line([r2s, r2e], fill=(0, 0, 0), width=4)
+        draw.line([r1s, r1e], fill=color, width=2)
+        draw.line([r2s, r2e], fill=color, width=2)
+
+        # Fuselage circle
+        r = size * 0.45
+        draw.ellipse([(px - r - 1, py - r - 1), (px + r + 1, py + r + 1)], fill=(0, 0, 0))
+        draw.ellipse([(px - r, py - r), (px + r, py + r)], fill=color)
     else:
         raw_points = [
             (0, -size),
@@ -825,16 +838,16 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
             (-1.5, -size * 0.5),
         ]
 
-    cos_a = math.cos(angle)
-    sin_a = math.sin(angle)
-    rotated = []
-    for rx, ry in raw_points:
-        nx = px + rx * cos_a - ry * sin_a
-        ny = py + rx * sin_a + ry * cos_a
-        rotated.append((nx, ny))
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        rotated = []
+        for rx, ry in raw_points:
+            nx = px + rx * cos_a - ry * sin_a
+            ny = py + rx * sin_a + ry * cos_a
+            rotated.append((nx, ny))
 
-    # Dark outline for contrast against map, then colored fill
-    draw.polygon(rotated, fill=color, outline=(0, 0, 0), width=2)
+        # Dark outline for contrast against map, then colored fill
+        draw.polygon(rotated, fill=color, outline=(0, 0, 0), width=2)
 
     # Callsign + altitude label
     callsign = ac.get("callsign", "").strip()
