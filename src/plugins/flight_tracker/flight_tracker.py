@@ -895,7 +895,7 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
         if alt_text:
             alt_tw, alt_th = get_text_dimensions(draw, alt_text, alt_font)
 
-        pad = 3
+        pad = 2
         total_h = th + (alt_th + 2 if alt_text else 0)
         combined_w = max(tw, alt_tw) + pad * 2
         label_rect = (label_x - pad, label_y - pad, label_x + combined_w, label_y + total_h + pad)
@@ -917,10 +917,9 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
         )
         draw.text((label_x, label_y), callsign, fill=(255, 255, 255), font=label_font)
         if alt_text:
-            alt_pad = 2
             alt_y = label_y + th + pad + 2
             draw.rectangle(
-                [(label_x - pad, alt_y - alt_pad), (label_x + alt_tw + pad, alt_y + alt_th + alt_pad)],
+                [(label_x - pad, alt_y), (label_x + alt_tw + pad, alt_y + alt_th + pad)],
                 fill=box_fill
             )
             alt_color = (255, 80, 80) if is_emerg else (180, 200, 255)
