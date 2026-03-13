@@ -798,26 +798,41 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
         angle = 0
 
     if _is_helicopter(ac):
-        # Circle (fuselage) with two crossed rotor arms, rotated to heading
-        rotor = size * 1.1
+        # Top-down helicopter silhouette: X rotor, fuselage oval, tail boom + tail rotor
+        s = size
         cos_a = math.cos(angle)
         sin_a = math.sin(angle)
 
         def rot(rx, ry):
             return (px + rx * cos_a - ry * sin_a, py + rx * sin_a + ry * cos_a)
 
-        # Rotor arms (two lines through center, 90° apart)
-        r1s, r1e = rot(0, -rotor), rot(0, rotor)
-        r2s, r2e = rot(-rotor, 0), rot(rotor, 0)
-        draw.line([r1s, r1e], fill=(0, 0, 0), width=4)
-        draw.line([r2s, r2e], fill=(0, 0, 0), width=4)
-        draw.line([r1s, r1e], fill=color, width=2)
-        draw.line([r2s, r2e], fill=color, width=2)
+        # Rotor blades: X pattern at 45° to heading (drawn first, behind fuselage)
+        d = s * 1.05 * 0.707  # rotor_len / sqrt(2)
+        for p1, p2 in [((-d, -d), (d, d)), ((d, -d), (-d, d))]:
+            draw.line([rot(*p1), rot(*p2)], fill=(0, 0, 0), width=3)
+            draw.line([rot(*p1), rot(*p2)], fill=color, width=2)
 
-        # Fuselage circle
-        r = size * 0.45
-        draw.ellipse([(px - r - 1, py - r - 1), (px + r + 1, py + r + 1)], fill=(0, 0, 0))
-        draw.ellipse([(px - r, py - r), (px + r, py + r)], fill=color)
+        # Tail boom
+        draw.line([rot(0, s * 0.38), rot(0, s * 0.82)], fill=(0, 0, 0), width=3)
+        draw.line([rot(0, s * 0.38), rot(0, s * 0.82)], fill=color, width=2)
+
+        # Tail rotor (small perpendicular bar at boom end)
+        draw.line([rot(-s * 0.2, s * 0.82), rot(s * 0.2, s * 0.82)], fill=(0, 0, 0), width=3)
+        draw.line([rot(-s * 0.2, s * 0.82), rot(s * 0.2, s * 0.82)], fill=color, width=2)
+
+        # Fuselage: elongated oval polygon (nose forward = -y in local coords)
+        fw, fn, fb = s * 0.28, s * 0.42, s * 0.38
+        body = [
+            rot(0, -fn),
+            rot(fw * 0.7, -fn * 0.6),
+            rot(fw, 0),
+            rot(fw * 0.6, fb * 0.7),
+            rot(0, fb),
+            rot(-fw * 0.6, fb * 0.7),
+            rot(-fw, 0),
+            rot(-fw * 0.7, -fn * 0.6),
+        ]
+        draw.polygon(body, fill=color, outline=(0, 0, 0), width=2)
     else:
         raw_points = [
             (0, -size),
