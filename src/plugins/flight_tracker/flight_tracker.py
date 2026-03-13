@@ -720,6 +720,44 @@ def _is_helicopter(ac):
     return any(ac_type.startswith(p) for p in heli_prefixes)
 
 
+def _get_aircraft_category(ac):
+    """Classify aircraft into one of: helicopter, airliner, business_jet, ga."""
+    if _is_helicopter(ac):
+        return "helicopter"
+    ac_type = (ac.get("aircraft_type") or "").upper()
+    if not ac_type:
+        return "ga"
+    airliner_prefixes = (
+        "B71", "B72", "B73", "B74", "B75", "B76", "B77", "B78",  # Boeing
+        "A30", "A31", "A32", "A33", "A34", "A35", "A38",           # Airbus
+        "MD8", "MD9", "DC8", "DC9", "DC10",                        # MD/DC
+        "CRJ", "E17", "E19", "E29", "E190", "E195",                # Regional jets
+        "AT4", "AT7", "DH8", "SF34", "B46",                        # Turboprops/regional
+        "IL9", "IL6", "TU",                                         # Russian
+    )
+    if any(ac_type.startswith(p) for p in airliner_prefixes):
+        return "airliner"
+    bizjet_prefixes = (
+        "GL", "LJ",                                      # Gulfstream, Learjet
+        "C25", "C55", "C56", "C68", "C75", "C70",       # Citations
+        "CL3", "CL60",                                   # Challenger
+        "HA4", "HA42",                                   # Hawker
+        "F900", "F2TH", "F7X",                           # Falcon
+        "PC24",                                          # Pilatus PC-24
+        "E50", "E55",                                    # Phenom
+        "BE40", "BE400",                                 # Beechjet/400
+        "PRM1", "SBR",                                   # Premier, Sabreliner
+        "WW24", "GALX",                                  # Westwind, Galaxy
+        "G150", "G200", "G280", "G450", "G500",          # Gulfstream numeric
+        "G550", "G600", "G650",
+        "C680", "C700",                                  # Citation Sovereign/Longitude
+        "FA7", "FA50",                                   # Falcon 7X, 50
+    )
+    if any(ac_type.startswith(p) for p in bizjet_prefixes):
+        return "business_jet"
+    return "ga"
+
+
 def _is_emergency(ac):
     """Check if aircraft is squawking an emergency code."""
     if ac.get("emergency"):
@@ -835,24 +873,71 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
         ]
         draw.polygon(body, fill=color, outline=(0, 0, 0), width=2)
     else:
-        raw_points = [
-            (0, -size),
-            (1.5, -size * 0.5),
-            (size * 0.9, -size * 0.1),
-            (size * 0.9, size * 0.1),
-            (1.5, size * 0.15),
-            (2, size * 0.6),
-            (2, size * 0.8),
-            (0.8, size * 0.5),
-            (0, size * 0.7),
-            (-0.8, size * 0.5),
-            (-2, size * 0.8),
-            (-2, size * 0.6),
-            (-1.5, size * 0.15),
-            (-size * 0.9, size * 0.1),
-            (-size * 0.9, -size * 0.1),
-            (-1.5, -size * 0.5),
-        ]
+        category = _get_aircraft_category(ac)
+
+        if category == "airliner":
+            # Swept wings, full size
+            s = size
+            raw_points = [
+                (0, -s),
+                (1.5, -s * 0.5),
+                (s * 0.9, -s * 0.1),
+                (s * 0.9, s * 0.1),
+                (1.5, s * 0.15),
+                (2, s * 0.6),
+                (2, s * 0.8),
+                (0.8, s * 0.5),
+                (0, s * 0.7),
+                (-0.8, s * 0.5),
+                (-2, s * 0.8),
+                (-2, s * 0.6),
+                (-1.5, s * 0.15),
+                (-s * 0.9, s * 0.1),
+                (-s * 0.9, -s * 0.1),
+                (-1.5, -s * 0.5),
+            ]
+        elif category == "business_jet":
+            # Swept wings, narrower fuselage, ~85% size
+            s = size * 0.85
+            raw_points = [
+                (0, -s),
+                (0.9, -s * 0.52),
+                (s * 0.9, -s * 0.05),
+                (s * 0.9, s * 0.12),
+                (1.1, s * 0.12),
+                (1.6, s * 0.62),
+                (1.6, s * 0.8),
+                (0.65, s * 0.52),
+                (0, s * 0.68),
+                (-0.65, s * 0.52),
+                (-1.6, s * 0.8),
+                (-1.6, s * 0.62),
+                (-1.1, s * 0.12),
+                (-s * 0.9, s * 0.12),
+                (-s * 0.9, -s * 0.05),
+                (-0.9, -s * 0.52),
+            ]
+        else:
+            # GA: straight perpendicular wings, ~70% size
+            s = size * 0.7
+            raw_points = [
+                (0, -s),
+                (0.6, -s * 0.4),
+                (s * 0.9, 0),
+                (s * 0.9, s * 0.18),
+                (0.8, s * 0.1),
+                (1.2, s * 0.62),
+                (1.2, s * 0.78),
+                (0.5, s * 0.55),
+                (0, s * 0.65),
+                (-0.5, s * 0.55),
+                (-1.2, s * 0.78),
+                (-1.2, s * 0.62),
+                (-0.8, s * 0.1),
+                (-s * 0.9, s * 0.18),
+                (-s * 0.9, 0),
+                (-0.6, -s * 0.4),
+            ]
 
         cos_a = math.cos(angle)
         sin_a = math.sin(angle)
