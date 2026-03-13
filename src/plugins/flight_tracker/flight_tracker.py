@@ -910,18 +910,19 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
             placed_labels.append(label_rect)
 
         box_fill = (80, 0, 0, 200) if is_emerg else ((0, 0, 0, 160) if hasattr(draw, '_image') else (20, 25, 35))
-        # Draw per-line backgrounds so each fits its own text width
+        alt_y = label_y + th + pad if alt_text else None
+        # Draw all backgrounds first, then all text on top
         draw.rectangle(
             [(label_x - pad, label_y), (label_x + tw + pad, label_y + th + pad)],
             fill=box_fill
         )
-        draw.text((label_x, label_y), callsign, fill=(255, 255, 255), font=label_font)
         if alt_text:
-            alt_y = label_y + th + pad
             draw.rectangle(
                 [(label_x - pad, alt_y), (label_x + alt_tw + pad, alt_y + alt_th + pad)],
                 fill=box_fill
             )
+        draw.text((label_x, label_y), callsign, fill=(255, 255, 255), font=label_font)
+        if alt_text:
             alt_color = (255, 80, 80) if is_emerg else (180, 200, 255)
             draw.text((label_x, alt_y), alt_text, fill=alt_color, font=alt_font)
 
