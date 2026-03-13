@@ -705,6 +705,20 @@ def _draw_vert_indicator(draw, ac, x, y, font_size, font):
         draw.line([(cx - sz, cy), (cx + sz, cy)], fill=color, width=2)
 
 
+def _is_helicopter(ac):
+    """Return True if aircraft type designator indicates a rotorcraft."""
+    ac_type = (ac.get("aircraft_type") or "").upper()
+    if not ac_type:
+        return False
+    # Common helicopter ICAO type prefixes and exact codes
+    heli_prefixes = ("H", "EC", "AS", "BO", "BK", "SA", "UH", "AH", "CH", "SH", "MH", "OH", "HH")
+    heli_exact = {"R22", "R44", "R66", "S76", "S92", "S61", "B06", "B407", "B412", "B427",
+                  "B429", "B430", "B505", "MD11", "MD52", "MD60", "MD90", "MD902"}
+    if ac_type in heli_exact:
+        return True
+    return any(ac_type.startswith(p) for p in heli_prefixes)
+
+
 def _is_emergency(ac):
     """Check if aircraft is squawking an emergency code."""
     if ac.get("emergency"):
@@ -768,7 +782,7 @@ def _draw_aircraft_trail(draw, ac, center_lat, center_lon, zoom, vw, vh):
 
 
 def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units="imperial"):
-    """Draw a rotated airplane silhouette marker for an aircraft."""
+    """Draw a rotated aircraft marker — airplane silhouette or helicopter diamond."""
     px, py = _latlon_to_pixel(ac["lat"], ac["lon"], center_lat, center_lon, zoom, vw, vh)
 
     if px < -20 or px > vw + 20 or py < -20 or py > vh + 20:
@@ -783,24 +797,33 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
     else:
         angle = 0
 
-    raw_points = [
-        (0, -size),
-        (1.5, -size * 0.5),
-        (size * 0.9, -size * 0.1),
-        (size * 0.9, size * 0.1),
-        (1.5, size * 0.15),
-        (2, size * 0.6),
-        (2, size * 0.8),
-        (0.8, size * 0.5),
-        (0, size * 0.7),
-        (-0.8, size * 0.5),
-        (-2, size * 0.8),
-        (-2, size * 0.6),
-        (-1.5, size * 0.15),
-        (-size * 0.9, size * 0.1),
-        (-size * 0.9, -size * 0.1),
-        (-1.5, -size * 0.5),
-    ]
+    if _is_helicopter(ac):
+        # Diamond with a short tail to distinguish from fixed-wing
+        raw_points = [
+            (0, -size),          # nose (top)
+            (size * 0.55, 0),    # right
+            (0, size * 0.6),     # bottom of diamond
+            (-size * 0.55, 0),   # left
+        ]
+    else:
+        raw_points = [
+            (0, -size),
+            (1.5, -size * 0.5),
+            (size * 0.9, -size * 0.1),
+            (size * 0.9, size * 0.1),
+            (1.5, size * 0.15),
+            (2, size * 0.6),
+            (2, size * 0.8),
+            (0.8, size * 0.5),
+            (0, size * 0.7),
+            (-0.8, size * 0.5),
+            (-2, size * 0.8),
+            (-2, size * 0.6),
+            (-1.5, size * 0.15),
+            (-size * 0.9, size * 0.1),
+            (-size * 0.9, -size * 0.1),
+            (-1.5, -size * 0.5),
+        ]
 
     cos_a = math.cos(angle)
     sin_a = math.sin(angle)
