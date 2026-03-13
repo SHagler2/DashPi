@@ -875,8 +875,9 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
 
         tw, th = get_text_dimensions(draw, callsign, label_font)
 
-        # Build altitude line (or emergency squawk)
+        # Build altitude + speed line (or emergency squawk)
         alt = ac.get("altitude")
+        speed = ac.get("speed")
         alt_text = None
         alt_tw, alt_th = 0, 0
         if is_emerg:
@@ -884,8 +885,12 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
             alt_text = EMERGENCY_SQUAWKS.get(squawk, "EMERG")
         elif alt == "ground":
             alt_text = "GND"
+            if speed is not None:
+                alt_text += f" · {_format_speed(speed, units)}"
         elif isinstance(alt, (int, float)):
             alt_text = _format_altitude(int(alt), units)
+            if speed is not None:
+                alt_text += f" · {_format_speed(speed, units)}"
         if alt_text:
             alt_tw, alt_th = get_text_dimensions(draw, alt_text, alt_font)
 
