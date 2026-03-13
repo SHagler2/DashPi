@@ -912,7 +912,7 @@ def _draw_aircraft_marker(draw, ac, center_lat, center_lon, zoom, vw, vh, units=
         box_fill = (80, 0, 0, 200) if is_emerg else ((0, 0, 0, 160) if hasattr(draw, '_image') else (20, 25, 35))
         # Draw per-line backgrounds so each fits its own text width
         draw.rectangle(
-            [(label_x - pad, label_y - pad), (label_x + tw + pad, label_y + th + pad)],
+            [(label_x - pad, label_y), (label_x + tw + pad, label_y + th + pad)],
             fill=box_fill
         )
         draw.text((label_x, label_y), callsign, fill=(255, 255, 255), font=label_font)
