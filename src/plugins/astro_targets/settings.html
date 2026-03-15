@@ -1,0 +1,379 @@
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<!-- Location Search -->
+<div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+    <label class="form-label" style="margin: 0; white-space: nowrap;">Location:</label>
+    <input type="text" id="citySearch" placeholder="Enter city name (e.g., Dallas, TX)" style="flex: 1; min-width: 200px;" class="form-input" />
+    <button type="button" id="searchCityBtn" class="action-button compact">Search</button>
+</div>
+<div id="cityResults" style="margin-bottom: 10px;"></div>
+
+<!-- Coordinates and Map Button -->
+<div class="form-group" style="display: flex; align-items: center; gap: 15px; margin-bottom: 5px;">
+    <span>Latitude:</span>
+    <input readonly type="text" id="latitude" name="latitude" class="form-input" style="width: 100px;" />
+    <span>Longitude:</span>
+    <input readonly type="text" id="longitude" name="longitude" class="form-input" style="width: 100px;" />
+    <button type="button" id="openMap" class="action-button compact">Select on Map</button>
+</div>
+<div id="locationSource" style="font-size: 12px; color: #888; margin-bottom: 15px;"></div>
+
+<!-- Max Targets -->
+<div class="form-group">
+    <label for="maxTargets" class="form-label">Targets to Show:</label>
+    <select id="maxTargets" name="maxTargets" class="form-input">
+        <option value="3">3</option>
+        <option value="4" selected>4</option>
+        <option value="5">5</option>
+    </select>
+</div>
+
+<!-- Equipment Profiles -->
+<div class="form-group">
+    <label class="form-label">Equipment:</label>
+    <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+        <div class="form-group">
+            <input type="checkbox" id="equip_zs61_2600" name="equip_ZS61__ASI2600MM" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>ZS61 + ASI2600MM (3.74 x 2.50 deg)</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="equip_seestar" name="equip_SeeStar_S50" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>SeeStar S50 (2.0 x 1.3 deg)</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="equip_ff107_2600" name="equip_FF107__ASI2600MM" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>FF107 + ASI2600MM (1.93 x 1.29 deg)</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="equip_zs61_174" name="equip_ZS61__ASI174MM" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>ZS61 + ASI174MM (1.80 x 1.13 deg)</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="equip_ff107_174" name="equip_FF107__ASI174MM" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>FF107 + ASI174MM (0.93 x 0.58 deg)</span>
+        </div>
+    </div>
+</div>
+
+<!-- Object Type Filters -->
+<div class="form-group">
+    <label class="form-label">Object Types:</label>
+    <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+        <div class="form-group">
+            <input type="checkbox" id="type_emission" name="type_emission_nebula" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>Emission Nebulae</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="type_reflection" name="type_reflection_nebula" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>Reflection Nebulae</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="type_planetary" name="type_planetary_nebula" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>Planetary Nebulae</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="type_dark" name="type_dark_nebula" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>Dark Nebulae</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="type_snr" name="type_supernova_remnant" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>Supernova Remnants</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="type_galaxy" name="type_galaxy" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>Galaxies</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="type_galaxy_group" name="type_galaxy_group" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>Galaxy Groups</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="type_open" name="type_open_cluster" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>Open Clusters</span>
+        </div>
+        <div class="form-group">
+            <input type="checkbox" id="type_globular" name="type_globular_cluster" value="true" checked
+                   onclick="this.value=this.checked ? 'true' : 'false';">
+            <span>Globular Clusters</span>
+        </div>
+    </div>
+</div>
+
+<!-- Horizon Profile -->
+<div class="form-group">
+    <label class="form-label">Horizon Profile:</label>
+    <small style="flex-basis: 100%; margin-top: 2px; margin-bottom: 8px; color: var(--text-secondary, #888);">
+        Minimum altitude (degrees) at each compass direction. Models obstructions in your sky.
+    </small>
+    <input type="hidden" id="horizonProfile" name="horizonProfile" />
+    <table id="horizonTable" style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <thead>
+            <tr>
+                <th style="text-align: left; padding: 4px 8px;">Direction</th>
+                <th style="text-align: left; padding: 4px 8px;">Azimuth</th>
+                <th style="text-align: left; padding: 4px 8px;">Min Altitude</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Map Modal -->
+<div id="mapModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button" onclick="closeModal('mapModal')">×</span>
+        <h2 id="modalTitle">Select Location</h2>
+        <div class="separator"></div>
+        <div id="map" style="width: 100%; height: 200px; margin: 10px 0px;"></div>
+        <button id="closeMap" class="action-button">Save</button>
+    </div>
+</div>
+
+<script>
+    const HORIZON_DEFAULTS = [
+        { az: 0, alt: 50, label: 'N' },
+        { az: 45, alt: 50, label: 'NE' },
+        { az: 90, alt: 45, label: 'E' },
+        { az: 135, alt: 20, label: 'SE' },
+        { az: 180, alt: 15, label: 'S' },
+        { az: 225, alt: 15, label: 'SW' },
+        { az: 270, alt: 20, label: 'W' },
+        { az: 315, alt: 50, label: 'NW' },
+    ];
+
+    function buildHorizonTable(data) {
+        const tbody = document.querySelector('#horizonTable tbody');
+        tbody.innerHTML = '';
+        data.forEach((point, i) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 4px 8px;">${point.label || ''} (${point.az}&deg;)</td>
+                <td style="padding: 4px 8px;">${point.az}&deg;</td>
+                <td style="padding: 4px 8px;">
+                    <input type="number" min="0" max="90" value="${point.alt}"
+                           class="form-input horizon-alt" data-index="${i}"
+                           style="width: 70px;" onchange="updateHorizonProfile()" />
+                    &deg;
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        updateHorizonProfile();
+    }
+
+    function updateHorizonProfile() {
+        const inputs = document.querySelectorAll('.horizon-alt');
+        const profile = [];
+        inputs.forEach(input => {
+            const i = parseInt(input.dataset.index);
+            const base = HORIZON_DEFAULTS[i] || { az: 0 };
+            profile.push({ az: base.az, alt: parseInt(input.value) || 0 });
+        });
+        document.getElementById('horizonProfile').value = JSON.stringify(profile);
+    }
+
+    // Equipment checkbox IDs to setting name mapping
+    const EQUIP_MAP = {
+        'equip_zs61_2600': 'equip_ZS61__ASI2600MM',
+        'equip_seestar': 'equip_SeeStar_S50',
+        'equip_ff107_2600': 'equip_FF107__ASI2600MM',
+        'equip_zs61_174': 'equip_ZS61__ASI174MM',
+        'equip_ff107_174': 'equip_FF107__ASI174MM',
+    };
+
+    const TYPE_MAP = {
+        'type_emission': 'type_emission_nebula',
+        'type_reflection': 'type_reflection_nebula',
+        'type_planetary': 'type_planetary_nebula',
+        'type_dark': 'type_dark_nebula',
+        'type_snr': 'type_supernova_remnant',
+        'type_galaxy': 'type_galaxy',
+        'type_galaxy_group': 'type_galaxy_group',
+        'type_open': 'type_open_cluster',
+        'type_globular': 'type_globular_cluster',
+    };
+
+    async function searchCity() {
+        const cityName = document.getElementById('citySearch').value.trim();
+        const resultsDiv = document.getElementById('cityResults');
+
+        if (!cityName) {
+            resultsDiv.innerHTML = '<div style="color: #dc3545; font-size: 14px;">Please enter a city name</div>';
+            return;
+        }
+
+        resultsDiv.innerHTML = '<div style="font-size: 14px; color: var(--text-secondary, #888);">Searching...</div>';
+
+        try {
+            const response = await fetch('/search_city', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ city_name: cityName })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.cities) {
+                let html = '<div style="font-size: 14px; margin-bottom: 8px; font-weight: bold;">Select a location:</div>';
+                result.cities.forEach(city => {
+                    html += `
+                        <button type="button"
+                                onclick="selectCity(${city.latitude}, ${city.longitude}, '${city.display.replace(/'/g, "\\'")}')"
+                                style="display: block; width: 100%; padding: 10px; margin-bottom: 8px; background: #f8f9fa; border: 1px solid #ccc; border-radius: 4px; text-align: left; cursor: pointer; font-size: 14px;">
+                            <strong>${city.display}</strong> (${city.country})
+                        </button>
+                    `;
+                });
+                resultsDiv.innerHTML = html;
+            } else {
+                resultsDiv.innerHTML = `<div style="color: #dc3545; font-size: 14px;">${result.error || 'No cities found'}</div>`;
+            }
+        } catch (error) {
+            resultsDiv.innerHTML = '<div style="color: #dc3545; font-size: 14px;">Error searching for city</div>';
+        }
+    }
+
+    function selectCity(lat, lon, displayName) {
+        document.getElementById('latitude').value = lat;
+        document.getElementById('longitude').value = lon;
+        document.getElementById('locationSource').innerHTML =
+            '<span style="color: #155724;">Custom location set</span>';
+        document.getElementById('cityResults').innerHTML =
+            `<div style="padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; font-size: 14px; color: #155724;">
+                Selected: ${displayName}<br>
+                <span style="font-size: 12px;">Lat: ${lat}, Lon: ${lon}</span>
+            </div>`;
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        const $latitude = document.querySelector('#latitude');
+        const $longitude = document.querySelector('#longitude');
+        const $openMap = document.querySelector('#openMap');
+        const $closeMap = document.querySelector('#closeMap');
+        const $locationSource = document.querySelector('#locationSource');
+
+        document.getElementById('searchCityBtn').addEventListener('click', searchCity);
+        document.getElementById('citySearch').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); searchCity(); }
+        });
+
+        let hasCustomLocation = false;
+
+        if (loadPluginSettings) {
+            $latitude.value = pluginSettings.latitude || '';
+            $longitude.value = pluginSettings.longitude || '';
+            document.getElementById('maxTargets').value = pluginSettings.maxTargets || '4';
+            hasCustomLocation = !!(pluginSettings.latitude && pluginSettings.longitude);
+
+            // Equipment checkboxes
+            for (const [elemId, settingName] of Object.entries(EQUIP_MAP)) {
+                const el = document.getElementById(elemId);
+                if (el && pluginSettings[settingName] !== undefined) {
+                    const val = pluginSettings[settingName];
+                    el.checked = val === 'true' || val === true;
+                    el.value = el.checked ? 'true' : 'false';
+                }
+            }
+
+            // Type checkboxes
+            for (const [elemId, settingName] of Object.entries(TYPE_MAP)) {
+                const el = document.getElementById(elemId);
+                if (el && pluginSettings[settingName] !== undefined) {
+                    const val = pluginSettings[settingName];
+                    el.checked = val === 'true' || val === true;
+                    el.value = el.checked ? 'true' : 'false';
+                }
+            }
+
+            // Horizon profile
+            if (pluginSettings.horizonProfile) {
+                try {
+                    const saved = JSON.parse(pluginSettings.horizonProfile);
+                    const merged = HORIZON_DEFAULTS.map((d, i) => ({
+                        ...d,
+                        alt: saved[i] ? saved[i].alt : d.alt,
+                    }));
+                    buildHorizonTable(merged);
+                } catch (e) {
+                    buildHorizonTable(HORIZON_DEFAULTS);
+                }
+            } else {
+                buildHorizonTable(HORIZON_DEFAULTS);
+            }
+        } else {
+            buildHorizonTable(HORIZON_DEFAULTS);
+        }
+
+        // Fetch weather plugin location as fallback
+        try {
+            const resp = await fetch('/api/weather_location');
+            const data = await resp.json();
+            if (data.latitude && data.longitude) {
+                if (!hasCustomLocation) {
+                    $latitude.value = data.latitude;
+                    $longitude.value = data.longitude;
+                    $locationSource.innerHTML = 'Using Weather plugin location. Search above to override.';
+                } else {
+                    $locationSource.innerHTML = 'Custom location set.';
+                }
+            } else {
+                if (!hasCustomLocation) {
+                    $locationSource.innerHTML = 'No location set. Search for a city above.';
+                }
+            }
+        } catch (e) {
+            if (!hasCustomLocation) {
+                $locationSource.innerHTML = 'No location set. Search for a city above.';
+            }
+        }
+
+        // Map modal
+        let latitude = +$latitude.value;
+        let longitude = +$longitude.value;
+        let zoom = latitude && longitude ? 6 : 2.5;
+        let map, marker;
+
+        $openMap.addEventListener('click', () => {
+            openModal('mapModal');
+            setTimeout(() => {
+                if (!map) {
+                    map = L.map('map').setView([latitude, longitude], zoom);
+                    L.tileLayer(OSM_TILE_URL).addTo(map);
+                    marker = L.marker([latitude, longitude], { draggable: true }).addTo(map);
+                    map.on('click', event => { marker.setLatLng(event.latlng); });
+                }
+            }, 100);
+        });
+
+        $closeMap.addEventListener('click', () => {
+            const position = marker.getLatLng().wrap();
+            const lat = Math.round(position.lat * 10000) / 10000;
+            const lon = Math.round(position.lng * 10000) / 10000;
+            $latitude.value = lat;
+            $longitude.value = lon;
+            document.getElementById('citySearch').value = '';
+            document.getElementById('cityResults').innerHTML =
+                `<div style="padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; font-size: 14px; color: #155724;">
+                    Selected: Map location<br>
+                    <span style="font-size: 12px;">Lat: ${lat}, Lon: ${lon}</span>
+                </div>`;
+            $locationSource.innerHTML = '<span style="color: #155724;">Custom location set</span>';
+            closeModal('mapModal');
+        });
+    });
+</script>
