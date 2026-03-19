@@ -44,44 +44,14 @@
         }
     </style>
     <script>
-        let lastModified = null;
         const refreshIntervalMs = 3000;
 
-        async function refreshImage() {
+        function refreshImage() {
             const img = document.getElementById('displayImage');
             if (!img) return;
 
-            try {
-                const headers = {};
-                if (lastModified) {
-                    headers['If-Modified-Since'] = lastModified;
-                }
-
-                const response = await fetch('/api/current_image', { headers });
-
-                if (response.status === 304) {
-                    return; // No change
-                }
-
-                if (!response.ok) {
-                    console.error('Failed to fetch image:', response.status);
-                    return;
-                }
-
-                const blob = await response.blob();
-                const objectUrl = URL.createObjectURL(blob);
-
-                img.src = objectUrl;
-                lastModified = response.headers.get('Last-Modified');
-
-                // Update timestamp
-                const ts = document.getElementById('timestamp');
-                if (ts) {
-                    ts.textContent = new Date().toLocaleTimeString();
-                }
-            } catch (error) {
-                console.error('Error refreshing image:', error);
-            }
+            // Cache-busting query param — matches working dashboard approach
+            img.src = '/api/current_image?t=' + Date.now();
         }
 
         document.addEventListener('DOMContentLoaded', function() {
