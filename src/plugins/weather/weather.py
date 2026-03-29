@@ -107,7 +107,7 @@ class Weather(BasePlugin):
             raise RuntimeError("Units are required.")
 
         weather_provider = settings.get('weatherProvider', 'OpenWeatherMap')
-        title = settings.get('customTitle', '')
+        title = settings.get('locationName', '')
 
         import pytz
 
@@ -122,7 +122,7 @@ class Weather(BasePlugin):
                     raise RuntimeError("Open Weather Map API Key not configured.")
                 weather_data = self.get_weather_data(api_key, units, lat, long)
                 aqi_data = self.get_air_quality(api_key, lat, long)
-                if settings.get('titleSelection', 'location') == 'location':
+                if not title:
                     title = self.get_location(api_key, lat, long)
                 if settings.get('weatherTimeZone', 'locationTimeZone') == 'locationTimeZone':
                     logger.info("Using location timezone for OpenWeatherMap data.")
