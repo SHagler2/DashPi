@@ -414,8 +414,8 @@ class AstroTargets(BasePlugin):
         else:
             date = now.date()
 
-        # Check cache
-        cache_key = (date, lat, lon)
+        # Check cache (include filters so changed settings bust the cache)
+        cache_key = (date, lat, lon, frozenset(enabled_types), frozenset(e["name"] for e in equipment))
         if self._cached_results is not None and self._cache_date == cache_key:
             ranked, moon_info = self._cached_results
         else:
@@ -457,7 +457,7 @@ class AstroTargets(BasePlugin):
         enabled = set()
         for t in all_types:
             key = f"type_{t}"
-            if settings.get(key, "true") in ("true", True, "on"):
+            if settings.get(key, "true") in ("true", True, "on", "1"):
                 enabled.add(t)
         return enabled if enabled else all_types
 

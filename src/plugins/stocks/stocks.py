@@ -7,7 +7,7 @@ from utils.text_utils import get_text_dimensions, truncate_text
 from utils.layout_utils import calculate_grid
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, date
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -48,15 +48,65 @@ def format_price(value):
     return f"${value:,.2f}" if value is not None else "N/A"
 
 
+# NYSE market holidays by year
+# Source: https://www.nyse.com/markets/hours-calendars
+# Early-close days (1 PM ET) are not tracked — treated as normal open days
+NYSE_HOLIDAYS = {
+    2025: {
+        date(2025, 1, 1),    # New Year's Day
+        date(2025, 1, 20),   # MLK Jr. Day
+        date(2025, 2, 17),   # Presidents' Day
+        date(2025, 4, 18),   # Good Friday
+        date(2025, 5, 26),   # Memorial Day
+        date(2025, 6, 19),   # Juneteenth
+        date(2025, 7, 4),    # Independence Day
+        date(2025, 9, 1),    # Labor Day
+        date(2025, 11, 27),  # Thanksgiving
+        date(2025, 12, 25),  # Christmas
+    },
+    2026: {
+        date(2026, 1, 1),    # New Year's Day
+        date(2026, 1, 19),   # MLK Jr. Day
+        date(2026, 2, 16),   # Presidents' Day
+        date(2026, 4, 3),    # Good Friday
+        date(2026, 5, 25),   # Memorial Day
+        date(2026, 6, 19),   # Juneteenth
+        date(2026, 7, 3),    # Independence Day (observed)
+        date(2026, 9, 7),    # Labor Day
+        date(2026, 11, 26),  # Thanksgiving
+        date(2026, 12, 25),  # Christmas
+    },
+    2027: {
+        date(2027, 1, 1),    # New Year's Day
+        date(2027, 1, 18),   # MLK Jr. Day
+        date(2027, 2, 15),   # Presidents' Day
+        date(2027, 3, 26),   # Good Friday
+        date(2027, 5, 31),   # Memorial Day
+        date(2027, 6, 18),   # Juneteenth (observed)
+        date(2027, 7, 5),    # Independence Day (observed)
+        date(2027, 9, 6),    # Labor Day
+        date(2027, 11, 25),  # Thanksgiving
+        date(2027, 12, 24),  # Christmas (observed)
+    },
+}
+
+
+def _is_nyse_holiday(today):
+    """Check if a date is a known NYSE holiday."""
+    return today in NYSE_HOLIDAYS.get(today.year, set())
+
+
 def is_market_open():
     """Check if US stock market (NYSE/NASDAQ) is currently open.
 
     Open Monday-Friday, 9:30 AM - 4:00 PM Eastern Time.
-    Does not account for market holidays.
+    Accounts for weekends and NYSE holidays (2025-2027).
     """
     now_et = datetime.now(ZoneInfo("America/New_York"))
     # Weekday: 0=Monday, 6=Sunday
     if now_et.weekday() >= 5:
+        return False
+    if _is_nyse_holiday(now_et.date()):
         return False
     market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
     market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
