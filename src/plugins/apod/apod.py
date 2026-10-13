@@ -1,8 +1,7 @@
 """
 APOD Plugin for DashPi
-This plugin fetches the Astronomy Picture of the Day (APOD) from NASA's API
-and displays it on the DashPi device. It supports optional manual date selection or random dates.
-For the API key, set `NASA_SECRET={API_KEY}` in your .env file.
+Fetches the Astronomy Picture of the Day from NASA's science.nasa.gov endpoint
+and displays it on the DashPi device.
 """
 
 from plugins.base_plugin.base_plugin import BasePlugin
@@ -15,20 +14,37 @@ import re
 from random import randint
 from datetime import datetime, timedelta
 
-API_TIMEOUT = 15  # Seconds before giving up on NASA API metadata request
+API_BASE = "https://science.nasa.gov/wp-json/wp/v2/apod-basic"
+API_TIMEOUT = 15
 
 logger = logging.getLogger(__name__)
+
+
+def _strip_html(text):
+    """Remove HTML tags and entities from a string."""
+    text = re.sub('<[^<]+?>', '', text)
+    text = re.sub(r'&[a-zA-Z]+;', '', text)
+    text = re.sub(r'&#\d+;', '', text)
+    return ' '.join(text.split()).strip()
+
+
+def _date_to_apod_slug(dt):
+    """Convert a datetime to the YYMMDD slug used by the apod-basic endpoint."""
+    return dt.strftime("%y%m%d")
+
+
+def _constrain_image_url(hdurl, max_width=1600):
+    """Rewrite the dynamic image URL to cap width, avoiding huge downloads."""
+    if "dynamicimage" in hdurl and "w=" in hdurl:
+        return re.sub(r'w=\d+', f'w={max_width}', hdurl)
+    return hdurl
+
 
 class Apod(BasePlugin):
     """Fetches NASA's Astronomy Picture of the Day and renders it for display."""
 
     def generate_settings_template(self):
         template_params = super().generate_settings_template()
-        template_params['api_key'] = {
-            "required": True,
-            "service": "NASA",
-            "expected_key": "NASA_SECRET"
-        }
         template_params['style_settings'] = False
         return template_params
 
@@ -36,94 +52,74 @@ class Apod(BasePlugin):
         """Fetch and render the APOD image for the configured or random date."""
         logger.info("=== APOD Plugin: Starting image generation ===")
 
-        api_key = device_config.load_env_key("NASA_SECRET")
-        if not api_key:
-            logger.error("NASA API Key not configured")
-            raise RuntimeError("NASA API Key not configured.")
-
-        # Retry up to 10 times to find an image (not video)
         max_retries = 10
         is_random = settings.get("randomizeApod") == "true"
         custom_date = settings.get("customDate")
 
-        for attempt in range(max_retries):
-            params = {"api_key": api_key}
+        session = get_http_session()
+        data = None
 
-            # Determine date to fetch
+        for attempt in range(max_retries):
             if is_random:
                 start = datetime(2015, 1, 1)
                 end = datetime.today()
                 delta_days = (end - start).days
-                random_date = start + timedelta(days=randint(0, delta_days))
-                params["date"] = random_date.strftime("%Y-%m-%d")
-                logger.info(f"Fetching random APOD from date: {params['date']} (attempt {attempt + 1})")
+                target_date = start + timedelta(days=randint(0, delta_days))
             elif custom_date:
-                # If custom date specified, go back day by day on retries
                 target_date = datetime.strptime(custom_date, "%Y-%m-%d") - timedelta(days=attempt)
-                params["date"] = target_date.strftime("%Y-%m-%d")
-                logger.info(f"Fetching APOD from date: {params['date']} (attempt {attempt + 1})")
             else:
-                # Fetching today's APOD, go back day by day on retries
                 target_date = datetime.today() - timedelta(days=attempt)
-                params["date"] = target_date.strftime("%Y-%m-%d")
-                logger.info(f"Fetching APOD from date: {params['date']} (attempt {attempt + 1})")
 
-            logger.debug("Requesting NASA APOD API...")
-            session = get_http_session()
-            response = session.get("https://api.nasa.gov/planetary/apod", params=params, timeout=API_TIMEOUT)
+            slug = _date_to_apod_slug(target_date)
+            url = f"{API_BASE}/{slug}"
+            logger.info(f"Fetching APOD for {target_date.strftime('%Y-%m-%d')} (attempt {attempt + 1}): {url}")
+
+            response = session.get(url, timeout=API_TIMEOUT)
 
             if response.status_code != 200:
-                logger.error(f"NASA API error (status {response.status_code}): {response.text}")
-                continue  # Try next date
+                logger.error(f"APOD API error (status {response.status_code})")
+                continue
 
             data = response.json()
-            logger.debug(f"APOD API response received: {data.get('title', 'No title')}")
+            if isinstance(data, list):
+                data = data[0] if data else None
 
-            # Check if it's an image
+            if not data:
+                logger.warning(f"Empty response for {slug}")
+                continue
+
             if data.get("media_type") == "image":
-                logger.info(f"Found APOD image on date: {params['date']}")
-                break  # Success! Exit retry loop
+                logger.info(f"Found APOD image: {data.get('title')}")
+                break
             else:
-                logger.warning(f"APOD on {params['date']} is a '{data.get('media_type')}', not an image. Trying another date...")
+                logger.warning(f"APOD on {slug} is '{data.get('media_type')}', not an image. Trying another date...")
         else:
-            # All retries exhausted
             logger.error(f"Failed to find an APOD image after {max_retries} attempts")
             raise RuntimeError(f"Could not find an APOD image after {max_retries} attempts.")
 
-        # Prefer standard URL (typically ~1024px) over HD URL (often 4000px+).
-        # HD images can be 15+ megapixels, risking OOM on Pi Zero (416MB RAM).
-        image_url = data.get("url") or data.get("hdurl")
-        logger.info(f"APOD image URL: {image_url}")
-        logger.debug(f"Using {'standard URL' if data.get('url') else 'HD URL (no standard available)'}")
+        image_url = data.get("hdurl")
+        if not image_url:
+            raise RuntimeError("APOD entry has no image URL.")
 
-        # Get target dimensions
+        image_url = _constrain_image_url(image_url)
+        logger.info(f"APOD image URL: {image_url}")
+
         dimensions = device_config.get_resolution()
         if device_config.get_config("orientation") == "vertical":
             dimensions = dimensions[::-1]
-            logger.debug(f"Vertical orientation detected, dimensions: {dimensions[0]}x{dimensions[1]}")
 
-        # Get fit mode setting (default to 'fit' for letterbox)
         fit_mode = settings.get("fitMode", "fit")
-        logger.debug(f"Fit mode: {fit_mode}")
 
-        # Use adaptive image loader for memory-efficient processing
         image = self.image_loader.from_url(image_url, dimensions, timeout_ms=40000, fit_mode=fit_mode)
 
         if not image:
             logger.error("Failed to load APOD image")
             raise RuntimeError("Failed to load APOD image.")
 
-        # Add title overlay
-        title = data.get("title", "")
+        title = _strip_html(data.get("title", ""))
         if title:
-            # Clean up any HTML if present
-            title = re.sub('<[^<]+?>', '', title)
-            title = re.sub(r'&[a-zA-Z]+;', '', title)
-            title = ' '.join(title.split()).strip()
-            # Truncate if too long
             if len(title) > 80:
                 title = title[:77] + "..."
-
             image = self._add_title_overlay(image, title)
             logger.info(f"Added title overlay: {title}")
 
@@ -132,41 +128,34 @@ class Apod(BasePlugin):
 
     def _add_title_overlay(self, image: Image.Image, title: str) -> Image.Image:
         """Add title text overlay at the bottom of the image with contrasting background."""
-        # Create a copy to avoid modifying the original
         img_with_overlay = image.copy()
         draw = ImageDraw.Draw(img_with_overlay, 'RGBA')
 
         width, height = img_with_overlay.size
 
-        # Try to use a nice font, fall back to default if not available
         try:
-            font_size = max(16, int(height * 0.018))  # 1.8% of image height
+            font_size = max(16, int(height * 0.018))
             font = get_font("Jost", font_size, "bold")
         except Exception:
             font = ImageFont.load_default()
             logger.warning("Could not load custom font, using default")
 
-        # Calculate text size and position
         bbox = draw.textbbox((0, 0), title, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
 
-        # Add padding
         padding = max(10, int(height * 0.01))
 
-        # Position at bottom of image
         text_x = (width - text_width) // 2
         text_y = height - text_height - padding
 
-        # Draw semi-transparent black rectangle background
         bg_top = text_y - padding
         bg_bottom = height
         draw.rectangle(
             [(0, bg_top), (width, bg_bottom)],
-            fill=(0, 0, 0, 180)  # Black with 70% opacity
+            fill=(0, 0, 0, 180)
         )
 
-        # Draw white text with black outline for extra contrast
         draw.text((text_x, text_y), title, font=font, fill=(255, 255, 255, 255),
                   stroke_width=2, stroke_fill=(0, 0, 0, 255))
 
