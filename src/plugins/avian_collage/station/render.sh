@@ -40,7 +40,7 @@ for hours in 12 24 168; do
     if "$PYTHON" shoot.py --url http://localhost --out "$raw" \
         --width "$WIDTH" --height "$HEIGHT" --dsf 2 --window-hours "$hours" \
         --title "Avian Visitors" --subtitle "${SUBTITLES[$hours]}" \
-        --headline-px 30 --eyebrow-px 15 --mat 0.02 \
+        --headline-px 30 --eyebrow-px 25 --mat 0.02 \
         --collage-vh 84 --cluster-xbias 1.8 --cluster-ybias 0.7 \
         --bird-names --timeout 90000 \
         && "$PYTHON" "$HERE/fit.py" "$raw" "$tmp" "$WIDTH" "$HEIGHT"; then
