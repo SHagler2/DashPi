@@ -22,6 +22,7 @@ WINDOWS = {"12": "collage-12h.png", "24": "collage-24h.png", "168": "collage-168
 DEFAULT_WINDOW = "24"
 MAX_BYTES = 10 * 1024 * 1024
 STALE_AFTER_SECONDS = 2 * 60 * 60
+PAPER_MIN = 245  # channel values at or above this become pure white
 
 
 class AvianCollage(BasePlugin):
@@ -54,7 +55,17 @@ class AvianCollage(BasePlugin):
 
         if not image:
             raise RuntimeError("Collage image could not be decoded, please check logs.")
-        return image
+        return self._whiten_paper(image)
+
+    @staticmethod
+    def _whiten_paper(image):
+        """Snap the collage's off-white paper (~#fcfcfb) to pure white.
+
+        Invisible on an LCD, but e-ink panels dither the slight tint into
+        coloured speckle across the whole background.
+        """
+        lut = [255 if v >= PAPER_MIN else v for v in range(256)]
+        return image.convert("RGB").point(lut * 3)
 
     def _download(self, url, host):
         try:

@@ -42,7 +42,7 @@ for hours in 12 24 168; do
         --title "Avian Visitors" --subtitle "${SUBTITLES[$hours]}" \
         --headline-px 30 --eyebrow-px 15 --mat 0.02 \
         --collage-vh 84 --cluster-xbias 1.8 --cluster-ybias 0.7 \
-        --timeout 90000 \
+        --bird-names --timeout 90000 \
         && "$PYTHON" "$HERE/fit.py" "$raw" "$tmp" "$WIDTH" "$HEIGHT"; then
         chmod 644 "$tmp"
         mv -f "$tmp" "$final"   # atomic, so DashPi never downloads a half-written file

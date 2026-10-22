@@ -877,3 +877,19 @@ class TestAvianCollage:
         img = plugin.generate_image({}, mock_device_config)
         assert_valid_image(img, (800, 480))
         assert "min old" in caplog.text
+
+    @patch("plugins.avian_collage.avian_collage.get_http_session")
+    def test_paper_snapped_to_white(self, mock_session, plugin, mock_device_config):
+        from io import BytesIO
+        from PIL import ImageDraw
+        buf = BytesIO()
+        img = Image.new("RGB", (1024, 600), (252, 252, 251))  # the station's paper colour
+        ImageDraw.Draw(img).rectangle((400, 200, 600, 400), fill=(200, 40, 30))
+        img.save(buf, format="PNG")
+        response = self._png_response()
+        response.content = buf.getvalue()
+        mock_session.return_value.get.return_value = response
+        out = plugin.generate_image({}, mock_device_config)
+        assert out.mode == "RGB"
+        assert out.getpixel((5, 5)) == (255, 255, 255)
+        assert out.getpixel((400, 240)) == (200, 40, 30)
