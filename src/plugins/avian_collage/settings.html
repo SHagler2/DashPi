@@ -21,6 +21,19 @@
 </div>
 
 <div class="form-group">
+    <label for="autoRefresh" class="form-label">Auto Refresh:</label>
+    <select id="autoRefresh" name="autoRefresh" class="form-input">
+        <option value="0">Off</option>
+        <option value="5">Every 5 minutes</option>
+        <option value="15" selected>Every 15 minutes</option>
+        <option value="30">Every 30 minutes</option>
+        <option value="60">Every 1 hour</option>
+        <option value="120">Every 2 hours</option>
+    </select>
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">How often to re-fetch the collage while this plugin is displayed or pinned (the station checks for new birds every 5 minutes)</small>
+</div>
+
+<div class="form-group">
     <label for="fitMode" class="form-label">Display Mode</label>
     <select id="fitMode" name="fitMode" class="form-input">
         <option value="fill">Fill (Crop - No black bars)</option>
@@ -38,6 +51,7 @@
             document.getElementById('stationUrl').value = pluginSettings.stationUrl || 'http://birdnet.local';
             document.getElementById('window').value = pluginSettings.window || '24';
             document.getElementById('fitMode').value = pluginSettings.fitMode || 'fill';
+            document.getElementById('autoRefresh').value = pluginSettings.autoRefresh || '15';
         }
     });
 </script>

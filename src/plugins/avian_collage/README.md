@@ -59,6 +59,7 @@ at most about 5 minutes behind the station.
 |---|---|---|
 | Bird station URL | `http://birdnet.local` | The station running AvianVisitors and the render timer |
 | Time window | Last 24 hours | Last hour, last 12 hours, last 24 hours or last week |
+| Auto Refresh | Every 15 minutes | Re-fetch while displayed or pinned outside a loop; on e-ink the panel only redraws when the image changed |
 | Display Mode | Fill | Fill crops to the screen; Fit letterboxes |
 
 ## Errors shown in the web UI
