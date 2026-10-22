@@ -245,14 +245,10 @@ class TestApod:
         from plugins.apod.apod import Apod
         return Apod(APOD_CONFIG)
 
-    def test_missing_api_key(self, plugin, mock_device_config):
-        mock_device_config.load_env_key.return_value = None
-        with pytest.raises(RuntimeError, match="NASA API Key"):
-            plugin.generate_image({}, mock_device_config)
-
     @patch("plugins.apod.apod.get_http_session")
     def test_successful_image(self, mock_session, plugin, mock_device_config):
-        mock_device_config.load_env_key.return_value = "fake-nasa-key"
+        # science.nasa.gov endpoint: no NASA API key needed
+        mock_device_config.load_env_key.return_value = None
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -273,7 +269,7 @@ class TestApod:
 
     @patch("plugins.apod.apod.get_http_session")
     def test_all_videos_raises(self, mock_session, plugin, mock_device_config):
-        mock_device_config.load_env_key.return_value = "fake-nasa-key"
+        mock_device_config.load_env_key.return_value = None
 
         mock_response = MagicMock()
         mock_response.status_code = 200
