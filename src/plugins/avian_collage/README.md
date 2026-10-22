@@ -4,7 +4,7 @@ Plugin id: `avian_collage`
 
 Shows the live bird collage from a BirdNET-Pi station running
 [AvianVisitors](https://github.com/Twarner491/AvianVisitors) full-screen on DashPi,
-for the last 12 hours, 24 hours or week.
+for the last hour, 12 hours, 24 hours or week.
 
 ## Requirements
 
@@ -29,7 +29,7 @@ renders it** and DashPi only downloads the finished PNG:
 ```
 bird station (Pi 4B)                                  DashPi
   dashpi-collage.timer, every 5 min
-  └─ station/render.sh, for 12h / 24h / 168h
+  └─ station/render.sh, for 1h / 12h / 24h / 168h
      ├─ station/signature.py          (skip the window if its birds haven't changed)
      ├─ AvianVisitors frame/shoot.py  (headless Chromium, 2x capture)
      └─ station/fit.py                (crop empty paper, zoom birds to 1024x600)
@@ -58,7 +58,7 @@ at most about 5 minutes behind the station.
 | Setting | Default | |
 |---|---|---|
 | Bird station URL | `http://birdnet.local` | The station running AvianVisitors and the render timer |
-| Time window | Last 24 hours | Last 12 hours, last 24 hours or last week |
+| Time window | Last 24 hours | Last hour, last 12 hours, last 24 hours or last week |
 | Display Mode | Fill | Fill crops to the screen; Fit letterboxes |
 
 ## Errors shown in the web UI

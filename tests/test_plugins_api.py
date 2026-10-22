@@ -798,7 +798,7 @@ class TestAvianCollage:
         assert mock_session.return_value.get.call_args[0][0] == "http://birdnet.local/dashpi/collage-12h.png"
 
     @pytest.mark.parametrize("window, filename", [
-        ("12", "collage-12h.png"), ("24", "collage-24h.png"), ("168", "collage-168h.png"), (168, "collage-168h.png")])
+        ("1", "collage-1h.png"), ("12", "collage-12h.png"), ("24", "collage-24h.png"), ("168", "collage-168h.png"), (168, "collage-168h.png")])
     @patch("plugins.avian_collage.avian_collage.get_http_session")
     def test_window_picks_station_png(self, mock_session, plugin, mock_device_config, window, filename):
         mock_session.return_value.get.return_value = self._png_response()

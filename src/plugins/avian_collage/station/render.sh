@@ -13,7 +13,7 @@ HEIGHT="${HEIGHT:-600}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 STATE_DIR="${STATE_DIR:-$HERE/state}"
 
-declare -A SUBTITLES=([12]="Last 12 Hours" [24]="Last 24 Hours" [168]="Last 7 Days")
+declare -A SUBTITLES=([1]="Last Hour" [12]="Last 12 Hours" [24]="Last 24 Hours" [168]="Last 7 Days")
 
 mkdir -p "$OUT_DIR" "$STATE_DIR"
 cd "$AVIAN_DIR/frame" || exit 1
@@ -22,7 +22,7 @@ failed=0
 raw="$(mktemp --suffix=.png)"
 trap 'rm -f "$raw"' EXIT
 
-for hours in 12 24 168; do
+for hours in 1 12 24 168; do
     final="$OUT_DIR/collage-${hours}h.png"
     tmp="$OUT_DIR/.collage-${hours}h.tmp.png"
     sig_file="$STATE_DIR/collage-${hours}h.sig"

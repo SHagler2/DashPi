@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_STATION_URL = "http://birdnet.local"
 # Hours -> the PNG the station's render timer writes (station/render.sh)
-WINDOWS = {"12": "collage-12h.png", "24": "collage-24h.png", "168": "collage-168h.png"}
+WINDOWS = {"1": "collage-1h.png", "12": "collage-12h.png", "24": "collage-24h.png", "168": "collage-168h.png"}
 DEFAULT_WINDOW = "24"
 MAX_BYTES = 10 * 1024 * 1024
 STALE_AFTER_SECONDS = 2 * 60 * 60
