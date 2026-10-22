@@ -478,7 +478,10 @@ def _fetch_aircraft(lat, lon, radius_nm, source="auto"):
     elif source == "airplaneslive":
         apis = [("airplanes.live", AIRPLANESLIVE_URL)]
     else:
-        apis = [("adsb.fi", ADSBFI_URL), ("airplanes.live", AIRPLANESLIVE_URL)]
+        # airplanes.live now returns 403 to every client that hasn't been approved
+        # (contact@airplanes.live), so auto only uses adsb.fi. Re-add it here as a
+        # fallback once access is granted.
+        apis = [("adsb.fi", ADSBFI_URL)]
 
     # Single source — simple call
     if len(apis) == 1:
