@@ -21,7 +21,7 @@ All display types share the same plugin ecosystem, web UI, and configuration —
 - **Self-update**: Check for and apply updates directly from the web UI
 - **Open source**: Modify, customize, and create your own plugins
 
-**Plugins include**: Weather, Clock, AI Image, AI Text, NASA APOD, Art Museum, Stocks, ISS Tracker, Flight Tracker, ShazamPi, Calendar, Newspaper, Comics, RSS, Image Upload, Image Album, Image URL, Countdown, GitHub, To-Do List, Unsplash, Year Progress, Wikipedia POTD, and more.
+**Plugins include**: Weather, Clock, AI Image, AI Text, NASA APOD, Art Museum, Stocks, ISS Tracker, Flight Tracker, BirdNet Collage (requires a separate [BirdNET-Pi + AvianVisitors](./src/plugins/avian_collage/README.md) station), ShazamPi, Calendar, Newspaper, Comics, RSS, Image Upload, Image Album, Image URL, Countdown, GitHub, To-Do List, Unsplash, Year Progress, Wikipedia POTD, and more.
 
 For documentation on building custom plugins, see [Building Plugins](./docs/building_plugins.md).
 

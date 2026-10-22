@@ -6,6 +6,20 @@ Shows the live bird collage from a BirdNET-Pi station running
 [AvianVisitors](https://github.com/Twarner491/AvianVisitors) full-screen on DashPi,
 for the last 12 hours, 24 hours or week.
 
+## Requirements
+
+This plugin does not work on its own. It needs:
+
+- **A separate Raspberry Pi running [BirdNET-Pi](https://github.com/Nachtzuster/BirdNET-Pi)
+  with the [AvianVisitors](https://github.com/Twarner491/AvianVisitors) overlay** and a
+  microphone. Tested on a Pi 4B; it needs enough memory to run headless Chromium, so not a Pi Zero.
+- **The render timer from `station/` installed on that Pi** (see [Station setup](#station-setup)).
+  It turns the collage into the PNGs this plugin downloads.
+- **Both Pis on the same network.** DashPi reaches the station at `http://birdnet.local` by default.
+
+Without the station, the plugin shows "Bird station unreachable"; without the render
+timer, it shows "Collage image not found".
+
 ## How it works
 
 The collage is a JavaScript page that takes a Pi Zero 2 W 70-120 s (and far more
