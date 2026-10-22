@@ -313,6 +313,31 @@ class TestAIText:
                 mock_device_config
             )
 
+    @pytest.mark.parametrize("saved, expected", [
+        (None, "gemini-flash-latest"),
+        ("gemini-flash-lite-latest", "gemini-flash-lite-latest"),
+        ("gemini-2.5-flash", "gemini-flash-latest"),   # closed to new users
+        ("gemini-2.0-flash", "gemini-flash-latest"),   # retired by Google
+        ("gemini-1.5-flash", "gemini-flash-latest"),   # retired by Google
+    ])
+    @patch("google.genai.Client")
+    def test_gemini_model_used(self, mock_client, plugin, mock_device_config, saved, expected):
+        mock_device_config.load_env_key.return_value = "fake-gemini-key"
+        mock_client.return_value.models.generate_content.return_value.text = " Hello birds "
+        settings = {"textPrompt": "Say hello", "provider": "gemini"}
+        if saved:
+            settings["geminiTextModel"] = saved
+        assert plugin._generate_with_gemini(settings, mock_device_config, "Say hello") == "Hello birds"
+        assert mock_client.return_value.models.generate_content.call_args.kwargs["model"] == expected
+
+    @patch("google.genai.Client")
+    def test_gemini_credits_depleted_message(self, mock_client, plugin, mock_device_config):
+        mock_device_config.load_env_key.return_value = "fake-gemini-key"
+        mock_client.return_value.models.generate_content.side_effect = Exception(
+            "402 RESOURCE_EXHAUSTED. Your prepayment credits are depleted.")
+        with pytest.raises(RuntimeError, match="prepaid credits are used up"):
+            plugin._generate_with_gemini({"provider": "gemini"}, mock_device_config, "hi")
+
     def test_render_pil(self, plugin):
         img = plugin._render_pil((800, 480), "Daily Joke", "Why did the chicken cross the road?", {})
         assert_valid_image(img, (800, 480))

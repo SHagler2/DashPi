@@ -14,9 +14,11 @@ logger = logging.getLogger(__name__)
 OPENAI_TEXT_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-5", "gpt-5-mini", "gpt-5-nano"]
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 
-# Gemini models (use full model names for new API)
-GEMINI_TEXT_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
-DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
+# Gemini models (use full model names for new API). The "-latest" names are
+# Google's aliases for the current Flash models, so they survive retirements
+# (2.0/1.5 Flash were retired, and 2.5 Flash is closed to new users).
+GEMINI_TEXT_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.8-flash"]
+DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
 
 
 class AIText(BasePlugin):
@@ -141,6 +143,15 @@ class AIText(BasePlugin):
             logger.error(f"Failed to make OpenAI request: {str(e)}")
             raise RuntimeError("OpenAI request failure, please check logs.")
 
+    @staticmethod
+    def _resolve_gemini_model(saved_model):
+        """Return the saved model if still offered, else the default (saved settings may name a retired model)."""
+        if saved_model in GEMINI_TEXT_MODELS:
+            return saved_model
+        if saved_model:
+            logger.warning(f"Gemini model '{saved_model}' is no longer offered; using {DEFAULT_GEMINI_MODEL}")
+        return DEFAULT_GEMINI_MODEL
+
     def _generate_with_gemini(self, settings, device_config, text_prompt):
         """Generate text using Google Gemini."""
         api_key = device_config.load_env_key("GOOGLE_GEMINI_SECRET")
@@ -150,7 +161,7 @@ class AIText(BasePlugin):
         # Sanitize API key
         api_key = api_key.encode('ascii', errors='ignore').decode('ascii').strip()
 
-        text_model = settings.get('geminiTextModel', DEFAULT_GEMINI_MODEL)
+        text_model = self._resolve_gemini_model(settings.get('geminiTextModel'))
 
         logger.info(f"Gemini Settings: model={text_model}")
 
@@ -215,7 +226,9 @@ class AIText(BasePlugin):
             logger.error(f"Failed to make Gemini request: {error_msg}")
 
             # Provide user-friendly error messages
-            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+            if "402" in error_msg or "credits are depleted" in error_msg:
+                raise RuntimeError("Gemini prepaid credits are used up. Top up billing at https://ai.studio/projects")
+            elif "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
                 raise RuntimeError("Gemini rate limit reached. Please wait a minute and try again, or try a different model.")
             elif "API_KEY" in error_msg.upper() or "401" in error_msg:
                 raise RuntimeError("Gemini API key is invalid. Please check your GOOGLE_GEMINI_SECRET in Settings > API Keys.")
