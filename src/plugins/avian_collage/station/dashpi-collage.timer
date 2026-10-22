@@ -1,0 +1,10 @@
+[Unit]
+Description=Check every 5 minutes and re-render the AvianVisitors collage for DashPi when the birds change
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

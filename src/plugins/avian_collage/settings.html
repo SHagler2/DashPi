@@ -1,0 +1,38 @@
+<div class="form-group">
+    <label for="stationUrl" class="form-label">Bird station URL:</label>
+    <input type="text" id="stationUrl" name="stationUrl" value="http://birdnet.local" required class="form-input">
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
+        The BirdNET-Pi running AvianVisitors and the DashPi render timer (see the plugin README)
+    </small>
+</div>
+
+<div class="form-group">
+    <label for="window" class="form-label">Time window</label>
+    <select id="window" name="window" class="form-input">
+        <option value="12">Last 12 hours</option>
+        <option value="24" selected>Last 24 hours</option>
+        <option value="168">Last week</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label for="fitMode" class="form-label">Display Mode</label>
+    <select id="fitMode" name="fitMode" class="form-input">
+        <option value="fill">Fill (Crop - No black bars)</option>
+        <option value="fit">Fit (Letterbox - Full image visible)</option>
+    </select>
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">
+        The station renders at 1024x600, so both look the same on the 7" LCD
+    </small>
+</div>
+
+<script>
+    // populate form values from plugin settings
+    document.addEventListener('DOMContentLoaded', () => {
+        if (loadPluginSettings) {
+            document.getElementById('stationUrl').value = pluginSettings.stationUrl || 'http://birdnet.local';
+            document.getElementById('window').value = pluginSettings.window || '24';
+            document.getElementById('fitMode').value = pluginSettings.fitMode || 'fill';
+        }
+    });
+</script>
