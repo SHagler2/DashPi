@@ -34,11 +34,18 @@ bird station (Pi 4B)                                  DashPi
      ├─ AvianVisitors frame/shoot.py  (headless Chromium, 2x capture)
      └─ station/fit.py                (crop empty paper, zoom birds to 1024x600)
         └─▶ ~/BirdSongs/Extracted/dashpi/collage-<H>h.png ──HTTP──▶ avian_collage plugin
+            (and collage-<H>h-dark.png, the same in the page's dark theme)
 ```
 
 `shoot.py` is AvianVisitors' own capture tool for its e-ink frame. It hides the menu
 button and other controls and waits for the collage to finish loading. It runs
 unmodified from the station's AvianVisitors checkout. DashPi contains none of its code.
+
+For the dark copies, `render.sh` writes a temporary `frame/.shoot_dark.py` each run with
+two substitutions: the page's own charcoal dark theme instead of light, and off-white
+bird names instead of black. If an AvianVisitors update changes those lines, it renders
+light only and the timer reports a failure. The temporary file is listed in the
+checkout's `.git/info/exclude`, so it never shows as a local change.
 
 The page lays the birds out for a portrait frame, which leaves a landscape screen
 mostly empty, so `fit.py` keeps the title at its rendered size and scales the bird
@@ -48,10 +55,12 @@ cluster up to fill the rest.
 
 Every 5 minutes the station checks each window's species and call-count brackets
 (the same idea as AvianVisitors' e-ink frame) and re-renders only the windows that
-changed. Every window is re-rendered at least hourly. On a Pi 4B a full render of all three
-windows takes about 35 s, and a check that finds no change takes about 3 s.
-DashPi downloads the current PNG every time it shows the plugin, so the screen is
-at most about 5 minutes behind the station.
+changed; unchanged windows just get their file timestamp refreshed. On a Pi 4B a
+full render of all four windows takes about 45 s per theme (about 90 s with the dark copies), and a check that finds no change
+takes about 3 s. DashPi downloads the current PNG every time it shows the plugin, so
+the screen is at most about 5 minutes behind the station. If the PNG is more than 2
+hours old (the station is down or its render timer stopped), DashPi still shows it,
+with a "Bird station not updated since ..." notice along the bottom.
 
 ## Settings
 
@@ -60,13 +69,15 @@ at most about 5 minutes behind the station.
 | Bird station URL | `http://birdnet.local` | The station running AvianVisitors and the render timer |
 | Time window | Last 24 hours | Last hour, last 12 hours, last 24 hours or last week |
 | Auto Refresh | Every 15 minutes | Re-fetch while displayed or pinned outside a loop; on e-ink the panel only redraws when the image changed |
+| Dark Mode | Off | The station's charcoal version of the collage. Good on the LCD; leave off on e-ink, where the dark background dithers |
 | Display Mode | Fill | Fill crops to the screen; Fit letterboxes |
 
 ## Errors shown in the web UI
 
 - **Bird station unreachable at …**: the station is offline or the hostname doesn't resolve.
 - **Collage image not found … Is the render timer set up?**: the station is up but hasn't written the PNG.
-- A PNG older than 2 hours is still shown, and a warning is logged.
+- **Dark collage not found … Update render.sh there**: Dark Mode is on but the station's `render.sh` predates the dark copies.
+- A PNG older than 2 hours is still shown, with a "Bird station not updated since …" strip along the bottom, and a warning is logged.
 
 ## Station setup
 

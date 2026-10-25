@@ -897,7 +897,43 @@ class TestAvianCollage:
             headers={"Last-Modified": "Wed, 01 Jan 2025 00:00:00 GMT"})
         img = plugin.generate_image({}, mock_device_config)
         assert_valid_image(img, (800, 480))
-        assert "min old" in caplog.text
+        assert "last updated" in caplog.text
+        # "not updated since" strip along the bottom: white bar under a black rule
+        assert img.getpixel((2, 478)) == (255, 255, 255)
+        assert img.getpixel((2, 480 - 28)) == (0, 0, 0)
+
+    @patch("plugins.avian_collage.avian_collage.get_http_session")
+    def test_fresh_image_has_no_stale_notice(self, mock_session, plugin, mock_device_config):
+        from email.utils import format_datetime
+        from datetime import datetime, timezone
+        from io import BytesIO
+        buf = BytesIO()
+        Image.new("RGB", (800, 480), (200, 40, 30)).save(buf, format="PNG")
+        response = self._png_response(
+            headers={"Last-Modified": format_datetime(datetime.now(timezone.utc), usegmt=True)})
+        response.content = buf.getvalue()
+        mock_session.return_value.get.return_value = response
+        img = plugin.generate_image({}, mock_device_config)
+        assert img.getpixel((2, 478)) == (200, 40, 30)
+
+    @patch("plugins.avian_collage.avian_collage.get_http_session")
+    def test_dark_mode_fetches_dark_copy(self, mock_session, plugin, mock_device_config):
+        from io import BytesIO
+        buf = BytesIO()
+        Image.new("RGB", (1024, 600), (250, 250, 250)).save(buf, format="PNG")
+        response = self._png_response()
+        response.content = buf.getvalue()
+        mock_session.return_value.get.return_value = response
+        img = plugin.generate_image({"window": "12", "darkMode": "on"}, mock_device_config)
+        assert mock_session.return_value.get.call_args[0][0] == "http://birdnet.local/dashpi/collage-12h-dark.png"
+        # no paper whitening in dark mode
+        assert img.convert("RGB").getpixel((5, 5)) == (250, 250, 250)
+
+    @patch("plugins.avian_collage.avian_collage.get_http_session")
+    def test_dark_mode_missing_on_station(self, mock_session, plugin, mock_device_config):
+        mock_session.return_value.get.return_value = self._png_response(status=404)
+        with pytest.raises(RuntimeError, match="Dark collage not found"):
+            plugin.generate_image({"darkMode": "on"}, mock_device_config)
 
     @patch("plugins.avian_collage.avian_collage.get_http_session")
     def test_paper_snapped_to_white(self, mock_session, plugin, mock_device_config):
