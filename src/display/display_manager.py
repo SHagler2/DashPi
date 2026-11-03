@@ -94,6 +94,7 @@ class DisplayManager:
         self._brightness_override = None  # Temporary override from dashboard slider
         self._last_period = None  # Track schedule period for auto-clearing override
         self._display_lock = threading.Lock()  # Prevent race between refresh task and brightness slider
+        self._last_frame = None  # Last processed frame sent to an LCD (crossfade start)
 
         display_type = device_config.get_config("display_type", default="auto")
 
@@ -146,7 +147,7 @@ class DisplayManager:
         image = apply_image_enhancement(image, effective_settings)
         return image
 
-    def display_image(self, image, image_settings=None):
+    def display_image(self, image, image_settings=None, transition=True):
         """Render an image to the display, optionally with a crossfade transition.
 
         On LCD displays with transitions enabled, crossfades from the previous
@@ -156,6 +157,8 @@ class DisplayManager:
         Args:
             image (PIL.Image): The image to be displayed.
             image_settings (list, optional): List of settings to modify image rendering.
+            transition (bool): False skips the crossfade (e.g. a plugin redrawing
+                itself every few seconds, where fading only adds latency).
 
         Raises:
             ValueError: If no valid display instance is found.
@@ -165,20 +168,24 @@ class DisplayManager:
         if not hasattr(self, "display"):
             raise ValueError("No valid display instance initialized.")
 
-        # Load old image BEFORE saving the new one (needed for transitions)
-        old_image_path = self.device_config.current_image_file
+        # The crossfade starts from the last frame sent to the display. Before
+        # the first one (after boot), fall back to the saved image, loaded
+        # BEFORE it is overwritten below.
         old_image = None
-        if os.path.exists(old_image_path):
-            try:
-                old_image = PILImage.open(old_image_path).copy()
-            except Exception:
-                old_image = None
+        if transition and self._last_frame is None and self.display.supports_fast_refresh():
+            old_image_path = self.device_config.current_image_file
+            if os.path.exists(old_image_path):
+                try:
+                    old_image = PILImage.open(old_image_path).copy()
+                except Exception:
+                    old_image = None
 
         # Save the new image atomically (temp file + rename) so the web UI
-        # never fetches a half-written file
+        # never fetches a half-written file. Light compression: the default
+        # level takes ~1.4 s for 1024x600 on a Pi Zero 2 W, level 1 ~0.35 s.
         logger.info(f"Saving image to {self.device_config.current_image_file}")
         tmp_path = self.device_config.current_image_file.replace(".png", "_tmp.png")
-        image.save(tmp_path)
+        image.save(tmp_path, compress_level=1)
         os.replace(tmp_path, self.device_config.current_image_file)
 
         with self._display_lock:
@@ -205,13 +212,16 @@ class DisplayManager:
             transition_config = self.device_config.get_config("display_transitions") or {}
             transitions_enabled = transition_config.get("enabled", False)
 
-            if (transitions_enabled and old_image is not None
+            if (transition and transitions_enabled
                     and self.display.supports_fast_refresh()):
                 try:
-                    old_processed = self._process_image(old_image, brightness, image_settings)
+                    old_processed = self._last_frame
+                    if old_processed is None and old_image is not None:
+                        old_processed = self._process_image(old_image, brightness, image_settings)
 
                     # Ensure both images are same size and mode for blending
-                    if old_processed.size == new_processed.size and old_processed.mode == new_processed.mode:
+                    if (old_processed is not None and old_processed.size == new_processed.size
+                            and old_processed.mode == new_processed.mode):
                         steps = transition_config.get("steps", 10)
                         duration_ms = transition_config.get("duration_ms", 800)
                         delay = duration_ms / 1000.0 / steps
@@ -219,12 +229,15 @@ class DisplayManager:
                         for frame in crossfade_frames(old_processed, new_processed, steps):
                             self.display.display_image(frame, image_settings)
                             time.sleep(delay)
+                        self._last_frame = new_processed
                         return  # Final frame already displayed
                 except Exception as e:
                     logger.warning(f"Transition failed, falling back to direct display: {e}")
 
             # Direct display (no transition, e-ink, or transition failed)
             self.display.display_image(new_processed, image_settings)
+            if self.display.supports_fast_refresh():
+                self._last_frame = new_processed
 
     def reapply_brightness(self):
         """Re-render the current image with updated brightness.
@@ -269,6 +282,7 @@ class DisplayManager:
             image = apply_image_enhancement(image, effective_settings)
 
             self.display.display_image(image)
+            self._last_frame = image
             logger.info(f"Reapplied brightness: {brightness}")
 
     def get_current_brightness(self):

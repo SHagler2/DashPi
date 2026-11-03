@@ -93,13 +93,19 @@
 <div class="form-group">
     <label for="autoRefresh" class="form-label">Display Refresh:</label>
     <select id="autoRefresh" name="autoRefresh" class="form-input">
+        {% if fast_refresh %}
         <option value="0.033">Every 2 seconds (fastest)</option>
         <option value="0.083">Every 5 seconds (smooth tracking)</option>
         <option value="0.167">Every 10 seconds</option>
         <option value="0.5" selected>Every 30 seconds</option>
         <option value="1">Every 1 minute</option>
+        {% else %}
+        <option value="1">Every 1 minute</option>
+        <option value="5" selected>Every 5 minutes</option>
+        <option value="15">Every 15 minutes</option>
+        {% endif %}
     </select>
-    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">How often the display updates. Shorter intervals show smoother aircraft movement.</small>
+    <small style="flex-basis: 100%; margin-top: 2px; color: var(--text-secondary, #888);">How often the display updates.{% if fast_refresh %} Shorter intervals show smoother aircraft movement.{% else %} E-ink can't show live movement; each update is a full refresh.{% endif %}</small>
 </div>
 
 <!-- Data Refresh (API fetch interval) -->
@@ -204,7 +210,11 @@
             document.getElementById('hideGround').checked = pluginSettings.hideGround !== 'false';
             document.getElementById('showTracks').checked = pluginSettings.showTracks !== 'false';
             document.getElementById('dataSource').value = pluginSettings.dataSource || 'auto';
-            document.getElementById('autoRefresh').value = pluginSettings.autoRefresh || '0.5';
+            const autoRefreshSelect = document.getElementById('autoRefresh');
+            const defaultAutoRefresh = '{{ "0.5" if fast_refresh else "5" }}';
+            autoRefreshSelect.value = pluginSettings.autoRefresh || defaultAutoRefresh;
+            // A saved LCD-only interval (e.g. 2 s) has no option on e-ink
+            if (!autoRefreshSelect.value) autoRefreshSelect.value = defaultAutoRefresh;
             document.getElementById('dataRefreshInterval').value = pluginSettings.dataRefreshInterval || '30';
             hasCustomLocation = !!(pluginSettings.latitude && pluginSettings.longitude);
         }

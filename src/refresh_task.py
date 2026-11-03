@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 GLOBAL_STATUS_DIR = os.path.join(SRC_DIR, "static", "images", "plugins")
 GLOBAL_STATUS_FILE = os.path.join(GLOBAL_STATUS_DIR, "refresh_status.json")
+# Shortest auto-refresh on displays without fast refresh (e-ink): faster settings
+# (e.g. the flight tracker's 2 s, meant for LCD) are stretched to this
+SLOW_DISPLAY_MIN_AUTO_REFRESH = 60
 PLUGINS_DIR = os.path.join(SRC_DIR, "plugins")
 
 class RefreshTask:
@@ -473,7 +476,13 @@ class RefreshTask:
             logger.info(f"Updating display. | refresh_info: {refresh_info}")
             # Kill splash BEFORE writing to fb0 to prevent race condition
             self._stop_splash_if_needed()
-            self.display_manager.display_image(image, image_settings=plugin.config.get("image_settings", []))
+            # An auto-refresh is the same plugin redrawing itself (e.g. the flight
+            # tracker every few seconds): no crossfade, it only adds latency
+            self.display_manager.display_image(
+                image,
+                image_settings=plugin.config.get("image_settings", []),
+                transition=not isinstance(refresh_action, AutoRefresh),
+            )
             logger.info(f"DISPLAYED: {plugin_name}")
             self._displayed_this_boot = True
             self._set_global_status("displayed", f"Displayed: {plugin_name}", plugin_name, plugin_id)
@@ -762,7 +771,11 @@ class RefreshTask:
             try:
                 minutes = float(auto_refresh)
                 if minutes > 0:
-                    return round(minutes * 60)
+                    seconds = round(minutes * 60)
+                    if (seconds < SLOW_DISPLAY_MIN_AUTO_REFRESH
+                            and not self.display_manager.display.supports_fast_refresh()):
+                        seconds = SLOW_DISPLAY_MIN_AUTO_REFRESH
+                    return seconds
             except (ValueError, TypeError) as e:
                 logger.debug("Could not parse autoRefresh value: %s", e)
         return None

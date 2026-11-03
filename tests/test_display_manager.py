@@ -204,3 +204,71 @@ class TestTimezoneGuard:
 
         period = dm._get_current_period()
         assert period in ("day", "evening", "night")
+
+
+# ---------------------------------------------------------------------------
+# Crossfade transitions
+# ---------------------------------------------------------------------------
+
+def _with_transitions(cfg, steps=4):
+    base = cfg.get_config.side_effect
+
+    def _side(key=None, default=None):
+        if key == "display_transitions":
+            return {"enabled": True, "steps": steps, "duration_ms": 0}
+        return base(key, default)
+
+    cfg.get_config.side_effect = _side
+    return cfg
+
+
+class TestTransitions:
+    def test_crossfade_between_images(self, tmp_path):
+        """A normal update on LCD crossfades from the previous frame."""
+        cfg = _with_transitions(_make_device_config(tmp_path))
+        lcd = _make_display_mock(has_backlight=True)
+        dm = _make_dm(cfg, lcd)
+
+        with patch.object(dm, '_get_effective_brightness', return_value=1.0):
+            dm.display_image(Image.new("RGB", (800, 480), "white"))
+            lcd.display_image.reset_mock()
+            dm.display_image(Image.new("RGB", (800, 480), "black"))
+
+        assert lcd.display_image.call_count == 4
+
+    def test_no_crossfade_when_transition_false(self, tmp_path):
+        """transition=False (same-plugin auto-refresh) sends one frame."""
+        cfg = _with_transitions(_make_device_config(tmp_path))
+        lcd = _make_display_mock(has_backlight=True)
+        dm = _make_dm(cfg, lcd)
+
+        with patch.object(dm, '_get_effective_brightness', return_value=1.0):
+            dm.display_image(Image.new("RGB", (800, 480), "white"))
+            lcd.display_image.reset_mock()
+            dm.display_image(Image.new("RGB", (800, 480), "black"), transition=False)
+
+        lcd.display_image.assert_called_once()
+
+    def test_crossfade_starts_from_last_frame_not_disk(self, tmp_path):
+        """After the first frame, the previous image is not reloaded from disk."""
+        cfg = _with_transitions(_make_device_config(tmp_path))
+        lcd = _make_display_mock(has_backlight=True)
+        dm = _make_dm(cfg, lcd)
+
+        with patch.object(dm, '_get_effective_brightness', return_value=1.0):
+            dm.display_image(Image.new("RGB", (800, 480), "white"))
+            with patch("PIL.Image.open") as spy:
+                dm.display_image(Image.new("RGB", (800, 480), "black"))
+            spy.assert_not_called()
+
+    def test_eink_never_crossfades(self, tmp_path):
+        """E-ink gets exactly one frame per update, transitions config or not."""
+        cfg = _with_transitions(_make_device_config(tmp_path))
+        eink = _make_display_mock(has_backlight=False)
+        dm = _make_dm(cfg, eink)
+
+        dm.display_image(Image.new("RGB", (800, 480), "white"))
+        dm.display_image(Image.new("RGB", (800, 480), "black"))
+
+        assert eink.display_image.call_count == 2
+        assert dm._last_frame is None

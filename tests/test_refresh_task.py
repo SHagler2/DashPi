@@ -465,3 +465,28 @@ class TestExecuteRefreshAction:
         img_arg = mock_display.display_image.call_args[0][0]
         from PIL import Image as PILImage
         assert isinstance(img_arg, PILImage.Image)
+
+
+# ---------------------------------------------------------------------------
+# Auto-refresh floor on slow (e-ink) displays
+# ---------------------------------------------------------------------------
+
+class TestAutoRefreshFloor:
+    def _make_task(self, task_config, mock_display, fast):
+        mock_display.display.supports_fast_refresh.return_value = fast
+        task = RefreshTask(task_config, mock_display)
+        task.auto_refresh_plugin_settings = {"autoRefresh": "0.033"}  # 2 s
+        return task
+
+    def test_lcd_keeps_fast_auto_refresh(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display, fast=True)
+        assert task._get_auto_refresh_seconds() == 2
+
+    def test_eink_auto_refresh_is_at_least_a_minute(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display, fast=False)
+        assert task._get_auto_refresh_seconds() == 60
+
+    def test_eink_slower_auto_refresh_unchanged(self, task_config, mock_display):
+        task = self._make_task(task_config, mock_display, fast=False)
+        task.auto_refresh_plugin_settings = {"autoRefresh": "5"}
+        assert task._get_auto_refresh_seconds() == 300

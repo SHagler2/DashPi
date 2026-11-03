@@ -45,6 +45,10 @@ def plugin_page(plugin_id):
             template_params["loop_add_mode"] = add_mode
             template_params["loop_name"] = loop_name
             template_params["loop_refresh_interval"] = existing_refresh_interval
+            display_manager = current_app.config.get('DISPLAY_MANAGER')
+            template_params["fast_refresh"] = bool(
+                display_manager and display_manager.display.supports_fast_refresh()
+            )
 
             # If in edit mode, merge loop settings with last-used settings.
             # Last-used settings provide operational data (file lists, etc.);
