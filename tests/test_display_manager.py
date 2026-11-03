@@ -272,3 +272,54 @@ class TestTransitions:
 
         assert eink.display_image.call_count == 2
         assert dm._last_frame is None
+
+
+
+# ---------------------------------------------------------------------------
+# current_image.png saving
+# ---------------------------------------------------------------------------
+
+class TestCurrentImageSave:
+    def test_normal_update_saves_before_returning(self, tmp_path):
+        cfg = _make_device_config(tmp_path)
+        lcd = _make_display_mock(has_backlight=True)
+        dm = _make_dm(cfg, lcd)
+
+        with patch.object(dm, '_get_effective_brightness', return_value=1.0):
+            dm.display_image(Image.new("RGB", (800, 480), "red"))
+
+        assert Image.open(cfg.current_image_file).getpixel((0, 0)) == (255, 0, 0)
+
+    def test_auto_refresh_saves_in_background(self, tmp_path):
+        cfg = _make_device_config(tmp_path)
+        lcd = _make_display_mock(has_backlight=True)
+        dm = _make_dm(cfg, lcd)
+
+        with patch.object(dm, '_get_effective_brightness', return_value=1.0), \
+                patch("display.display_manager.threading.Thread") as thread_cls:
+            dm.display_image(Image.new("RGB", (800, 480), "red"), transition=False)
+
+        thread_cls.assert_called_once()
+        assert thread_cls.call_args.kwargs["target"] == dm._write_current_image
+
+    def test_eink_always_saves_synchronously(self, tmp_path):
+        cfg = _make_device_config(tmp_path)
+        eink = _make_display_mock(has_backlight=False)
+        dm = _make_dm(cfg, eink)
+
+        with patch("display.display_manager.threading.Thread") as thread_cls:
+            dm.display_image(Image.new("RGB", (800, 480), "red"), transition=False)
+
+        thread_cls.assert_not_called()
+        assert os.path.exists(cfg.current_image_file)
+
+    def test_superseded_write_is_skipped(self, tmp_path):
+        """A queued older image never overwrites a newer one."""
+        cfg = _make_device_config(tmp_path)
+        lcd = _make_display_mock(has_backlight=True)
+        dm = _make_dm(cfg, lcd)
+
+        dm._save_seq = 2  # a newer image (seq 2) was queued after seq 1
+        dm._write_current_image(Image.new("RGB", (800, 480), "red"), 1)
+
+        assert not os.path.exists(cfg.current_image_file)

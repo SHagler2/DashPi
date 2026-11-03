@@ -29,6 +29,9 @@ GLOBAL_STATUS_FILE = os.path.join(GLOBAL_STATUS_DIR, "refresh_status.json")
 # Shortest auto-refresh on displays without fast refresh (e-ink): faster settings
 # (e.g. the flight tracker's 2 s, meant for LCD) are stretched to this
 SLOW_DISPLAY_MIN_AUTO_REFRESH = 60
+# Minimum pause between auto-refreshes when a render takes longer than the
+# interval, so the web UI still gets CPU time
+MIN_AUTO_REFRESH_GAP = 0.5
 PLUGINS_DIR = os.path.join(SRC_DIR, "plugins")
 
 class RefreshTask:
@@ -199,7 +202,7 @@ class RefreshTask:
             pinned_ar = pinned_settings.get("autoRefresh")
             if pinned_ar:
                 try:
-                    auto_refresh_seconds = round(float(pinned_ar) * 60)
+                    auto_refresh_seconds = self._apply_slow_display_floor(round(float(pinned_ar) * 60))
                 except (ValueError, TypeError):
                     auto_refresh_seconds = self._get_auto_refresh_seconds()
             else:
@@ -210,9 +213,14 @@ class RefreshTask:
         use_auto_refresh = False
         if auto_refresh_seconds:
             if auto_refresh_seconds < sleep_time:
+                # The interval runs from the start of the last refresh, so
+                # render and display time come out of the wait
                 sleep_time = auto_refresh_seconds
+                if self.last_display_time:
+                    elapsed = (self._get_current_datetime() - self.last_display_time).total_seconds()
+                    sleep_time = max(MIN_AUTO_REFRESH_GAP, auto_refresh_seconds - elapsed)
                 use_auto_refresh = True
-                logger.info(f"Auto-refresh configured: {auto_refresh_seconds}s, using as sleep interval")
+                logger.info(f"Auto-refresh configured: {auto_refresh_seconds}s, waiting {sleep_time:.1f}s")
             else:
                 use_auto_refresh = True
                 logger.info(f"Auto-refresh configured: {auto_refresh_seconds}s, but loop interval {sleep_time}s is shorter")
@@ -771,14 +779,17 @@ class RefreshTask:
             try:
                 minutes = float(auto_refresh)
                 if minutes > 0:
-                    seconds = round(minutes * 60)
-                    if (seconds < SLOW_DISPLAY_MIN_AUTO_REFRESH
-                            and not self.display_manager.display.supports_fast_refresh()):
-                        seconds = SLOW_DISPLAY_MIN_AUTO_REFRESH
-                    return seconds
+                    return self._apply_slow_display_floor(round(minutes * 60))
             except (ValueError, TypeError) as e:
                 logger.debug("Could not parse autoRefresh value: %s", e)
         return None
+
+    def _apply_slow_display_floor(self, seconds):
+        """Stretch an auto-refresh interval to at least a minute on e-ink."""
+        if (seconds < SLOW_DISPLAY_MIN_AUTO_REFRESH
+                and not self.display_manager.display.supports_fast_refresh()):
+            return SLOW_DISPLAY_MIN_AUTO_REFRESH
+        return seconds
 
     def _should_auto_refresh(self, current_dt):
         """Check if we should auto-refresh the current plugin based on elapsed time."""

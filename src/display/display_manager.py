@@ -95,6 +95,9 @@ class DisplayManager:
         self._last_period = None  # Track schedule period for auto-clearing override
         self._display_lock = threading.Lock()  # Prevent race between refresh task and brightness slider
         self._last_frame = None  # Last processed frame sent to an LCD (crossfade start)
+        self._save_seq_lock = threading.Lock()  # Guards _save_seq
+        self._save_seq = 0  # Newest image queued for saving; older writes are skipped
+        self._write_lock = threading.Lock()  # Serializes current_image.png writes
 
         display_type = device_config.get_config("display_type", default="auto")
 
@@ -180,13 +183,10 @@ class DisplayManager:
                 except Exception:
                     old_image = None
 
-        # Save the new image atomically (temp file + rename) so the web UI
-        # never fetches a half-written file. Light compression: the default
-        # level takes ~1.4 s for 1024x600 on a Pi Zero 2 W, level 1 ~0.35 s.
-        logger.info(f"Saving image to {self.device_config.current_image_file}")
-        tmp_path = self.device_config.current_image_file.replace(".png", "_tmp.png")
-        image.save(tmp_path, compress_level=1)
-        os.replace(tmp_path, self.device_config.current_image_file)
+        # current_image.png only feeds the web UI preview and the brightness
+        # slider, so frequent redraws on an LCD save it in the background
+        # rather than hold up the screen (~1 s on a Pi Zero 2 W)
+        self._save_current_image(image, background=not transition and self.display.supports_fast_refresh())
 
         with self._display_lock:
             # Check scheduled brightness — only applies to displays with backlight
@@ -238,6 +238,32 @@ class DisplayManager:
             self.display.display_image(new_processed, image_settings)
             if self.display.supports_fast_refresh():
                 self._last_frame = new_processed
+
+    def _save_current_image(self, image, background=False):
+        """Save the image as current_image.png, now or on a background thread."""
+        with self._save_seq_lock:
+            self._save_seq += 1
+            seq = self._save_seq
+        if background:
+            threading.Thread(target=self._write_current_image, args=(image, seq), daemon=True).start()
+        else:
+            self._write_current_image(image, seq)
+
+    def _write_current_image(self, image, seq):
+        """Write current_image.png unless a newer image has been queued since."""
+        with self._write_lock:
+            if seq != self._save_seq:
+                return
+            # Atomic (temp file + rename) so the web UI never fetches a
+            # half-written file. Light compression: the default level takes
+            # ~1.4 s for 1024x600 on a Pi Zero 2 W, level 1 ~0.35 s.
+            logger.info(f"Saving image to {self.device_config.current_image_file}")
+            tmp_path = self.device_config.current_image_file.replace(".png", "_tmp.png")
+            try:
+                image.save(tmp_path, compress_level=1)
+                os.replace(tmp_path, self.device_config.current_image_file)
+            except Exception as e:
+                logger.warning(f"Could not save current image: {e}")
 
     def reapply_brightness(self):
         """Re-render the current image with updated brightness.

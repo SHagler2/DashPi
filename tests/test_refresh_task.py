@@ -10,11 +10,11 @@ Coverage:
 
 import os
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 from PIL import Image
 
-from refresh_task import RefreshTask, ManualRefresh, AutoRefresh, LoopRefresh
+from refresh_task import RefreshTask, ManualRefresh, AutoRefresh, LoopRefresh, MIN_AUTO_REFRESH_GAP
 from model import Loop, PluginReference
 
 
@@ -299,7 +299,7 @@ class TestComputeSleepTime:
         sleep_time, use_auto, ar_secs = task._compute_sleep_time(loop_mgr)
         assert use_auto is True
         assert ar_secs == 60
-        assert sleep_time == 60  # shorter than loop interval
+        assert sleep_time == pytest.approx(60, abs=1)  # shorter than loop interval
 
 
 # ---------------------------------------------------------------------------
@@ -490,3 +490,46 @@ class TestAutoRefreshFloor:
         task = self._make_task(task_config, mock_display, fast=False)
         task.auto_refresh_plugin_settings = {"autoRefresh": "5"}
         assert task._get_auto_refresh_seconds() == 300
+
+
+# ---------------------------------------------------------------------------
+# Auto-refresh wait counts from the start of the last refresh
+# ---------------------------------------------------------------------------
+
+class TestAutoRefreshWait:
+    def _make_task(self, task_config, mock_display, seconds_ago, auto_refresh="0.083"):
+        task = RefreshTask(task_config, mock_display)
+        task.first_run = False
+        task.auto_refresh_plugin_settings = {"autoRefresh": auto_refresh}  # 0.083 min = 5 s
+        now = datetime.now(timezone.utc)
+        task.last_display_time = now - timedelta(seconds=seconds_ago)
+        task._get_current_datetime = MagicMock(return_value=now)
+        loop_mgr = task_config.get_loop_manager()
+        loop_mgr.rotation_interval_seconds = 300
+        return task, loop_mgr
+
+    def test_render_time_comes_out_of_the_wait(self, task_config, mock_display):
+        task, loop_mgr = self._make_task(task_config, mock_display, seconds_ago=2)
+        sleep_time, use_auto, _ = task._compute_sleep_time(loop_mgr)
+        assert use_auto is True
+        assert sleep_time == pytest.approx(3)
+
+    def test_slow_render_still_pauses_briefly(self, task_config, mock_display):
+        task, loop_mgr = self._make_task(task_config, mock_display, seconds_ago=8)
+        sleep_time, _, _ = task._compute_sleep_time(loop_mgr)
+        assert sleep_time == MIN_AUTO_REFRESH_GAP
+
+    def test_pinned_plugin_gets_eink_floor(self, task_config, mock_display):
+        mock_display.display.supports_fast_refresh.return_value = False
+        task, loop_mgr = self._make_task(task_config, mock_display, seconds_ago=0)
+        task_config.get_loop_override.return_value = {"type": "plugin", "plugin_id": "flight_tracker"}
+        base = task_config.get_config.side_effect
+
+        def _side(key=None, default=None):
+            if key == "plugin_last_settings_flight_tracker":
+                return {"autoRefresh": "0.033"}
+            return base(key, default)
+
+        task_config.get_config.side_effect = _side
+        _, _, ar_secs = task._compute_sleep_time(loop_mgr)
+        assert ar_secs == 60
