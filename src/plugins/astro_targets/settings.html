@@ -39,9 +39,9 @@
             <span>ZS61 + ASI2600MM (3.74 x 2.50 deg)</span>
         </div>
         <div class="form-group">
-            <input type="hidden" name="equip_SeeStar_S50" value="false">
-            <input type="checkbox" id="equip_seestar" name="equip_SeeStar_S50" value="true" checked>
-            <span>SeeStar S50 (2.0 x 1.3 deg)</span>
+            <input type="hidden" name="equip_SeeStar_S50_Pro" value="false">
+            <input type="checkbox" id="equip_seestar_pro" name="equip_SeeStar_S50_Pro" value="true" checked>
+            <span>SeeStar S50 Pro (2.45 x 1.38 deg)</span>
         </div>
         <div class="form-group">
             <input type="hidden" name="equip_FF107__ASI2600MM" value="false">
@@ -52,6 +52,11 @@
             <input type="hidden" name="equip_ZS61__ASI174MM" value="false">
             <input type="checkbox" id="equip_zs61_174" name="equip_ZS61__ASI174MM" value="true" checked>
             <span>ZS61 + ASI174MM (1.80 x 1.13 deg)</span>
+        </div>
+        <div class="form-group">
+            <input type="hidden" name="equip_SeeStar_S50" value="false">
+            <input type="checkbox" id="equip_seestar" name="equip_SeeStar_S50" value="true" checked>
+            <span>SeeStar S50 (1.28 x 0.72 deg)</span>
         </div>
         <div class="form-group">
             <input type="hidden" name="equip_FF107__ASI174MM" value="false">
@@ -189,6 +194,7 @@
     // Equipment checkbox IDs to setting name mapping
     const EQUIP_MAP = {
         'equip_zs61_2600': 'equip_ZS61__ASI2600MM',
+        'equip_seestar_pro': 'equip_SeeStar_S50_Pro',
         'equip_seestar': 'equip_SeeStar_S50',
         'equip_ff107_2600': 'equip_FF107__ASI2600MM',
         'equip_zs61_174': 'equip_ZS61__ASI174MM',

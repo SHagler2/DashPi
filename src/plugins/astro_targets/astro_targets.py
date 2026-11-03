@@ -13,13 +13,15 @@ from utils.text_utils import get_text_dimensions, truncate_text
 
 logger = logging.getLogger(__name__)
 
-# Equipment profiles: name, FOV width/height in degrees
+# Equipment profiles, widest first: name, short label for the display footer,
+# FOV width/height in degrees
 EQUIPMENT_PROFILES = [
-    {"name": "ZS61 + ASI2600MM", "fov_w": 3.74, "fov_h": 2.50},
-    {"name": "SeeStar S50", "fov_w": 2.0, "fov_h": 1.3},
-    {"name": "FF107 + ASI2600MM", "fov_w": 1.93, "fov_h": 1.29},
-    {"name": "ZS61 + ASI174MM", "fov_w": 1.80, "fov_h": 1.13},
-    {"name": "FF107 + ASI174MM", "fov_w": 0.93, "fov_h": 0.58},
+    {"name": "ZS61 + ASI2600MM", "short": "ZS61/2600", "fov_w": 3.74, "fov_h": 2.50},
+    {"name": "SeeStar S50 Pro", "short": "S50 Pro", "fov_w": 2.45, "fov_h": 1.38},
+    {"name": "FF107 + ASI2600MM", "short": "FF107/2600", "fov_w": 1.93, "fov_h": 1.29},
+    {"name": "ZS61 + ASI174MM", "short": "ZS61/174", "fov_w": 1.80, "fov_h": 1.13},
+    {"name": "SeeStar S50", "short": "S50", "fov_w": 1.28, "fov_h": 0.72},
+    {"name": "FF107 + ASI174MM", "short": "FF107/174", "fov_w": 0.93, "fov_h": 0.58},
 ]
 
 # Default horizon profile (Steven's backyard)
@@ -531,8 +533,18 @@ class AstroTargets(BasePlugin):
                       msg, font=no_targets_font, fill=dim_color)
             return image
 
+        # -- Footer: equipment being considered --
+        enabled_equipment = self._get_enabled_equipment(settings)
+        equip_labels = [p["short"] for p in EQUIPMENT_PROFILES if p["name"] in enabled_equipment]
+        footer_font = get_font("Jost", int(title_size * 0.45), "normal")
+        footer_h = int(title_size * 0.45 * 1.6)
+        footer_y = height - margin - footer_h + int(footer_h * 0.2)
+        footer_text = truncate_text(draw, "Equipment: " + "  \u00b7  ".join(equip_labels),
+                                    footer_font, width - 2 * margin)
+        draw.text((margin, footer_y), footer_text, font=footer_font, fill=dim_color)
+
         card_area_top = sep_y + 8
-        card_area_height = height - card_area_top - margin
+        card_area_height = height - card_area_top - margin - footer_h
         num_targets = len(targets)
         card_spacing = 6
         # Card height: divide available space evenly, capped at reasonable max
