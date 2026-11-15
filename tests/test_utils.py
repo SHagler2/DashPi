@@ -315,3 +315,50 @@ class TestCalculateSeconds:
 
     def test_unknown_unit_default(self):
         assert calculate_seconds(99, "parsec") == 300
+
+
+# ---------------------------------------------------------------------------
+# fix_jpeg_orientation (upload EXIF handling)
+# ---------------------------------------------------------------------------
+
+class TestFixJpegOrientation:
+    def _jpeg(self, tmp_path, size=(40, 20), orientation=None):
+        from PIL import Image
+        path = tmp_path / "photo.jpeg"
+        img = Image.new("RGB", size, "red")
+        exif = Image.Exif()
+        if orientation is not None:
+            exif[0x0112] = orientation
+        img.save(path, "JPEG", quality=90, exif=exif)
+        return path
+
+    def test_no_orientation_tag_leaves_file_untouched(self, tmp_path):
+        from utils.app_utils import fix_jpeg_orientation
+        path = self._jpeg(tmp_path)
+        before = path.read_bytes()
+        fix_jpeg_orientation(str(path))
+        assert path.read_bytes() == before
+
+    def test_upright_orientation_leaves_file_untouched(self, tmp_path):
+        from utils.app_utils import fix_jpeg_orientation
+        path = self._jpeg(tmp_path, orientation=1)
+        before = path.read_bytes()
+        fix_jpeg_orientation(str(path))
+        assert path.read_bytes() == before
+
+    def test_rotated_photo_is_turned_upright(self, tmp_path):
+        from PIL import Image
+        from utils.app_utils import fix_jpeg_orientation
+        path = self._jpeg(tmp_path, size=(40, 20), orientation=6)  # rotate 90 CW
+        fix_jpeg_orientation(str(path))
+        with Image.open(path) as img:
+            assert img.size == (20, 40)
+            assert img.getexif().get(0x0112, 1) == 1
+
+    def test_oversized_image_is_skipped(self, tmp_path, monkeypatch):
+        import utils.app_utils as app_utils
+        monkeypatch.setattr(app_utils, "MAX_ORIENTATION_FIX_MEGAPIXELS", 0.0001)
+        path = self._jpeg(tmp_path, orientation=6)
+        before = path.read_bytes()
+        app_utils.fix_jpeg_orientation(str(path))
+        assert path.read_bytes() == before

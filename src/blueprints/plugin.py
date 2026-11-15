@@ -2,7 +2,7 @@
 
 from flask import Blueprint, request, jsonify, current_app, render_template, send_from_directory
 from plugins.plugin_registry import get_plugin_instance
-from utils.app_utils import resolve_path, handle_request_files, parse_form, sanitize_filename
+from utils.app_utils import resolve_path, handle_request_files, parse_form, sanitize_filename, fix_jpeg_orientation
 from refresh_task import ManualRefresh
 import json
 import os
@@ -144,21 +144,8 @@ def upload_image():
             os.remove(file_path)
             return jsonify({"error": "File is not a valid image"}), 400
 
-        # Fix EXIF orientation for JPEGs (skip very large images)
         if extension in {'jpg', 'jpeg'}:
-            try:
-                from PIL import Image, ImageOps
-                with Image.open(file_path) as img:
-                    w, h = img.size
-                    megapixels = (w * h) / 1_000_000
-                    if megapixels <= 50:
-                        transposed = ImageOps.exif_transpose(img)
-                        if transposed is not img:
-                            transposed.save(file_path)
-                            transposed.close()
-                import gc; gc.collect()
-            except Exception as e:
-                logger.warning(f"EXIF processing error for {file_name}: {e}")
+            fix_jpeg_orientation(file_path)
 
         logger.info(f"Uploaded image: {file_name} ({os.path.getsize(file_path)} bytes)")
         return jsonify({"success": True, "file_path": file_path, "file_name": file_name}), 200

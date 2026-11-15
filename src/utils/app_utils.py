@@ -200,6 +200,37 @@ def parse_form(request_form):
             request_dict[key] = values[-1] if values else ''
     return request_dict
 
+EXIF_ORIENTATION_TAG = 0x0112
+MAX_ORIENTATION_FIX_MEGAPIXELS = 50  # Full decode above this risks OOM on a Pi Zero
+
+
+def fix_jpeg_orientation(file_path):
+    """Rotate an uploaded JPEG on disk to match its EXIF orientation tag.
+
+    Rewrites the file only when the tag asks for a rotation or flip: the
+    re-encode is lossy and needs a full decode. Images without the tag (most
+    astro and edited photos) are left byte-for-byte as uploaded.
+    """
+    file_name = os.path.basename(file_path)
+    try:
+        with Image.open(file_path) as img:
+            if img.getexif().get(EXIF_ORIENTATION_TAG, 1) == 1:
+                return
+            megapixels = (img.size[0] * img.size[1]) / 1_000_000
+            if megapixels > MAX_ORIENTATION_FIX_MEGAPIXELS:
+                logger.info(f"Skipping EXIF rotation for {file_name} ({megapixels:.0f}MP) - too large")
+                return
+            icc_profile = img.info.get("icc_profile")
+            transposed = ImageOps.exif_transpose(img)
+        transposed.save(file_path, "JPEG", quality=95, exif=transposed.getexif(), icc_profile=icc_profile)
+        transposed.close()
+        logger.info(f"Applied EXIF rotation to {file_name}")
+    except Exception as e:
+        logger.warning(f"EXIF processing error for {file_name}: {e}")
+    finally:
+        import gc; gc.collect()
+
+
 def handle_request_files(request_files, form_data=None):
     """Process uploaded files: save to disk, fix EXIF orientation, return path map."""
     if form_data is None:
@@ -230,23 +261,8 @@ def handle_request_files(request_files, form_data=None):
         # Save the raw upload to disk first (no PIL, no memory spike)
         file.save(file_path)
 
-        # Fix EXIF orientation in-place for JPEGs
-        # Skip for very large images to avoid OOM on Pi
-        if extension in {'jpg', 'jpeg'}:
-            try:
-                with Image.open(file_path) as img:
-                    w, h = img.size
-                    megapixels = (w * h) / 1_000_000
-                    if megapixels > 50:
-                        logger.info(f"Skipping EXIF for {file_name} ({megapixels:.0f}MP) - too large")
-                    else:
-                        transposed = ImageOps.exif_transpose(img)
-                        if transposed is not img:
-                            transposed.save(file_path)
-                            transposed.close()
-                import gc; gc.collect()
-            except Exception as e:
-                logger.warning(f"EXIF processing error for {file_name}: {e}")
+        if extension.lower() in {'jpg', 'jpeg'}:
+            fix_jpeg_orientation(file_path)
 
         if is_list:
             file_location_map.setdefault(key, [])
